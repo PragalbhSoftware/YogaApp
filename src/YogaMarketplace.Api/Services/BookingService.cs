@@ -23,12 +23,25 @@ public interface IBookingService
     Task<IReadOnlyList<BookingResponse>> ListMineAsync(CancellationToken cancellationToken);
 }
 
+public interface IBookingHandshake
+{
+    Task<IReadOnlyList<BookingResponse>> ListForInstructorAsync(string? status, CancellationToken cancellationToken);
+
+    Task<BookingResponse> AcceptAsync(Guid bookingId, CancellationToken cancellationToken);
+
+    Task<BookingResponse> DeclineAsync(Guid bookingId, CancellationToken cancellationToken);
+
+    Task<BookingResponse> CompleteAsync(Guid bookingId, CancellationToken cancellationToken);
+
+    Task<ReviewResponse> CreateReviewAsync(Guid bookingId, CreateReviewRequest request, CancellationToken cancellationToken);
+}
+
 public interface IRazorpayWebhookHandler
 {
     Task<WebhookResult> HandleWebhookAsync(string rawBody, string? signature, CancellationToken cancellationToken);
 }
 
-public class BookingService : IBookingService, IRazorpayWebhookHandler
+public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebhookHandler
 {
     private static readonly BookingStatus[] Occupying =
         Enum.GetValues<BookingStatus>().Where(BookingRules.OccupiesSlot).ToArray();
@@ -157,12 +170,8 @@ public class BookingService : IBookingService, IRazorpayWebhookHandler
     public async Task<IReadOnlyList<BookingResponse>> ListMineAsync(CancellationToken cancellationToken)
     {
         var customer = await RequireCustomerAsync(cancellationToken);
-        var currency = await _db.Policies.AsNoTracking().Select(p => p.Currency).SingleAsync(cancellationToken);
-        var bookings = await _db.Bookings.AsNoTracking()
-            .Include(b => b.Provider)
-            .Include(b => b.Service)
-            .Include(b => b.Slot)
-            .Include(b => b.Payment)
+        var currency = await CurrencyAsync(cancellationToken);
+        var bookings = await BookingsWithDetails(tracking: false)
             .Where(b => b.CustomerId == customer.Id)
             .ToListAsync(cancellationToken);
 
@@ -170,6 +179,113 @@ public class BookingService : IBookingService, IRazorpayWebhookHandler
             .OrderByDescending(b => b.CreatedAt)
             .Select(b => ToResponse(b, b.Payment, currency))
             .ToList();
+    }
+
+    public async Task<IReadOnlyList<BookingResponse>> ListForInstructorAsync(string? status, CancellationToken cancellationToken)
+    {
+        var provider = await RequireInstructorAsync(cancellationToken);
+        var filter = ParseStatus(status);
+        var currency = await CurrencyAsync(cancellationToken);
+        var query = BookingsWithDetails(tracking: false).Where(b => b.ProviderId == provider.Id);
+        if (filter is BookingStatus parsed)
+            query = query.Where(b => b.Status == parsed);
+
+        var bookings = await query.ToListAsync(cancellationToken);
+        return bookings
+            .OrderByDescending(b => b.CreatedAt)
+            .Select(b => ToResponse(b, b.Payment, currency))
+            .ToList();
+    }
+
+    public async Task<BookingResponse> AcceptAsync(Guid bookingId, CancellationToken cancellationToken)
+    {
+        var (booking, currency) = await LoadForInstructorAsync(bookingId, cancellationToken);
+        BookingRules.Accept(booking);
+        await _db.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("Instructor {ProviderId} accepted booking {BookingId}.", booking.ProviderId, booking.Id);
+        return ToResponse(booking, booking.Payment, currency);
+    }
+
+    public async Task<BookingResponse> DeclineAsync(Guid bookingId, CancellationToken cancellationToken)
+    {
+        var (booking, currency) = await LoadForInstructorAsync(bookingId, cancellationToken);
+        var payment = booking.Payment ?? throw new DomainException("This booking has no payment to refund.");
+        var gatewayPaymentId = payment.GatewayPaymentId;
+        if (string.IsNullOrWhiteSpace(gatewayPaymentId))
+            throw new DomainException("This payment cannot be refunded.");
+
+        BookingRules.Decline(booking);
+        PaymentRules.MarkRefunded(payment);
+        await _razorpay.RefundPaymentAsync(
+            gatewayPaymentId,
+            RazorpayMoney.ToPaise(payment.Amount),
+            booking.Id.ToString("N"),
+            cancellationToken);
+        await _db.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation(
+            "Instructor {ProviderId} declined booking {BookingId} and refunded payment {PaymentId}.",
+            booking.ProviderId,
+            booking.Id,
+            gatewayPaymentId);
+        return ToResponse(booking, payment, currency);
+    }
+
+    public async Task<BookingResponse> CompleteAsync(Guid bookingId, CancellationToken cancellationToken)
+    {
+        var (booking, currency) = await LoadForInstructorAsync(bookingId, cancellationToken);
+        BookingRules.Complete(booking);
+        if (booking.Payout is not null)
+            throw new DomainException("This booking already has a payout.", 409);
+
+        var feePercent = await _db.Policies.AsNoTracking()
+            .Select(p => p.PlatformFeePercent)
+            .SingleAsync(cancellationToken);
+        var payout = PayoutCalculator.ForCompletedBooking(booking, feePercent);
+        _db.PayoutsPending.Add(payout);
+        try
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex)
+        {
+            _logger.LogWarning(ex, "Payout save conflict for booking {BookingId}.", booking.Id);
+            throw new DomainException("This booking already has a payout.", 409);
+        }
+
+        _logger.LogInformation(
+            "Instructor {ProviderId} completed booking {BookingId}. Payout {PayoutId} net {NetAmount}.",
+            booking.ProviderId,
+            booking.Id,
+            payout.Id,
+            payout.NetAmount);
+        return ToResponse(booking, booking.Payment, currency);
+    }
+
+    public async Task<ReviewResponse> CreateReviewAsync(Guid bookingId, CreateReviewRequest request, CancellationToken cancellationToken)
+    {
+        var customer = await RequireCustomerAsync("Only the customer who booked can review.", cancellationToken);
+        var booking = await _db.Bookings
+            .Include(b => b.Review)
+            .SingleOrDefaultAsync(b => b.Id == bookingId, cancellationToken)
+            ?? throw new DomainException("Booking not found.", 404);
+        if (booking.CustomerId != customer.Id)
+            throw new DomainException("This booking belongs to another account.", 403);
+        if (booking.Review is not null)
+            throw new DomainException("This booking already has a review.", 409);
+
+        var review = ReviewRules.Create(booking, customer.Id, request.Rating, request.Comment);
+        _db.Reviews.Add(review);
+        try
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex)
+        {
+            _logger.LogWarning(ex, "Review save conflict for booking {BookingId}.", booking.Id);
+            throw new DomainException("This booking already has a review.", 409);
+        }
+
+        return new ReviewResponse(review.Id, review.BookingId, review.ProviderId, review.Rating, review.Comment, review.CreatedAt);
     }
 
     public async Task<WebhookResult> HandleWebhookAsync(string rawBody, string? signature, CancellationToken cancellationToken)
@@ -296,13 +412,63 @@ public class BookingService : IBookingService, IRazorpayWebhookHandler
         }
     }
 
-    private async Task<User> RequireCustomerAsync(CancellationToken cancellationToken)
+    private Task<User> RequireCustomerAsync(CancellationToken cancellationToken) =>
+        RequireCustomerAsync("Only customers can book a session.", cancellationToken);
+
+    private async Task<User> RequireCustomerAsync(string forbiddenMessage, CancellationToken cancellationToken)
     {
         var user = await _db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Id == _current.UserId, cancellationToken)
             ?? throw new DomainException("Sign in required.", 401);
         if (user.Role != UserRole.Customer)
-            throw new DomainException("Only customers can book a session.", 403);
+            throw new DomainException(forbiddenMessage, 403);
         return user;
+    }
+
+    private async Task<Provider> RequireInstructorAsync(CancellationToken cancellationToken)
+    {
+        var user = await _db.Users.AsNoTracking()
+            .Include(u => u.Provider)
+            .SingleOrDefaultAsync(u => u.Id == _current.UserId, cancellationToken)
+            ?? throw new DomainException("Sign in required.", 401);
+        if (user.Role != UserRole.Provider || user.Provider is null)
+            throw new DomainException("Only the instructor can do that.", 403);
+        return user.Provider;
+    }
+
+    private async Task<(Booking Booking, string Currency)> LoadForInstructorAsync(Guid bookingId, CancellationToken cancellationToken)
+    {
+        var provider = await RequireInstructorAsync(cancellationToken);
+        var booking = await BookingsWithDetails(tracking: true)
+            .Include(b => b.Payout)
+            .SingleOrDefaultAsync(b => b.Id == bookingId, cancellationToken)
+            ?? throw new DomainException("Booking not found.", 404);
+        if (booking.ProviderId != provider.Id)
+            throw new DomainException("This booking belongs to another instructor.", 403);
+
+        var currency = await CurrencyAsync(cancellationToken);
+        return (booking, currency);
+    }
+
+    private IQueryable<Booking> BookingsWithDetails(bool tracking)
+    {
+        var query = tracking ? _db.Bookings : _db.Bookings.AsNoTracking();
+        return query
+            .Include(b => b.Provider)
+            .Include(b => b.Service)
+            .Include(b => b.Slot)
+            .Include(b => b.Payment);
+    }
+
+    private Task<string> CurrencyAsync(CancellationToken cancellationToken) =>
+        _db.Policies.AsNoTracking().Select(p => p.Currency).SingleAsync(cancellationToken);
+
+    private static BookingStatus? ParseStatus(string? status)
+    {
+        if (string.IsNullOrWhiteSpace(status))
+            return null;
+        if (!Enum.TryParse<BookingStatus>(status.Trim(), ignoreCase: true, out var parsed) || !Enum.IsDefined(parsed))
+            throw new DomainException("Unknown booking status.");
+        return parsed;
     }
 
     private async Task<Service> ResolveServiceAsync(Guid providerId, Guid? serviceId, CancellationToken cancellationToken)

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -42,7 +43,14 @@ public interface IRazorpayClient
         CancellationToken cancellationToken);
 
     bool VerifyWebhookSignature(string rawBody, string? signature);
+
+    /// <summary>
+    /// Refunds a captured payment in full or in part. The fake client records the call and does not contact Razorpay.
+    /// </summary>
+    Task RefundPaymentAsync(string paymentId, long amountPaise, string receipt, CancellationToken cancellationToken);
 }
+
+internal readonly record struct RecordedRefund(string PaymentId, long AmountPaise, string Receipt);
 
 internal static class RazorpaySignatures
 {
@@ -86,11 +94,14 @@ internal static class RazorpayMoney
 public sealed class FakeRazorpayClient : IRazorpayClient
 {
     private readonly RazorpayOptions _options;
+    private readonly ConcurrentQueue<RecordedRefund> _refunds = new();
 
     public FakeRazorpayClient(IOptions<RazorpayOptions> options)
     {
         _options = options.Value;
     }
+
+    internal IReadOnlyCollection<RecordedRefund> Refunds => _refunds.ToArray();
 
     public string KeyId => _options.KeyId;
 
@@ -124,6 +135,16 @@ public sealed class FakeRazorpayClient : IRazorpayClient
 
     public bool VerifyWebhookSignature(string rawBody, string? signature) =>
         RazorpaySignatures.MatchesWebhook(_options.WebhookSecret, rawBody, signature);
+
+    public Task RefundPaymentAsync(string paymentId, long amountPaise, string receipt, CancellationToken cancellationToken)
+    {
+        EnsureKeyId();
+        if (string.IsNullOrWhiteSpace(paymentId) || amountPaise <= 0 || string.IsNullOrWhiteSpace(receipt))
+            throw new DomainException("This payment cannot be refunded.");
+
+        _refunds.Enqueue(new RecordedRefund(paymentId, amountPaise, receipt));
+        return Task.CompletedTask;
+    }
 
     private void EnsureKeyId()
     {
@@ -210,6 +231,24 @@ public sealed class RazorpayHttpClient : IRazorpayClient
 
     public bool VerifyWebhookSignature(string rawBody, string? signature) =>
         RazorpaySignatures.MatchesWebhook(_options.WebhookSecret, rawBody, signature);
+
+    public async Task RefundPaymentAsync(string paymentId, long amountPaise, string receipt, CancellationToken cancellationToken)
+    {
+        EnsureConfigured();
+        if (string.IsNullOrWhiteSpace(paymentId) || amountPaise <= 0 || string.IsNullOrWhiteSpace(receipt))
+            throw new DomainException("This payment cannot be refunded.");
+
+        using var response = await _http.PostAsJsonAsync(
+            $"v1/payments/{Uri.EscapeDataString(paymentId)}/refund",
+            new { amount = amountPaise, receipt },
+            cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            await LogFailureAsync("refund payment", response, cancellationToken);
+            throw new DomainException("Could not refund the payment. Try again.", 502);
+        }
+    }
 
     private async Task<PaymentWire?> FetchPaymentAsync(string paymentId, CancellationToken cancellationToken)
     {

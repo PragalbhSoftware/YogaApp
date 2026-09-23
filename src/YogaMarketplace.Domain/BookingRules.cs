@@ -1,8 +1,8 @@
 namespace YogaMarketplace.Domain;
 
 /// <summary>
-/// Booking handshake for later slices. Pay-at-book creates PendingAccept.
-/// Decline refunds (caller) and frees the slot. Complete unlocks a review and a pending payout.
+/// Booking handshake. Pay-at-book creates PendingAccept.
+/// Decline refunds (the caller) and frees the slot. Complete unlocks a review and a pending payout.
 /// Cancel and reschedule windows live on <see cref="MarketplacePolicy"/> as TBD defaults and are not enforced here.
 /// </summary>
 public static class BookingRules

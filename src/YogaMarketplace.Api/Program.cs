@@ -36,7 +36,7 @@ builder.Services.AddSwaggerGen(options =>
     {
         Title = "Yoga Marketplace API",
         Version = "v1",
-        Description = "OTP auth, Mumbai catalog, mode-specific slots, and pay-at-book with Razorpay."
+        Description = "OTP auth, Mumbai catalog, mode-specific slots, pay-at-book, and the instructor accept, decline, and complete handshake."
     });
     options.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
     {
