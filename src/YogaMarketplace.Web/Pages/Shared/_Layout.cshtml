@@ -34,6 +34,11 @@
 </head>
 <body class="@ViewData["Shell"]">
     <a class="skip" href="#main">@UiCopy.SkipToContent</a>
+    <div class="tag-row">
+        <div class="wrap">
+            <p class="tag">@UiCopy.Tagline</p>
+        </div>
+    </div>
     <header class="site-header">
         <div class="wrap header-bar">
             <div class="brand-block">
@@ -41,7 +46,6 @@
                     <img class="brand-mark" src="~/img/logo.png" asp-append-version="true" alt="" width="36" height="36" />
                     <span class="brand-name">@UiCopy.AppName</span>
                 </a>
-                <p class="tag">@UiCopy.Tagline</p>
             </div>
             <nav class="nav" aria-label="Account">
                 @if (User.Identity?.IsAuthenticated == true)
@@ -97,5 +101,9 @@
             <p class="footer-legal">© @DateTime.UtcNow.Year @UiCopy.AppName</p>
         </div>
     </footer>
+    <button type="button" class="to-top" data-to-top hidden aria-label="@UiCopy.BackToTop">
+        <span aria-hidden="true">↑</span>
+    </button>
+    <script src="~/js/site.js" asp-append-version="true"></script>
 </body>
 </html>

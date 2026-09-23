@@ -14,6 +14,7 @@ public static class UiCopy
 
     public const string Tagline = "Book verified yoga instructors — home, studio, or online";
     public const string SkipToContent = "Skip to content";
+    public const string BackToTop = "Back to top";
     public const string SignOut = "Sign out";
     public const string AreaNav = "Area";
     public const string FooterNote = "Book verified yoga instructors for home, studio, or online sessions.";
