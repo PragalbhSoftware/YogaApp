@@ -533,6 +533,29 @@ public class BookingLifecyclePageTests : IClassFixture<YogaApiFactory>
         Assert.DoesNotContain(UiCopy.MeetLink, instructorDone);
     }
 
+    [Fact]
+    public async Task Home_upcoming_hides_meet_link_on_customer_and_instructor_pages()
+    {
+        await using var web = CreateWeb(_api);
+        var customer = await SignInNewAsync(web);
+        var (homeSlot, homeId) = await PayForFutureSlotAsync(customer, SessionModes.Home);
+
+        var (instructor, _) = await SignInExistingAsync(web, InstructorPhone);
+        await AcceptAsync(instructor, homeId);
+
+        var customerHome = Article(await customer.GetStringAsync("/bookings"), homeId);
+        Assert.Contains(BookingArticle(homeId, homeSlot, BookingStatuses.Upcoming), customerHome);
+        Assert.DoesNotContain("meet.google.com", customerHome, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(UiCopy.MeetLink, customerHome);
+
+        var instructorHome = Article(
+            await instructor.GetStringAsync($"/instructor/bookings?status={BookingStatuses.Upcoming}"),
+            homeId);
+        Assert.Contains(BookingArticle(homeId, homeSlot, BookingStatuses.Upcoming), instructorHome);
+        Assert.DoesNotContain("meet.google.com", instructorHome, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(UiCopy.MeetLink, instructorHome);
+    }
+
     private WebApplicationFactory<WebApp::Program> CreateWeb(YogaApiFactory api, Action<IServiceCollection>? configure = null)
     {
         _ = api.Server;
@@ -639,7 +662,14 @@ public class BookingLifecyclePageTests : IClassFixture<YogaApiFactory>
         var path = $"/bookings/new?providerId={SeedIds.AnanyaProviderId}&slotId={slotId}&mode={mode}";
         var bookPage = await client.GetStringAsync(path);
         Assert.Contains(slotId.ToString(), bookPage);
-        var started = await client.PostAsync(path, Form(bookPage, new Dictionary<string, string>()));
+        var fields = new Dictionary<string, string>();
+        if (SessionModes.IsHome(mode))
+        {
+            fields["HomeAddress"] = "14th Road, Bandra West";
+            fields["Landmark"] = "Near the station";
+        }
+
+        var started = await client.PostAsync(path, Form(bookPage, fields));
         Assert.Equal(HttpStatusCode.Redirect, started.StatusCode);
         var pay = await client.GetAsync(started.Headers.Location);
         var payHtml = await pay.Content.ReadAsStringAsync();
