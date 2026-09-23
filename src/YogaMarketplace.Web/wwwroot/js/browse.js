@@ -23,17 +23,29 @@
         return select.options[select.selectedIndex] ? select.options[select.selectedIndex].text : "";
     }
 
+    function checkedModeLabel() {
+        var picked = form.querySelector('input[name="mode"]:checked');
+        if (!picked || !picked.value) {
+            return "";
+        }
+        var label = picked.closest ? picked.closest("label") : null;
+        var text = label ? label.querySelector("span") : null;
+        return text && text.textContent ? text.textContent.trim() : picked.value;
+    }
+
     function paint() {
         var areaSelect = form.querySelector('[name="area"]');
-        var modeSelect = form.querySelector('[name="mode"]');
         var heading = document.getElementById("browse-heading");
         if (!areaSelect || !heading) {
             return;
         }
         var area = selectedText(areaSelect);
-        var mode = modeSelect && modeSelect.value ? selectedText(modeSelect) : "";
+        var mode = checkedModeLabel();
         var headingPattern = heading.getAttribute("data-heading") || "";
-        heading.textContent = headingPattern.replace("{0}", area);
+        var modeHeading = heading.getAttribute("data-title-mode") || "";
+        heading.textContent = mode && modeHeading
+            ? modeHeading.replace("{0}", mode).replace("{1}", area)
+            : headingPattern.replace("{0}", area);
         var titlePattern = mode ? heading.getAttribute("data-title-mode") : heading.getAttribute("data-title");
         var title = (titlePattern || "").replace("{0}", mode || area).replace("{1}", area);
         var app = heading.getAttribute("data-app") || "";

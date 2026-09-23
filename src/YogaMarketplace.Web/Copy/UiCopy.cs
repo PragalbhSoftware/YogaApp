@@ -74,6 +74,10 @@ public static class UiCopy
     public const string ModeOnline = "Online";
     public const string ApplyFilters = "Show instructors";
     public const string FilterLegend = "Filter by area and mode";
+    public const string TrustVerified = "Verified";
+    public const string ModeHomeHint = "At your address";
+    public const string ModeStudioHint = "At the studio";
+    public const string ModeOnlineHint = "Live from home";
     public const string BookCta = "Book";
     public const string BookInstructor = "Book {0}";
     public const string ViewProfile = "View profile and slots";
@@ -91,6 +95,7 @@ public static class UiCopy
     public const string ProfileMissingDescription = "That yoga instructor is not listed in Mumbai.";
     public const string BackToList = "Back to instructors";
     public const string RatesHeading = "Rates";
+    public const string SessionType = "Session type";
     public const string Selected = "Selected";
     public const string ShowingMode = "{0} is {1} a session. Choose an open time to book.";
     public const string NoModes = "No session modes are listed.";

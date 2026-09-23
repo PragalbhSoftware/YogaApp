@@ -30,6 +30,14 @@ public class ProfileModel : PageModel
     public bool IsSelected(string mode) =>
         string.Equals(mode, Mode, StringComparison.OrdinalIgnoreCase);
 
+    public string ModeHint(string mode) => SessionModes.Normalize(mode) switch
+    {
+        SessionModes.Home => UiCopy.ModeHomeHint,
+        SessionModes.Studio => UiCopy.ModeStudioHint,
+        SessionModes.Online => UiCopy.ModeOnlineHint,
+        _ => ""
+    };
+
     public bool CanBook(SlotDto slot) => !SessionClock.HasEnded(slot.Date, slot.End);
     public List<SlotDto> Slots { get; private set; } = [];
     public DateOnly? From { get; private set; }

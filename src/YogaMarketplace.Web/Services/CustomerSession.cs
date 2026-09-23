@@ -119,3 +119,22 @@ public static class TextTrim
         return text[..(max - 1)].TrimEnd() + "…";
     }
 }
+
+public static class PersonMark
+{
+    public static string Initials(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return "";
+
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length == 0)
+            return "";
+        if (parts.Length == 1)
+            return char.ToUpperInvariant(parts[0][0]).ToString();
+
+        return string.Concat(
+            char.ToUpperInvariant(parts[0][0]),
+            char.ToUpperInvariant(parts[^1][0]));
+    }
+}

@@ -2,49 +2,63 @@
 
 @if (!string.IsNullOrEmpty(Model.Error))
 {
-    <p class="alert" role="alert" data-results-summary>@Model.Error</p>
+    <div class="notice notice-alert" role="alert">
+        <p data-results-summary>@Model.Error</p>
+    </div>
 }
 else if (Model.Instructors.Count == 0)
 {
-    <div class="empty">
-        <p data-results-summary>@string.Format(UiCopy.NoInstructors, Model.Area, Model.ModePhrase)</p>
+    <div class="notice">
+        <p class="notice-title" data-results-summary>@string.Format(UiCopy.NoInstructors, Model.Area, Model.ModePhrase)</p>
         <p class="muted">@UiCopy.EmptyBrowseHint</p>
     </div>
 }
 else
 {
     <p class="results-count" data-results-summary>@Model.ResultsLabel</p>
-}
-
-@foreach (var instructor in Model.Instructors)
-{
-    <article class="card instructor-card">
-        <h2>@instructor.DisplayName</h2>
-        <p class="muted place">@instructor.Area, @instructor.City</p>
-        @if (!string.IsNullOrWhiteSpace(instructor.Bio))
+    <div class="person-list">
+        @foreach (var instructor in Model.Instructors)
         {
-            <p class="bio">@TextTrim.Brief(instructor.Bio)</p>
-        }
-        @if (instructor.Modes.Count > 0)
-        {
-            <ul class="rates">
-                @foreach (var mode in instructor.Modes)
+            <article class="person">
+                <div class="person-id">
+                    <span class="avatar" aria-hidden="true">@PersonMark.Initials(instructor.DisplayName)</span>
+                    <div class="person-copy">
+                        <div class="name-row">
+                            <h2>@instructor.DisplayName</h2>
+                            @if (string.Equals(instructor.Status, ProviderStatuses.Verified, StringComparison.OrdinalIgnoreCase))
+                            {
+                                <p class="trust">@UiCopy.TrustVerified</p>
+                            }
+                        </div>
+                        <p class="place">@instructor.Area, @instructor.City</p>
+                    </div>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(instructor.Bio))
                 {
-                    <li>
-                        <span class="rate-mode">@mode.Mode</span>
-                        <span class="rate-amount">@Money.Inr(mode.Rate)</span>
-                    </li>
+                    <p class="bio">@TextTrim.Brief(instructor.Bio)</p>
                 }
-            </ul>
+                @if (instructor.Modes.Count > 0)
+                {
+                    <ul class="rate-grid">
+                        @foreach (var mode in instructor.Modes)
+                        {
+                            <li>
+                                <span class="rate-mode">@mode.Mode</span>
+                                <span class="rate-amount">@Money.Inr(mode.Rate)</span>
+                            </li>
+                        }
+                    </ul>
+                }
+                @if (instructor.ReviewCount > 0 && instructor.RatingAverage is decimal rating)
+                {
+                    <p class="rating">@string.Format(UiCopy.RatingLine, rating.ToString("0.0"), instructor.ReviewCount)</p>
+                }
+                <a class="button"
+                   asp-page="/Instructors/Profile"
+                   asp-route-id="@instructor.Id"
+                   asp-route-mode="@Model.Mode"
+                   aria-label="@string.Format(UiCopy.BookInstructor, instructor.DisplayName)">@UiCopy.BookCta</a>
+            </article>
         }
-        @if (instructor.ReviewCount > 0 && instructor.RatingAverage is decimal rating)
-        {
-            <p class="rating">@string.Format(UiCopy.RatingLine, rating.ToString("0.0"), instructor.ReviewCount)</p>
-        }
-        <a class="button"
-           asp-page="/Instructors/Profile"
-           asp-route-id="@instructor.Id"
-           asp-route-mode="@Model.Mode"
-           aria-label="@string.Format(UiCopy.BookInstructor, instructor.DisplayName)">@UiCopy.BookCta</a>
-    </article>
+    </div>
 }

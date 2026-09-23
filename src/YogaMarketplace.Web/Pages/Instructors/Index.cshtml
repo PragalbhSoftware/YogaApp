@@ -5,67 +5,67 @@
     ViewData["Description"] = Model.MetaDescription;
 }
 
-<header class="page-head">
-    <p class="kicker">@UiCopy.CategoryName · @UiCopy.CityName</p>
-    <h1 id="browse-heading"
-        data-heading="@UiCopy.BrowseHeading"
-        data-title="@UiCopy.BrowseDocumentTitle"
-        data-title-mode="@UiCopy.BrowseDocumentTitleWithMode"
-        data-description="@UiCopy.BrowseDescription"
-        data-description-mode="@UiCopy.BrowseDescriptionWithMode"
-        data-app="@UiCopy.AppName">@string.Format(UiCopy.BrowseHeading, Model.Area)</h1>
-    <p class="lead">@UiCopy.BrowseLead</p>
-</header>
+<div class="catalog">
+    <header class="catalog-intro">
+        <p class="kicker">@UiCopy.CategoryName · @UiCopy.CityName</p>
+        <h1 id="browse-heading"
+            data-heading="@UiCopy.BrowseHeading"
+            data-title="@UiCopy.BrowseDocumentTitle"
+            data-title-mode="@UiCopy.BrowseDocumentTitleWithMode"
+            data-description="@UiCopy.BrowseDescription"
+            data-description-mode="@UiCopy.BrowseDescriptionWithMode"
+            data-app="@UiCopy.AppName">@string.Format(UiCopy.BrowseHeading, Model.Area)</h1>
+        <p class="lead">@UiCopy.BrowseLead</p>
+    </header>
 
-@if (!string.IsNullOrEmpty(Model.AreasError))
-{
-    <p class="alert" role="alert">@Model.AreasError</p>
-}
+    @if (!string.IsNullOrEmpty(Model.AreasError))
+    {
+        <p class="alert" role="alert">@Model.AreasError</p>
+    }
 
-<form method="get" class="filters" data-browse-filters action="@Url.Page("/Instructors/Index")" aria-controls="instructor-results">
-    <fieldset>
-        <legend class="visually-hidden">@UiCopy.FilterLegend</legend>
-        <div class="filter-grid">
-            <div class="field">
-                <label for="area">@UiCopy.Area</label>
-                <select id="area" name="area">
-                    @foreach (var area in Model.AreaChoices)
+    <form method="get" class="filter-tray" data-browse-filters action="@Url.Page("/Instructors/Index")" aria-controls="instructor-results">
+        <div class="field">
+            <label for="area">@UiCopy.Area</label>
+            <select id="area" name="area">
+                @foreach (var area in Model.AreaChoices)
+                {
+                    if (area == Model.Area)
                     {
-                        if (area == Model.Area)
-                        {
-                            <option value="@area" selected>@area</option>
-                        }
-                        else
-                        {
-                            <option value="@area">@area</option>
-                        }
+                        <option value="@area" selected>@area</option>
                     }
-                </select>
-            </div>
-            <div class="field">
-                <label for="mode">@UiCopy.Mode</label>
-                <select id="mode" name="mode">
-                    @foreach (var option in Model.ModeOptions)
+                    else
                     {
-                        if (option.Selected)
-                        {
-                            <option value="@option.Value" selected>@option.Label</option>
-                        }
-                        else
-                        {
-                            <option value="@option.Value">@option.Label</option>
-                        }
+                        <option value="@area">@area</option>
                     }
-                </select>
-            </div>
+                }
+            </select>
         </div>
-        <button type="submit" class="secondary auto">@UiCopy.ApplyFilters</button>
-    </fieldset>
-</form>
+        <fieldset class="mode-chips">
+            <legend>@UiCopy.Mode</legend>
+            <div class="chip-row">
+                @foreach (var option in Model.ModeOptions)
+                {
+                    <label>
+                        @if (option.Selected)
+                        {
+                            <input type="radio" name="mode" value="@option.Value" checked />
+                        }
+                        else
+                        {
+                            <input type="radio" name="mode" value="@option.Value" />
+                        }
+                        <span>@option.Label</span>
+                    </label>
+                }
+            </div>
+        </fieldset>
+        <button type="submit" class="secondary">@UiCopy.ApplyFilters</button>
+    </form>
 
-<p id="browse-status" class="visually-hidden" data-browse-status aria-live="polite"></p>
-<div id="instructor-results" data-browse-results data-updating="@UiCopy.UpdatingList">
-    <partial name="_InstructorList" model="Model" />
+    <p id="browse-status" class="visually-hidden" data-browse-status aria-live="polite"></p>
+    <div id="instructor-results" data-browse-results data-updating="@UiCopy.UpdatingList">
+        <partial name="_InstructorList" model="Model" />
+    </div>
 </div>
 
 <script src="~/js/browse.js" asp-append-version="true"></script>

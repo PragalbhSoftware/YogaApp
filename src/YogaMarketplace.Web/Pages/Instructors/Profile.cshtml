@@ -5,109 +5,137 @@
     ViewData["Description"] = Model.MetaDescription;
 }
 
-<p class="back-link"><a asp-page="/Instructors/Index">@UiCopy.BackToList</a></p>
+<div class="catalog">
+    <p class="back-link"><a asp-page="/Instructors/Index">@UiCopy.BackToList</a></p>
 
-@if (!string.IsNullOrEmpty(Model.Error))
-{
-    <h1>@UiCopy.ProfileTitle</h1>
-    <p class="alert" role="alert">@Model.Error</p>
-}
-else if (Model.Instructor is { } instructor)
-{
-    <header class="page-head">
-        <p class="kicker">@UiCopy.CategoryName · @instructor.Area, @UiCopy.CityName</p>
-        <h1>@instructor.DisplayName</h1>
-        @if (instructor.Age is int age)
-        {
-            <p class="muted">@string.Format(UiCopy.AgeLabel, age)</p>
-        }
-        @if (instructor.ReviewCount > 0 && instructor.RatingAverage is decimal rating)
-        {
-            <p class="rating">@string.Format(UiCopy.RatingLine, rating.ToString("0.0"), instructor.ReviewCount)</p>
-        }
-    </header>
-
-    @if (!string.IsNullOrWhiteSpace(instructor.Bio))
+    @if (!string.IsNullOrEmpty(Model.Error))
     {
-        <p>@instructor.Bio</p>
+        <h1>@UiCopy.ProfileTitle</h1>
+        <div class="notice notice-alert" role="alert">
+            <p>@Model.Error</p>
+        </div>
     }
-    @if (!string.IsNullOrWhiteSpace(instructor.StudioAddress))
+    else if (Model.Instructor is { } instructor)
     {
-        <p><strong>@UiCopy.StudioAddress.</strong> @instructor.StudioAddress</p>
-    }
-
-    <section class="profile-section" aria-labelledby="rates-heading">
-        <h2 id="rates-heading">@UiCopy.RatesHeading</h2>
-        @if (instructor.Modes.Count == 0)
-        {
-            <p class="empty">@UiCopy.NoModes</p>
-        }
-        else
-        {
-            <ul class="mode-list">
-                @foreach (var mode in instructor.Modes)
-                {
-                    var selected = Model.IsSelected(mode.Mode);
-                    <li>
-                        <a asp-page="/Instructors/Profile"
-                           asp-route-id="@instructor.Id"
-                           asp-route-mode="@mode.Mode"
-                           aria-current="@(selected ? "page" : null)">
-                            <span>@mode.Mode</span>
-                            <span class="mode-meta">
-                                <span class="rate-amount">@Money.Inr(mode.Rate)</span>
-                                @if (selected)
-                                {
-                                    <span class="mode-state">@UiCopy.Selected</span>
-                                }
-                            </span>
-                        </a>
-                    </li>
-                }
-            </ul>
-        }
-    </section>
-
-    <section class="profile-section" aria-labelledby="slots-heading">
-        <h2 id="slots-heading">@UiCopy.SlotsTitle</h2>
-        @if (Model.SelectedRate is { } rate)
-        {
-            <p class="lead">@string.Format(UiCopy.ShowingMode, rate.Mode, Money.Inr(rate.Rate))</p>
-        }
-        <p class="muted">@UiCopy.SlotsLead</p>
-        @if (Model.From is DateOnly from && Model.To is DateOnly to)
-        {
-            <p class="muted">@string.Format(UiCopy.SlotRange, from.ToString("d MMM"), to.ToString("d MMM"))</p>
-        }
-        @if (!string.IsNullOrEmpty(Model.SlotsError))
-        {
-            <p class="alert" role="alert">@Model.SlotsError</p>
-        }
-        else if (Model.Slots.Count == 0)
-        {
-            <p class="empty">@UiCopy.NoSlots</p>
-        }
-        else
-        {
-            @foreach (var day in Model.Slots.GroupBy(slot => slot.Date))
-            {
-                <h3>@day.Key.ToString("dddd d MMM")</h3>
-                <ul class="slots">
-                    @foreach (var slot in day)
+        <header class="identity">
+            <span class="avatar avatar-lg" aria-hidden="true">@PersonMark.Initials(instructor.DisplayName)</span>
+            <div class="person-copy">
+                <p class="kicker">@UiCopy.CategoryName · @instructor.Area, @UiCopy.CityName</p>
+                <div class="name-row">
+                    <h1>@instructor.DisplayName</h1>
+                    @if (string.Equals(instructor.Status, ProviderStatuses.Verified, StringComparison.OrdinalIgnoreCase))
                     {
+                        <p class="trust">@UiCopy.TrustVerified</p>
+                    }
+                </div>
+                @if (instructor.Age is int age)
+                {
+                    <p class="muted">@string.Format(UiCopy.AgeLabel, age)</p>
+                }
+                @if (instructor.ReviewCount > 0 && instructor.RatingAverage is decimal rating)
+                {
+                    <p class="rating">@string.Format(UiCopy.RatingLine, rating.ToString("0.0"), instructor.ReviewCount)</p>
+                }
+            </div>
+        </header>
+
+        @if (!string.IsNullOrWhiteSpace(instructor.Bio))
+        {
+            <p class="prose-card">@instructor.Bio</p>
+        }
+        @if (!string.IsNullOrWhiteSpace(instructor.StudioAddress))
+        {
+            <p class="place-line"><strong>@UiCopy.StudioAddress.</strong> @instructor.StudioAddress</p>
+        }
+
+        <section class="profile-section" aria-labelledby="rates-heading">
+            <h2 id="rates-heading">@UiCopy.SessionType</h2>
+            @if (instructor.Modes.Count == 0)
+            {
+                <div class="notice">
+                    <p class="notice-title">@UiCopy.NoModes</p>
+                </div>
+            }
+            else
+            {
+                <ul class="mode-list">
+                    @foreach (var mode in instructor.Modes)
+                    {
+                        var selected = Model.IsSelected(mode.Mode);
                         <li>
-                            @if (Model.CanBook(slot))
-                            {
-                                <a class="button" asp-page="/Bookings/New" asp-route-providerId="@instructor.Id" asp-route-slotId="@slot.Id" asp-route-mode="@Model.Mode">@string.Format(UiCopy.BookSlot, slot.Start, slot.End)</a>
-                            }
-                            else
-                            {
-                                <span class="muted">@slot.Start–@slot.End · @UiCopy.SlotEnded</span>
-                            }
+                            <a asp-page="/Instructors/Profile"
+                               asp-route-id="@instructor.Id"
+                               asp-route-mode="@mode.Mode"
+                               aria-current="@(selected ? "page" : null)">
+                                <span class="mode-choice-copy">
+                                    <span class="mode-choice-name">@mode.Mode</span>
+                                    <span class="mode-choice-hint">@Model.ModeHint(mode.Mode)</span>
+                                </span>
+                                <span class="mode-meta">
+                                    <span class="rate-amount">@Money.Inr(mode.Rate)</span>
+                                    @if (selected)
+                                    {
+                                        <span class="mode-state">@UiCopy.Selected</span>
+                                    }
+                                </span>
+                            </a>
                         </li>
                     }
                 </ul>
             }
-        }
-    </section>
-}
+        </section>
+
+        <section class="profile-section" aria-labelledby="slots-heading">
+            <h2 id="slots-heading">@UiCopy.SlotsTitle</h2>
+            @if (Model.SelectedRate is { } rate)
+            {
+                <div class="price-callout">
+                    <p class="price-figure">@Money.Inr(rate.Rate)</p>
+                    <p>@string.Format(UiCopy.ShowingMode, rate.Mode, Money.Inr(rate.Rate))</p>
+                </div>
+            }
+            <p class="muted">@UiCopy.SlotsLead</p>
+            @if (Model.From is DateOnly from && Model.To is DateOnly to)
+            {
+                <p class="muted">@string.Format(UiCopy.SlotRange, from.ToString("d MMM"), to.ToString("d MMM"))</p>
+            }
+            @if (!string.IsNullOrEmpty(Model.SlotsError))
+            {
+                <div class="notice notice-alert" role="alert">
+                    <p>@Model.SlotsError</p>
+                </div>
+            }
+            else if (Model.Slots.Count == 0)
+            {
+                <div class="notice">
+                    <p class="notice-title">@UiCopy.NoSlots</p>
+                </div>
+            }
+            else
+            {
+                @foreach (var day in Model.Slots.GroupBy(slot => slot.Date))
+                {
+                    <h3 class="day-label">@day.Key.ToString("dddd d MMM")</h3>
+                    <ul class="slot-list">
+                        @foreach (var slot in day)
+                        {
+                            <li>
+                                @if (Model.CanBook(slot))
+                                {
+                                    <a class="slot-book" asp-page="/Bookings/New" asp-route-providerId="@instructor.Id" asp-route-slotId="@slot.Id" asp-route-mode="@Model.Mode" aria-label="@string.Format(UiCopy.BookSlot, slot.Start, slot.End)">
+                                        <span>@slot.Start–@slot.End</span>
+                                        <span class="slot-go">@UiCopy.BookCta</span>
+                                    </a>
+                                }
+                                else
+                                {
+                                    <span class="slot-ended">@slot.Start–@slot.End · @UiCopy.SlotEnded</span>
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+            }
+        </section>
+    }
+</div>
