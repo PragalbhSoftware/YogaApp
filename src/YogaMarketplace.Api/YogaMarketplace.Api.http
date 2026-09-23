@@ -92,6 +92,54 @@ Content-Type: application/json
 }
 
 ###
+# Admin JWT. Development seed phone +919000000001, existing user (isNewUser false).
+GET {{host}}/api/admin/providers?status=Pending
+Authorization: Bearer {{adminToken}}
+
+###
+POST {{host}}/api/admin/providers/00000000-0000-0000-0000-000000000000/verify
+Authorization: Bearer {{adminToken}}
+
+###
+POST {{host}}/api/admin/providers/00000000-0000-0000-0000-000000000000/reject
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "reason": "Incomplete profile"
+}
+
+###
+GET {{host}}/api/admin/users?q=Ananya&role=Provider
+Authorization: Bearer {{adminToken}}
+
+###
+GET {{host}}/api/admin/bookings?status=PendingAccept&from=2026-09-23&to=2026-09-30
+Authorization: Bearer {{adminToken}}
+
+###
+GET {{host}}/api/admin/payments?status=Paid
+Authorization: Bearer {{adminToken}}
+
+###
+GET {{host}}/api/admin/payouts
+Authorization: Bearer {{adminToken}}
+
+###
+GET {{host}}/api/admin/reports/summary
+Authorization: Bearer {{adminToken}}
+
+###
+PATCH {{host}}/api/admin/policy
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "platformFeePercent": 15,
+  "cancelFreeWindowHours": 12
+}
+
+###
 POST {{host}}/api/webhooks/razorpay
 Content-Type: application/json
 X-Razorpay-Signature: hex hmac sha256 of the raw body using Razorpay:WebhookSecret

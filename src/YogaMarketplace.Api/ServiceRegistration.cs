@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization.Policy;
 using YogaMarketplace.Api.Options;
 using YogaMarketplace.Api.Security;
 using YogaMarketplace.Api.Services;
@@ -18,6 +20,13 @@ public static class ServiceRegistration
         services.AddScoped<ProviderService>();
         services.AddScoped<CatalogService>();
         services.AddScoped<BookingService>();
+        services.AddScoped<IAdminProviderService, AdminProviderService>();
+        services.AddScoped<IAdminUserService, AdminUserService>();
+        services.AddScoped<IAdminBookingService, AdminBookingService>();
+        services.AddScoped<IAdminTransactionService, AdminTransactionService>();
+        services.AddScoped<IAdminMasterService, AdminMasterService>();
+        services.AddScoped<IAdminReportService, AdminReportService>();
+        services.AddSingleton<IAuthorizationMiddlewareResultHandler, ApiAuthorizationResultHandler>();
         services.AddScoped<IBookingService>(sp => sp.GetRequiredService<BookingService>());
         services.AddScoped<IBookingHandshake>(sp => sp.GetRequiredService<BookingService>());
         services.AddScoped<IRazorpayWebhookHandler>(sp => sp.GetRequiredService<BookingService>());
