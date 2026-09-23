@@ -81,6 +81,21 @@ public static class InstructorNotices
     };
 }
 
+/// <summary>
+/// Join link for an online session while it is upcoming.
+/// </summary>
+public static class BookingMeet
+{
+    public static string? JoinHref(BookingDto booking)
+    {
+        if (SessionModes.Normalize(booking.Mode) != SessionModes.Online)
+            return null;
+        if (booking.Status != BookingStatuses.Upcoming)
+            return null;
+        return AdminLinks.Http(booking.MeetLink);
+    }
+}
+
 public static class BookingStatusText
 {
     public static string FilterLabel(string status) => status switch

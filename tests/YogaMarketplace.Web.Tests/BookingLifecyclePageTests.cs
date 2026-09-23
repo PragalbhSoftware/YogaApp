@@ -462,6 +462,77 @@ public class BookingLifecyclePageTests : IClassFixture<YogaApiFactory>
         Assert.Contains("data-action=\"reschedule\"", card);
     }
 
+    [Fact]
+    public async Task Online_upcoming_shows_meet_link_and_studio_does_not()
+    {
+        const string meetUrl = "https://meet.google.com/abc-defg-hij";
+
+        await using var web = CreateWeb(_api);
+        var customer = await SignInNewAsync(web);
+        var (onlineSlot, onlineId) = await PayForFutureSlotAsync(customer, SessionModes.Online);
+
+        var pendingCustomer = Article(await customer.GetStringAsync("/bookings"), onlineId);
+        Assert.Contains(BookingArticle(onlineId, onlineSlot, BookingStatuses.PendingAccept), pendingCustomer);
+        Assert.DoesNotContain(meetUrl, pendingCustomer, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(UiCopy.MeetLink, pendingCustomer);
+
+        var (instructor, _) = await SignInExistingAsync(web, InstructorPhone);
+        var pendingInbox = Article(
+            await instructor.GetStringAsync($"/instructor/bookings?status={BookingStatuses.PendingAccept}"),
+            onlineId);
+        Assert.Contains(BookingArticle(onlineId, onlineSlot, BookingStatuses.PendingAccept), pendingInbox);
+        Assert.DoesNotContain(meetUrl, pendingInbox, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(UiCopy.MeetLink, pendingInbox);
+
+        await AcceptAsync(instructor, onlineId);
+
+        var customerUpcoming = Article(await customer.GetStringAsync("/bookings"), onlineId);
+        Assert.Contains(BookingArticle(onlineId, onlineSlot, BookingStatuses.Upcoming), customerUpcoming);
+        Assert.Contains($"href=\"{meetUrl}\"", customerUpcoming, StringComparison.Ordinal);
+        Assert.Contains(UiCopy.MeetLink, customerUpcoming);
+
+        var instructorUpcoming = Article(
+            await instructor.GetStringAsync($"/instructor/bookings?status={BookingStatuses.Upcoming}"),
+            onlineId);
+        Assert.Contains(BookingArticle(onlineId, onlineSlot, BookingStatuses.Upcoming), instructorUpcoming);
+        Assert.Contains($"href=\"{meetUrl}\"", instructorUpcoming, StringComparison.Ordinal);
+        Assert.Contains(UiCopy.MeetLink, instructorUpcoming);
+
+        var (studioSlot, studioId) = await PayForFutureSlotAsync(customer, SessionModes.Studio);
+        await AcceptAsync(instructor, studioId);
+
+        var customerStudio = Article(await customer.GetStringAsync("/bookings"), studioId);
+        Assert.Contains(BookingArticle(studioId, studioSlot, BookingStatuses.Upcoming), customerStudio);
+        Assert.DoesNotContain("meet.google.com", customerStudio, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(UiCopy.MeetLink, customerStudio);
+
+        var instructorStudio = Article(
+            await instructor.GetStringAsync($"/instructor/bookings?status={BookingStatuses.Upcoming}"),
+            studioId);
+        Assert.Contains(BookingArticle(studioId, studioSlot, BookingStatuses.Upcoming), instructorStudio);
+        Assert.DoesNotContain("meet.google.com", instructorStudio, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(UiCopy.MeetLink, instructorStudio);
+
+        var upcomingPage = await instructor.GetStringAsync($"/instructor/bookings?status={BookingStatuses.Upcoming}");
+        var completed = await instructor.PostAsync(
+            $"/instructor/bookings?handler=Complete&id={onlineId}&status={BookingStatuses.Upcoming}",
+            Form(upcomingPage, new Dictionary<string, string>()));
+        var completedBody = await completed.Content.ReadAsStringAsync();
+        Assert.True(completed.StatusCode == HttpStatusCode.Redirect, completedBody);
+
+        var customerDone = Article(await customer.GetStringAsync("/bookings"), onlineId);
+        Assert.Contains(BookingArticle(onlineId, onlineSlot, BookingStatuses.Completed), customerDone);
+        Assert.DoesNotContain(meetUrl, customerDone, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(UiCopy.MeetLink, customerDone);
+
+        var instructorDone = Article(
+            await instructor.GetStringAsync($"/instructor/bookings?status={BookingStatuses.Completed}"),
+            onlineId);
+        Assert.Contains(BookingArticle(onlineId, onlineSlot, BookingStatuses.Completed), instructorDone);
+        Assert.DoesNotContain(meetUrl, instructorDone, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(UiCopy.MeetLink, instructorDone);
+    }
+
     private WebApplicationFactory<WebApp::Program> CreateWeb(YogaApiFactory api, Action<IServiceCollection>? configure = null)
     {
         _ = api.Server;
