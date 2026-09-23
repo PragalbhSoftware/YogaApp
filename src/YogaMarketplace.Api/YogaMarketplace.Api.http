@@ -1,0 +1,38 @@
+@host = http://localhost:5080
+
+GET {{host}}/health
+
+###
+GET {{host}}/api/areas
+
+###
+GET {{host}}/api/categories
+
+###
+GET {{host}}/api/policy
+
+###
+POST {{host}}/api/auth/otp/request
+Content-Type: application/json
+
+{
+  "phone": "9876543210",
+  "name": "Rahul Sharma",
+  "gender": "Male",
+  "isNewUser": true
+}
+
+###
+POST {{host}}/api/auth/otp/verify
+Content-Type: application/json
+
+{
+  "phone": "9876543210",
+  "code": "123456"
+}
+
+###
+GET {{host}}/api/providers?area=Bandra&mode=Home&category=yoga
+
+###
+GET {{host}}/api/providers/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4/slots?mode=Home
