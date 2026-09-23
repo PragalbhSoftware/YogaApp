@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@(ViewData["Title"] == null ? UiCopy.AppName : ViewData["Title"] + " · " + UiCopy.AppName)</title>
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body>
+    <a class="skip" href="#main">@UiCopy.SkipToContent</a>
+    <header class="site-header">
+        <div class="wrap header-bar">
+            <a class="brand" asp-page="/Index">@UiCopy.AppName</a>
+            <p class="tag">@UiCopy.Tagline</p>
+            <nav class="nav" aria-label="Account">
+                @if (User.Identity?.IsAuthenticated == true)
+                {
+                    var who = string.IsNullOrWhiteSpace(User.Identity.Name)
+                        ? User.FindFirst(ClaimTypes.MobilePhone)?.Value
+                        : User.Identity.Name;
+                    <span class="who">@who</span>
+                    <a asp-page="/Areas/Select">@UiCopy.AreaNav</a>
+                    <a asp-page="/Instructors/Index">@UiCopy.ProviderPlural</a>
+                    <form method="post" asp-page="/Account/SignOut">
+                        <button type="submit" class="link">@UiCopy.SignOut</button>
+                    </form>
+                }
+                else
+                {
+                    <a asp-page="/Account/SignIn">@UiCopy.SignInCta</a>
+                }
+            </nav>
+        </div>
+    </header>
+    <main id="main" class="wrap">
+        @RenderBody()
+    </main>
+    <footer class="site-footer">
+        <div class="wrap">@UiCopy.FooterNote</div>
+    </footer>
+</body>
+</html>

@@ -2,7 +2,7 @@
 
 Mumbai-first yoga instructor marketplace. This repository is **slice 1**: ASP.NET Core Web API, domain model, EF Core, and SQL Server. Customers can authenticate with a one-time passcode, instructors can register (they stay pending until a later admin slice), and verified instructors can be browsed with **mode-specific** slots (Home, Studio, Online).
 
-Yoga is the first `Category`. The model is generic enough for another category later. There is no customer web UI in this slice.
+Yoga is the first `Category`. The model is generic enough for another category later. The customer web shell is `src/YogaMarketplace.Web`: phone OTP, Mumbai area, then verified instructors. Booking and payments are not in that shell.
 
 ## Solution
 
@@ -11,7 +11,9 @@ Yoga is the first `Category`. The model is generic enough for another category l
 | `src/YogaMarketplace.Api` | Controllers, OTP/JWT, browse and slots |
 | `src/YogaMarketplace.Domain` | Entities and booking rules |
 | `src/YogaMarketplace.Infrastructure` | EF Core, SQL Server, seed |
+| `src/YogaMarketplace.Web` | Razor Pages customer shell (OTP, area, browse) |
 | `tests/YogaMarketplace.Api.Tests` | Domain rules and API tests (SQLite) |
+| `tests/YogaMarketplace.Web.Tests` | Customer shell against the API test host |
 
 Flow is controllers to services to EF Core. No CQRS and no message bus.
 
@@ -69,6 +71,30 @@ dotnet test
 ```
 
 Tests build the model with SQLite. The app itself uses SQL Server.
+
+## Customer web
+
+`src/YogaMarketplace.Web` is a mobile-first Razor Pages shell. It does not open SQL Server. It calls the API with `HttpClient` (`Api:BaseUrl`, default `http://localhost:5080`).
+
+Start SQL Server and the API (sections above), then in a second terminal:
+
+```bash
+dotnet run --project src/YogaMarketplace.Web
+```
+
+Web: `http://localhost:5081`
+
+1. **Account.** New customers send name, gender (Female, Male, or Other), and phone. Existing customers send phone only. Verify the code.
+2. **Area.** Pick a Mumbai neighbourhood from `GET /api/areas`.
+3. **Instructors.** Filter by area and Home / Studio / Online. The list is verified instructors for the `yoga` category (`Api:CategorySlug`). Open a profile to see this week's slots. There is no book or pay action.
+
+The API JWT from `POST /api/auth/otp/verify` is stored in the encrypted `ym.session` cookie and sent as `Authorization: Bearer` on later API calls. The chosen area is the `ym.area` cookie.
+
+In Development the API code is `123456` and the response includes `devCode`. The verify step shows that code (and fills it in) when the API returns it. `Api:ShowDevOtpHint` is true only in `appsettings.Development.json`, which is not published. Seeded instructor Ananya Desai (`+919876543210`, Bandra) can sign in with her phone.
+
+If the API is stopped, pages show an error and empty lists. The web app does not keep a second catalog or a fake OTP store.
+
+Labels live in `src/YogaMarketplace.Web/Copy/UiCopy.cs` so the first category and city can be renamed later without changing the flow.
 
 ## Dev OTP and seed
 
@@ -152,7 +178,7 @@ Target is IIS on Plesk with SQL Server, subdomain `YogaDemo.psoftcs.com`.
 ## Later slices
 
 1. **This PR** — auth, domain, EF, browse/slots skeleton
-2. Browse + book + pay (Razorpay). Pay-at-book creates `PendingAccept`
+2. Customer web shell (OTP, area, verified browse) is in this repo. Book + pay (Razorpay) is still later. Pay-at-book creates `PendingAccept`
 3. Accept / decline / complete, reviews, payout pending
 4. Admin approve/reject and oversight
 5. Reschedule, cancel, payout export

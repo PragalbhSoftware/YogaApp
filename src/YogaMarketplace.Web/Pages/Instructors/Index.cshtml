@@ -1,0 +1,85 @@
+@page "/instructors"
+@model YogaMarketplace.Web.Pages.Instructors.IndexModel
+@{
+    ViewData["Title"] = UiCopy.BrowseTitle;
+}
+
+<h1>@UiCopy.BrowseTitle</h1>
+<p class="lead">@UiCopy.BrowseLead</p>
+<p class="muted">@UiCopy.CategoryName · @UiCopy.VerifiedOnly</p>
+
+@if (!string.IsNullOrEmpty(Model.Error))
+{
+    <p class="alert" role="alert">@Model.Error</p>
+}
+else if (!string.IsNullOrEmpty(Model.AreasError))
+{
+    <p class="alert" role="alert">@Model.AreasError</p>
+}
+
+<form method="get">
+    <div class="field">
+        <label for="area">@UiCopy.Area</label>
+        <select id="area" name="area">
+            @foreach (var area in Model.AreaChoices)
+            {
+                if (area == Model.Area)
+                {
+                    <option value="@area" selected>@area</option>
+                }
+                else
+                {
+                    <option value="@area">@area</option>
+                }
+            }
+        </select>
+    </div>
+    <div class="field">
+        <label for="mode">@UiCopy.Mode</label>
+        <select id="mode" name="mode">
+            @foreach (var option in Model.ModeOptions)
+            {
+                if (option.Selected)
+                {
+                    <option value="@option.Value" selected>@option.Label</option>
+                }
+                else
+                {
+                    <option value="@option.Value">@option.Label</option>
+                }
+            }
+        </select>
+    </div>
+    <button type="submit" class="auto">@UiCopy.ApplyFilters</button>
+</form>
+
+@if (Model.Instructors.Count == 0 && string.IsNullOrEmpty(Model.Error))
+{
+    <p>@string.Format(UiCopy.NoInstructors, Model.Area, Model.ModePhrase)</p>
+}
+
+@foreach (var instructor in Model.Instructors)
+{
+    <article class="card">
+        <h2>@instructor.DisplayName</h2>
+        <p class="muted">@instructor.Area, @instructor.City · @instructor.Status</p>
+        @if (!string.IsNullOrWhiteSpace(instructor.Bio))
+        {
+            <p>@TextTrim.Brief(instructor.Bio)</p>
+        }
+        @if (instructor.Modes.Count > 0)
+        {
+            <ul class="pills">
+                @foreach (var mode in instructor.Modes)
+                {
+                    <li class="pill">@mode.Mode @Money.Inr(mode.Rate)</li>
+                }
+            </ul>
+        }
+        @if (instructor.ReviewCount > 0 && instructor.RatingAverage is decimal rating)
+        {
+            <p>@string.Format(UiCopy.RatingLine, rating.ToString("0.0"), instructor.ReviewCount)</p>
+        }
+        <a class="button secondary" asp-page="/Instructors/Profile" asp-route-id="@instructor.Id" asp-route-mode="@Model.Mode">@UiCopy.ViewProfile</a>
+    </article>
+}
