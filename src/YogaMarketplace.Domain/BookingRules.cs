@@ -3,7 +3,10 @@ namespace YogaMarketplace.Domain;
 /// <summary>
 /// Booking handshake. Pay-at-book creates PendingAccept.
 /// Decline refunds (the caller) and frees the slot. Complete unlocks a review and a pending payout.
-/// Cancel and reschedule windows live on <see cref="MarketplacePolicy"/> as TBD defaults and are not enforced here.
+/// Cancel allows PendingAccept or Upcoming before the session starts and frees the slot.
+/// Reschedule keeps one Upcoming booking on another slot with the same instructor and mode.
+/// Free-window hours and the late-cancel fee live on <see cref="MarketplacePolicy"/> as TBD defaults.
+/// <see cref="IsFreeWindow"/> evaluates that window. Cancel and reschedule do not charge it.
 /// </summary>
 public static class BookingRules
 {
@@ -83,12 +86,15 @@ public static class BookingRules
         booking.UpdatedAt = DateTimeOffset.UtcNow;
     }
 
-    public static void Cancel(Booking booking)
+    public static void Cancel(Booking booking, DateTimeOffset sessionStart, DateTimeOffset now)
     {
-        if (booking.Status != BookingStatus.Upcoming)
-            throw new DomainException("Only an upcoming booking can be cancelled.");
+        if (booking.Status is not (BookingStatus.PendingAccept or BookingStatus.Upcoming))
+            throw new DomainException("Only a pending or upcoming booking can be cancelled.");
+        if (now >= sessionStart)
+            throw new DomainException("This session has already started.");
+
         booking.Status = BookingStatus.Cancelled;
-        booking.UpdatedAt = DateTimeOffset.UtcNow;
+        booking.UpdatedAt = now;
     }
 
     public static void MarkNoShow(Booking booking)
