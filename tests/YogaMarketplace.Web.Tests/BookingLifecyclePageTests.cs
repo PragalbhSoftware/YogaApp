@@ -522,15 +522,15 @@ public class BookingLifecyclePageTests : IClassFixture<YogaApiFactory>
 
         var customerDone = Article(await customer.GetStringAsync("/bookings"), onlineId);
         Assert.Contains(BookingArticle(onlineId, onlineSlot, BookingStatuses.Completed), customerDone);
-        Assert.Contains($"href=\"{meetUrl}\"", customerDone, StringComparison.Ordinal);
-        Assert.Contains(UiCopy.MeetLink, customerDone);
+        Assert.DoesNotContain(meetUrl, customerDone, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(UiCopy.MeetLink, customerDone);
 
         var instructorDone = Article(
             await instructor.GetStringAsync($"/instructor/bookings?status={BookingStatuses.Completed}"),
             onlineId);
         Assert.Contains(BookingArticle(onlineId, onlineSlot, BookingStatuses.Completed), instructorDone);
-        Assert.Contains($"href=\"{meetUrl}\"", instructorDone, StringComparison.Ordinal);
-        Assert.Contains(UiCopy.MeetLink, instructorDone);
+        Assert.DoesNotContain(meetUrl, instructorDone, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(UiCopy.MeetLink, instructorDone);
     }
 
     private WebApplicationFactory<WebApp::Program> CreateWeb(YogaApiFactory api, Action<IServiceCollection>? configure = null)
