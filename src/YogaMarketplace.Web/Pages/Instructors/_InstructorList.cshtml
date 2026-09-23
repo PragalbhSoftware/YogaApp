@@ -31,12 +31,12 @@ else
                             }
                         </div>
                         <p class="place">@instructor.Area, @instructor.City</p>
+                        @if (instructor.ReviewCount > 0 && instructor.RatingAverage is decimal rating)
+                        {
+                            <p class="rating">@string.Format(UiCopy.RatingLine, rating.ToString("0.0"), instructor.ReviewCount)</p>
+                        }
                     </div>
                 </div>
-                @if (!string.IsNullOrWhiteSpace(instructor.Bio))
-                {
-                    <p class="bio">@TextTrim.Brief(instructor.Bio)</p>
-                }
                 @if (instructor.Modes.Count > 0)
                 {
                     <ul class="rate-grid">
@@ -48,10 +48,6 @@ else
                             </li>
                         }
                     </ul>
-                }
-                @if (instructor.ReviewCount > 0 && instructor.RatingAverage is decimal rating)
-                {
-                    <p class="rating">@string.Format(UiCopy.RatingLine, rating.ToString("0.0"), instructor.ReviewCount)</p>
                 }
                 <a class="button"
                    asp-page="/Instructors/Profile"

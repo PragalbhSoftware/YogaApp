@@ -38,6 +38,7 @@
                 {
                     <p class="rating">@string.Format(UiCopy.RatingLine, rating.ToString("0.0"), instructor.ReviewCount)</p>
                 }
+                <p class="review-note">@UiCopy.ReviewsFromCompleted</p>
                 @if (instructor.Modes.Count > 0)
                 {
                     <ul class="mode-pills">

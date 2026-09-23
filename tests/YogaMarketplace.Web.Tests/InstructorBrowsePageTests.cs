@@ -127,6 +127,8 @@ public class InstructorBrowsePageTests : IClassFixture<YogaApiFactory>
         Assert.Contains("Ananya Desai teaches yoga in Bandra, Mumbai.", profile);
         Assert.Contains("property=\"og:description\"", profile);
         Assert.DoesNotContain("noindex", profile);
+        Assert.Contains(UiCopy.TrustVerified, profile);
+        Assert.Contains(UiCopy.ReviewsFromCompleted, profile);
         Assert.Contains("aria-current=\"page\"", profile);
         Assert.Contains(UiCopy.SlotsLead, profile);
         Assert.Contains(string.Format(UiCopy.ShowingMode, SessionModes.Home, "₹899"), profileText);

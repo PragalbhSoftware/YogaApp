@@ -592,6 +592,12 @@ a:focus-visible {
 
 .person .rating { color: var(--muted); }
 
+.review-note {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
 .rate-grid { margin-bottom: 1rem; }
 
 .person .button {

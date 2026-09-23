@@ -88,6 +88,7 @@ public static class UiCopy
     public const string UpdatingList = "Updating the list.";
     public const string AnyModePhrase = "any mode";
     public const string RatingLine = "{0} · {1} reviews";
+    public const string ReviewsFromCompleted = "Reviews are from completed sessions only.";
 
     public const string ProfileTitle = "Instructor";
     public const string ProfileDocumentTitle = "{0}, yoga in {1}";
