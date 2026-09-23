@@ -43,7 +43,7 @@ public class AdminPageTests : IClassFixture<YogaApiFactory>
         Assert.DoesNotContain("href=\"/bookings\"", dashboard);
         Assert.DoesNotContain("href=\"/instructor/bookings\"", dashboard);
 
-        var users = await admin.GetStringAsync("/admin/users?role=Admin");
+        var users = WebUtility.HtmlDecode(await admin.GetStringAsync("/admin/users?role=Admin"));
         Assert.Contains(SeedIds.AdminPhone, users);
         Assert.Contains("data-role=\"Admin\"", users);
         Assert.DoesNotContain("codeHash", users, StringComparison.OrdinalIgnoreCase);
@@ -52,7 +52,7 @@ public class AdminPageTests : IClassFixture<YogaApiFactory>
 
         var userId = Regex.Match(users, "data-user-id=\"([0-9a-fA-F-]{36})\"");
         Assert.True(userId.Success, users);
-        var detail = await admin.GetStringAsync($"/admin/users/{userId.Groups[1].Value}");
+        var detail = WebUtility.HtmlDecode(await admin.GetStringAsync($"/admin/users/{userId.Groups[1].Value}"));
         Assert.Contains(SeedIds.AdminPhone, detail);
         Assert.Contains(UiCopy.NoProviderRecord, detail);
         Assert.DoesNotContain("codeHash", detail, StringComparison.OrdinalIgnoreCase);
