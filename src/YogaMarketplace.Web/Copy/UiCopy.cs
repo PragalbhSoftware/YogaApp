@@ -117,8 +117,19 @@ public static class UiCopy
     public const string PaymentReceived = "Payment received. Waiting for the instructor to accept.";
 
     public const string MyBookingsTitle = "My bookings";
-    public const string MyBookingsLead = "Sessions you have paid for. After the instructor marks one complete, you can leave one rating.";
+    public const string MyBookingsLead = "Sessions you have paid for. Cancel before the session starts, or move an accepted session to another open slot. After the instructor marks one complete, you can leave one rating.";
     public const string NoBookings = "You have no bookings yet.";
+    public const string CancelBooking = "Cancel booking";
+    public const string CancelHint = "This refunds the payment and frees the slot.";
+    public const string CancelledNotice = "Cancelled. The payment was refunded and the slot is free.";
+    public const string RescheduleBooking = "Reschedule";
+    public const string RescheduleHint = "Pick another open slot with this instructor and the same mode. Payment stays paid.";
+    public const string RescheduleSlot = "New slot";
+    public const string ChooseSlot = "Choose a slot";
+    public const string RescheduleSlotRequired = "Choose another slot.";
+    public const string RescheduledNotice = "Rescheduled. The session moved to the new slot. Payment stays paid.";
+    public const string NoRescheduleSlots = "No other open slots for this instructor and mode.";
+    public const string SlotTaken = "That slot was just taken. Choose another.";
     public const string StatusPendingAccept = "Waiting for the instructor";
     public const string StatusUpcoming = "Accepted. This session is upcoming.";
     public const string StatusDeclined = "Declined. The payment was refunded.";

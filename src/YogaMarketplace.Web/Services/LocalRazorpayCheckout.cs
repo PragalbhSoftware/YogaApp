@@ -10,12 +10,13 @@ public sealed class PaymentOptions
 
     /// <summary>
     /// Development stand-in for Razorpay Checkout. The server signs the capture; the browser never sees <see cref="KeySecret"/>.
-    /// Must stay false in Production.
+    /// Must stay false in Production. <c>Payments__UseFakeCheckout</c> overrides this for a later test checkout.
     /// </summary>
     public bool UseFakeCheckout { get; set; }
 
     /// <summary>
     /// HMAC secret for the local checkout only. Same placeholder as the API in Development. Never a live Razorpay secret.
+    /// <c>Payments__KeySecret</c> overrides this. Do not commit test or live keys.
     /// </summary>
     public string KeySecret { get; set; } = "";
 }

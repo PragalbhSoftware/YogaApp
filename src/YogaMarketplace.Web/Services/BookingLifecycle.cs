@@ -11,6 +11,41 @@ public static class InstructorBookingCommands
     public static bool CanComplete(string status) => status == BookingStatuses.Upcoming;
 }
 
+public static class CustomerBookingChanges
+{
+    public static bool CanCancel(BookingDto booking) =>
+        booking.Status is BookingStatuses.PendingAccept or BookingStatuses.Upcoming
+        && !SessionClock.HasStarted(booking.Date, booking.Start);
+
+    public static bool CanReschedule(BookingDto booking) =>
+        booking.Status == BookingStatuses.Upcoming;
+}
+
+public static class RescheduleChoices
+{
+    public static IReadOnlyList<SlotDto> OpenFor(BookingDto booking, IEnumerable<SlotDto> slots) =>
+        slots
+            .Where(slot => slot.Id != booking.SlotId)
+            .Where(slot => string.Equals(slot.Mode, booking.Mode, StringComparison.OrdinalIgnoreCase))
+            .Where(slot => !SessionClock.HasEnded(slot.Date, slot.End))
+            .OrderBy(slot => slot.Date)
+            .ThenBy(slot => slot.Start, StringComparer.Ordinal)
+            .ToList();
+}
+
+public static class CustomerNotices
+{
+    public const string Cancelled = "cancelled";
+    public const string Rescheduled = "rescheduled";
+
+    public static string? Text(string? notice) => notice switch
+    {
+        Cancelled => UiCopy.CancelledNotice,
+        Rescheduled => UiCopy.RescheduledNotice,
+        _ => null
+    };
+}
+
 public static class CustomerReviews
 {
     public const int MinRating = 1;
