@@ -8,6 +8,7 @@ builder.Services.AddRazorPages(options =>
 {
     options.Conventions.AuthorizeFolder("/Areas");
     options.Conventions.AuthorizeFolder("/Instructors");
+    options.Conventions.AuthorizeFolder("/Bookings");
 });
 
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
@@ -25,6 +26,7 @@ builder.Services.AddAuthorization();
 builder.Services.AddHttpContextAccessor();
 
 builder.Services.Configure<ApiOptions>(builder.Configuration.GetSection(ApiOptions.Section));
+builder.Services.Configure<PaymentOptions>(builder.Configuration.GetSection(PaymentOptions.Section));
 builder.Services.AddTransient<BearerTokenHandler>();
 builder.Services.AddHttpClient(MarketplaceApiClient.HttpClientName, (sp, client) =>
 {
@@ -34,8 +36,16 @@ builder.Services.AddHttpClient(MarketplaceApiClient.HttpClientName, (sp, client)
     client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds <= 0 ? 15 : options.TimeoutSeconds);
 }).AddHttpMessageHandler<BearerTokenHandler>();
 builder.Services.AddScoped<IMarketplaceApi, MarketplaceApiClient>();
+builder.Services.AddScoped<IBookingApi, BookingApiClient>();
+builder.Services.AddSingleton<ILocalRazorpayCheckout, LocalRazorpayCheckout>();
+builder.Services.AddScoped<ISlotQuoteReader, SlotQuoteReader>();
+builder.Services.AddScoped<IPaymentCheckout, PaymentCheckout>();
 
 var app = builder.Build();
+
+var payments = app.Services.GetRequiredService<IOptions<PaymentOptions>>().Value;
+if (app.Environment.IsProduction() && payments.UseFakeCheckout)
+    throw new InvalidOperationException("Payments:UseFakeCheckout must be false in Production.");
 
 if (app.Environment.IsDevelopment())
     app.UseDeveloperExceptionPage();

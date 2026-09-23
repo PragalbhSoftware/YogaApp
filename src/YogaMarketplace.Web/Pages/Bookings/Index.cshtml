@@ -1,0 +1,61 @@
+@page "/bookings"
+@model YogaMarketplace.Web.Pages.Bookings.IndexModel
+@{
+    ViewData["Title"] = UiCopy.MyBookingsTitle;
+}
+
+<h1>@UiCopy.MyBookingsTitle</h1>
+<p class="lead">@UiCopy.MyBookingsLead</p>
+
+@if (Model.JustBookedId is Guid booked && Model.Bookings.Any(item => item.Id == booked))
+{
+    <p class="hint" role="status">@UiCopy.PaymentReceived</p>
+}
+
+@if (!string.IsNullOrEmpty(Model.Notice))
+{
+    <p class="alert" role="status">@Model.Notice</p>
+}
+
+@if (!string.IsNullOrEmpty(Model.Error))
+{
+    <p class="alert" role="alert">@Model.Error</p>
+}
+else if (Model.Bookings.Count == 0)
+{
+    <p>@UiCopy.NoBookings</p>
+    <a class="button" asp-page="/Instructors/Index">@UiCopy.BrowseTitle</a>
+}
+else
+{
+    @foreach (var booking in Model.Bookings)
+    {
+        <article class="card" data-booking-id="@booking.Id" data-status="@booking.Status">
+            <h2>@booking.ProviderName</h2>
+            <p class="muted">@booking.ServiceTitle</p>
+            <p>@booking.Date.ToString("dddd d MMM") · @booking.Start–@booking.End</p>
+            <p>@booking.Mode · @Money.Inr(booking.Amount)</p>
+            @if (booking.Status == BookingStatuses.PendingAccept)
+            {
+                <p>@UiCopy.StatusPendingAccept</p>
+            }
+            <p class="muted">@booking.Status · @booking.PaymentStatus</p>
+            @if (!string.IsNullOrWhiteSpace(booking.HomeAddress))
+            {
+                <p><strong>@UiCopy.HomeAddress.</strong> @booking.HomeAddress</p>
+            }
+            @if (!string.IsNullOrWhiteSpace(booking.Landmark))
+            {
+                <p><strong>@UiCopy.Landmark.</strong> @booking.Landmark</p>
+            }
+            @if (!string.IsNullOrWhiteSpace(booking.StudioAddress))
+            {
+                <p><strong>@UiCopy.StudioAddress.</strong> @booking.StudioAddress</p>
+            }
+            @if (!string.IsNullOrWhiteSpace(booking.MeetLink))
+            {
+                <p><a href="@booking.MeetLink">@UiCopy.MeetLink</a></p>
+            }
+        </article>
+    }
+}

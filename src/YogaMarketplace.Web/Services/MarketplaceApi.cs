@@ -1,7 +1,4 @@
 using System.Net.Http.Headers;
-using System.Net.Http.Json;
-using System.Text.Json;
-using YogaMarketplace.Web.Copy;
 
 namespace YogaMarketplace.Web.Services;
 
@@ -81,18 +78,15 @@ public sealed class MarketplaceApiClient : IMarketplaceApi
 {
     public const string HttpClientName = "marketplace";
 
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
-    private readonly HttpClient _http;
-    private readonly ILogger<MarketplaceApiClient> _logger;
+    private readonly ApiExchange _exchange;
 
     public MarketplaceApiClient(IHttpClientFactory factory, ILogger<MarketplaceApiClient> logger)
     {
-        _http = factory.CreateClient(HttpClientName);
-        _logger = logger;
+        _exchange = new ApiExchange(factory.CreateClient(HttpClientName), logger);
     }
 
     public Task<ApiResult<OtpResponseDto>> RequestOtpAsync(OtpRequestDto request, CancellationToken cancellationToken) =>
-        PostAsync<OtpResponseDto>("api/auth/otp/request", new
+        _exchange.PostAsync<OtpResponseDto>("api/auth/otp/request", new
         {
             phone = request.Phone,
             name = request.IsNewUser ? request.Name : null,
@@ -101,13 +95,13 @@ public sealed class MarketplaceApiClient : IMarketplaceApi
         }, cancellationToken);
 
     public Task<ApiResult<OtpResponseDto>> ResendOtpAsync(string phone, CancellationToken cancellationToken) =>
-        PostAsync<OtpResponseDto>("api/auth/otp/resend", new { phone }, cancellationToken);
+        _exchange.PostAsync<OtpResponseDto>("api/auth/otp/resend", new { phone }, cancellationToken);
 
     public Task<ApiResult<VerifyResponseDto>> VerifyOtpAsync(string phone, string code, CancellationToken cancellationToken) =>
-        PostAsync<VerifyResponseDto>("api/auth/otp/verify", new { phone, code }, cancellationToken);
+        _exchange.PostAsync<VerifyResponseDto>("api/auth/otp/verify", new { phone, code }, cancellationToken);
 
     public Task<ApiResult<List<AreaDto>>> GetAreasAsync(CancellationToken cancellationToken) =>
-        GetAsync<List<AreaDto>>("api/areas", cancellationToken);
+        _exchange.GetAsync<List<AreaDto>>("api/areas", cancellationToken);
 
     public Task<ApiResult<List<ProviderSummaryDto>>> BrowseAsync(
         string? area,
@@ -124,84 +118,14 @@ public sealed class MarketplaceApiClient : IMarketplaceApi
             query.Add("category=" + Uri.EscapeDataString(category.Trim()));
 
         var path = query.Count == 0 ? "api/providers" : "api/providers?" + string.Join('&', query);
-        return GetAsync<List<ProviderSummaryDto>>(path, cancellationToken);
+        return _exchange.GetAsync<List<ProviderSummaryDto>>(path, cancellationToken);
     }
 
     public Task<ApiResult<ProviderDetailDto>> GetProviderAsync(Guid id, CancellationToken cancellationToken) =>
-        GetAsync<ProviderDetailDto>($"api/providers/{id}", cancellationToken);
+        _exchange.GetAsync<ProviderDetailDto>($"api/providers/{id}", cancellationToken);
 
     public Task<ApiResult<SlotListDto>> GetSlotsAsync(Guid id, string mode, CancellationToken cancellationToken) =>
-        GetAsync<SlotListDto>($"api/providers/{id}/slots?mode={Uri.EscapeDataString(mode)}", cancellationToken);
-
-    private async Task<ApiResult<T>> GetAsync<T>(string path, CancellationToken cancellationToken)
-    {
-        try
-        {
-            using var response = await _http.GetAsync(path, cancellationToken);
-            return await ReadAsync<T>(response, path, cancellationToken);
-        }
-        catch (Exception ex) when (IsTransportFailure(ex, cancellationToken))
-        {
-            _logger.LogWarning(ex, "Marketplace API GET {Path} was unreachable.", path);
-            return ApiResult<T>.Down(UiCopy.ApiUnreachable);
-        }
-    }
-
-    private async Task<ApiResult<T>> PostAsync<T>(string path, object body, CancellationToken cancellationToken)
-    {
-        try
-        {
-            using var response = await _http.PostAsJsonAsync(path, body, Json, cancellationToken);
-            return await ReadAsync<T>(response, path, cancellationToken);
-        }
-        catch (Exception ex) when (IsTransportFailure(ex, cancellationToken))
-        {
-            _logger.LogWarning(ex, "Marketplace API POST {Path} was unreachable.", path);
-            return ApiResult<T>.Down(UiCopy.ApiUnreachable);
-        }
-    }
-
-    private async Task<ApiResult<T>> ReadAsync<T>(HttpResponseMessage response, string path, CancellationToken cancellationToken)
-    {
-        if (!response.IsSuccessStatusCode)
-        {
-            _logger.LogWarning("Marketplace API {Path} returned {Status}.", path, (int)response.StatusCode);
-            return ApiResult<T>.Fail(await ReadErrorAsync(response, cancellationToken));
-        }
-
-        try
-        {
-            var data = await response.Content.ReadFromJsonAsync<T>(Json, cancellationToken);
-            if (data is null)
-                return ApiResult<T>.Fail(UiCopy.EmptyResponse);
-            return ApiResult<T>.Success(data);
-        }
-        catch (JsonException ex)
-        {
-            _logger.LogWarning(ex, "Marketplace API {Path} returned JSON the web app could not read.", path);
-            return ApiResult<T>.Fail(UiCopy.GenericError);
-        }
-    }
-
-    private static async Task<string> ReadErrorAsync(HttpResponseMessage response, CancellationToken cancellationToken)
-    {
-        try
-        {
-            var body = await response.Content.ReadFromJsonAsync<ErrorBody>(Json, cancellationToken);
-            if (!string.IsNullOrWhiteSpace(body?.Error))
-                return body.Error;
-        }
-        catch (JsonException)
-        {
-        }
-
-        return UiCopy.GenericError;
-    }
-
-    private static bool IsTransportFailure(Exception ex, CancellationToken cancellationToken) =>
-        ex is HttpRequestException || (ex is TaskCanceledException && !cancellationToken.IsCancellationRequested);
-
-    private sealed record ErrorBody(string? Error);
+        _exchange.GetAsync<SlotListDto>($"api/providers/{id}/slots?mode={Uri.EscapeDataString(mode)}", cancellationToken);
 }
 
 public sealed class BearerTokenHandler : DelegatingHandler

@@ -1,0 +1,79 @@
+@page "/bookings/pay"
+@model YogaMarketplace.Web.Pages.Bookings.PayModel
+@{
+    ViewData["Title"] = UiCopy.PayTitle;
+}
+
+<h1>@UiCopy.PayTitle</h1>
+<p class="lead">@(Model.UseFakeCheckout ? UiCopy.PayLead : UiCopy.PayLiveLead)</p>
+
+@if (!string.IsNullOrEmpty(Model.Error))
+{
+    <p class="alert" role="alert">@Model.Error</p>
+}
+
+@if (Model.Draft is { } draft)
+{
+    <dl class="summary">
+        <div>
+            <dt>@UiCopy.ProviderSingular</dt>
+            <dd>@draft.ProviderName</dd>
+        </div>
+        <div>
+            <dt>@UiCopy.Mode</dt>
+            <dd>@draft.Mode</dd>
+        </div>
+        <div>
+            <dt>@UiCopy.When</dt>
+            <dd>@draft.Date.ToString("dddd d MMM") · @draft.Start–@draft.End</dd>
+        </div>
+        <div>
+            <dt>@UiCopy.AmountDue</dt>
+            <dd>@Money.Inr(draft.Amount) @draft.Currency</dd>
+        </div>
+    </dl>
+    @if (!string.IsNullOrWhiteSpace(draft.HomeAddress))
+    {
+        <p><strong>@UiCopy.HomeAddress.</strong> @draft.HomeAddress</p>
+        <p><strong>@UiCopy.Landmark.</strong> @draft.Landmark</p>
+    }
+    <p class="muted" data-order-id="@draft.OrderId">@string.Format(UiCopy.OrderId, draft.OrderId)</p>
+
+    @if (Model.UseFakeCheckout)
+    {
+        <form method="post" asp-page-handler="Pay">
+            <button type="submit">@UiCopy.PayNow</button>
+        </form>
+        <form method="post" asp-page-handler="Fail">
+            <button type="submit" class="secondary">@UiCopy.PaymentFailedButton</button>
+        </form>
+        <form method="post" asp-page-handler="Abandon">
+            <button type="submit" class="secondary">@UiCopy.AbandonPayment</button>
+        </form>
+    }
+    else
+    {
+        <form id="confirm-form" method="post" asp-page-handler="Confirm">
+            <input type="hidden" asp-for="OrderId" id="orderId" />
+            <input type="hidden" asp-for="PaymentId" id="paymentId" />
+            <input type="hidden" asp-for="Signature" id="signature" />
+        </form>
+        <form id="fail-form" method="post" asp-page-handler="Fail"></form>
+        <form id="abandon-form" method="post" asp-page-handler="Abandon"></form>
+        <button type="button" id="razorpay-open">@UiCopy.PayWithRazorpay</button>
+        <div id="rzp-order"
+             hidden
+             data-key="@draft.KeyId"
+             data-amount="@draft.AmountPaise"
+             data-currency="@draft.Currency"
+             data-order="@draft.OrderId"
+             data-name="@UiCopy.AppName"
+             data-description="@draft.ProviderName"></div>
+        <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+        <script src="~/js/checkout.js" asp-append-version="true"></script>
+    }
+}
+else
+{
+    <p><a asp-page="/Instructors/Index">@UiCopy.BackToList</a></p>
+}

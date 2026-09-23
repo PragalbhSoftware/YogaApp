@@ -20,3 +20,6 @@ csharp_style_namespace_declarations = file_scoped:suggestion
 dotnet_style_qualification_for_field = false:suggestion
 dotnet_style_qualification_for_property = false:suggestion
 csharp_prefer_braces = true:suggestion
+csharp_style_prefer_method_group_conversion = true:suggestion
+dotnet_style_readonly_field = true:suggestion
+dotnet_style_require_accessibility_modifiers = for_non_interface_members:suggestion
