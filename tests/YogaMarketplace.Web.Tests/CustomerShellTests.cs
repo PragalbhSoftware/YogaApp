@@ -268,6 +268,12 @@ public class CustomerShellTests : IClassFixture<YogaApiFactory>
 
         public Task<ApiResult<SlotListDto>> GetSlotsAsync(Guid id, string mode, CancellationToken cancellationToken) =>
             Task.FromResult(ApiResult<SlotListDto>.Down(UiCopy.ApiUnreachable));
+
+        public Task<ApiResult<ProviderSelfDto>> GetMineAsync(CancellationToken cancellationToken) =>
+            Task.FromResult(ApiResult<ProviderSelfDto>.Down(UiCopy.ApiUnreachable));
+
+        public Task<ApiResult<RegisterProviderResultDto>> RegisterProviderAsync(RegisterProviderRequestDto request, CancellationToken cancellationToken) =>
+            Task.FromResult(ApiResult<RegisterProviderResultDto>.Down(UiCopy.ApiUnreachable));
     }
 
     private sealed class CountingApi : DownApi

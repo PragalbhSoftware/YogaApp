@@ -296,6 +296,177 @@ public class AdminPageTests : IClassFixture<YogaApiFactory>
         }
     }
 
+    [Fact]
+    public async Task Customer_otp_register_shows_pending_and_admin_can_verify()
+    {
+        await using var web = CreateWeb(_api);
+        var anon = Client(web);
+        var signIn = await anon.GetStringAsync("/account/sign-in");
+        Assert.Contains("href=\"/instructor/register\"", signIn);
+        Assert.Contains(UiCopy.BecomeInstructor, signIn);
+
+        var gate = await anon.GetAsync("/instructor/register");
+        Assert.Equal(HttpStatusCode.Redirect, gate.StatusCode);
+        var signInUrl = Uri.UnescapeDataString(gate.Headers.Location?.OriginalString ?? "");
+        Assert.Contains("/account/sign-in", signInUrl, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("/instructor/register", signInUrl, StringComparison.OrdinalIgnoreCase);
+
+        var html = await anon.GetStringAsync(gate.Headers.Location);
+        var phone = "98" + Random.Shared.Next(10000000, 99999999);
+        var requested = await anon.PostAsync("/account/sign-in?handler=Request", Form(html, new Dictionary<string, string>
+        {
+            ["AccountKind"] = "new",
+            ["Name"] = "Rahul Sharma",
+            ["Gender"] = "Male",
+            ["Phone"] = phone,
+            ["ReturnUrl"] = "/instructor/register"
+        }));
+        html = await requested.Content.ReadAsStringAsync();
+        Assert.True(requested.IsSuccessStatusCode, html);
+        var code = Regex.Match(html, "data-dev-code=\"([^\"]+)\"");
+        Assert.True(code.Success, html);
+
+        var verified = await anon.PostAsync("/account/sign-in?handler=Verify", Form(html, new Dictionary<string, string>
+        {
+            ["Phone"] = phone,
+            ["Code"] = code.Groups[1].Value,
+            ["ReturnUrl"] = "/instructor/register"
+        }));
+        Assert.Equal(HttpStatusCode.Redirect, verified.StatusCode);
+        Assert.Equal("/instructor/register", verified.Headers.Location?.OriginalString);
+
+        var areas = await anon.GetStringAsync("/areas");
+        Assert.Contains("href=\"/instructor/register\"", areas);
+        Assert.Contains(UiCopy.BecomeInstructor, areas);
+        Assert.DoesNotContain("/instructor/bookings", areas, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("/instructor/availability", areas, StringComparison.OrdinalIgnoreCase);
+
+        var denied = await anon.GetAsync("/instructor/bookings");
+        Assert.Equal(HttpStatusCode.Redirect, denied.StatusCode);
+        Assert.Contains("/account/access-denied", denied.Headers.Location?.OriginalString, StringComparison.OrdinalIgnoreCase);
+        var deniedPage = await anon.GetStringAsync(denied.Headers.Location);
+        Assert.Contains("href=\"/instructor/register\"", deniedPage);
+        Assert.Contains(UiCopy.BecomeInstructor, deniedPage);
+        Assert.Contains("href=\"/bookings\"", deniedPage);
+
+        var form = await anon.GetStringAsync("/instructor/register");
+        Assert.Contains(UiCopy.RegisterTitle, form);
+        Assert.Contains(UiCopy.RegisterSubmit, form);
+        Assert.Contains("Bandra", form);
+        Assert.Contains(SeedIds.AreaBandra.ToString(), form);
+        Assert.DoesNotContain("data-status=", form);
+
+        var name = "Kavya" + Random.Shared.Next(100000, 999999);
+        var email = name.ToLowerInvariant() + "@example.com";
+        var meetLink = "https://meet.google.com/reg-" + name.ToLowerInvariant();
+        var fields = new Dictionary<string, string>
+        {
+            ["DisplayName"] = name,
+            ["Age"] = "31",
+            ["Email"] = email,
+            ["AreaId"] = SeedIds.AreaBandra.ToString(),
+            ["Bio"] = "Morning batches in Bandra",
+            ["OffersOnline"] = "true",
+            ["OnlineRate"] = "650"
+        };
+
+        var failed = await anon.PostAsync("/instructor/register", Form(form, fields));
+        var failedBody = await failed.Content.ReadAsStringAsync();
+        Assert.Equal(HttpStatusCode.OK, failed.StatusCode);
+        Assert.Contains("Online sessions need an https://meet.google.com link.", failedBody);
+        Assert.Contains(UiCopy.RegisterSubmit, failedBody);
+        Assert.Contains($"value=\"{name}\"", failedBody);
+
+        fields["GoogleMeetLink"] = meetLink;
+        var created = await anon.PostAsync("/instructor/register", Form(failedBody, fields));
+        var createdBody = await created.Content.ReadAsStringAsync();
+        Assert.True(created.StatusCode == HttpStatusCode.Redirect, createdBody);
+        Assert.Equal("/instructor/register", created.Headers.Location?.OriginalString);
+
+        var pending = await anon.GetStringAsync("/instructor/register");
+        Assert.Contains("data-status=\"Pending\"", pending);
+        Assert.Contains(UiCopy.RegisterPendingLead, pending);
+        Assert.Contains(name, pending);
+        Assert.Contains(email, pending);
+        Assert.Contains("Morning batches in Bandra", pending);
+        Assert.Contains("650", pending);
+        Assert.Contains(meetLink, pending);
+        Assert.Contains("href=\"/instructor/bookings\"", pending);
+        Assert.Contains(UiCopy.InstructorStatusNav, pending);
+        Assert.DoesNotContain(UiCopy.RegisterSubmit, pending);
+        Assert.DoesNotContain(UiCopy.BecomeInstructor, pending);
+        var id = Attr(pending, "data-provider-id");
+
+        var inbox = await anon.GetStringAsync("/instructor/bookings");
+        Assert.Contains(UiCopy.NoInstructorBookings, inbox);
+        Assert.DoesNotContain("role=\"alert\"", inbox);
+
+        var hidden = await anon.GetStringAsync("/instructors?area=Bandra");
+        Assert.DoesNotContain(name, hidden);
+        Assert.DoesNotContain(meetLink, hidden);
+        var profile = await anon.GetStringAsync($"/instructors/{id}");
+        Assert.Contains("Instructor not found.", profile);
+        Assert.DoesNotContain(name, profile);
+        Assert.DoesNotContain(meetLink, profile);
+
+        var (admin, _) = await SignInExistingAsync(web, SeedIds.AdminPhone);
+        var adminGate = await admin.GetAsync("/instructor/register");
+        Assert.Equal(HttpStatusCode.Redirect, adminGate.StatusCode);
+        Assert.Contains("/account/access-denied", adminGate.Headers.Location?.OriginalString, StringComparison.OrdinalIgnoreCase);
+
+        var queue = await admin.GetStringAsync("/admin/approvals");
+        var card = Article(queue, name);
+        Assert.Contains("data-status=\"Pending\"", card);
+        Assert.Contains(meetLink, card, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(id, Attr(card, "data-provider-id"));
+
+        var approved = await admin.PostAsync(
+            $"/admin/approvals?handler=Verify&id={id}&status={ProviderApprovalStatuses.Pending}",
+            Form(queue, new Dictionary<string, string>()));
+        var approvedBody = await approved.Content.ReadAsStringAsync();
+        Assert.True(approved.StatusCode == HttpStatusCode.Redirect, approvedBody);
+        Assert.Contains($"notice={AdminNotices.Verified}", approved.Headers.Location?.OriginalString);
+
+        var notice = await admin.GetStringAsync(approved.Headers.Location);
+        Assert.Contains(UiCopy.ProviderVerifiedNotice, notice);
+
+        var after = await anon.GetStringAsync("/instructor/register");
+        Assert.Contains("data-status=\"Verified\"", after);
+        Assert.Contains(UiCopy.RegisterVerifiedLead, after);
+        Assert.Contains(meetLink, after);
+
+        var browse = await anon.GetStringAsync("/instructors?area=Bandra");
+        Assert.Contains(name, browse);
+        Assert.DoesNotContain(meetLink, browse);
+
+        var bookings = await admin.GetStringAsync("/admin/bookings");
+        Assert.DoesNotContain(name, bookings);
+    }
+
+    [Fact]
+    public async Task Verified_instructor_sees_status_instead_of_the_register_form()
+    {
+        await using var web = CreateWeb(_api);
+        var (instructor, _) = await SignInExistingAsync(web, SeedIds.AnanyaPhone);
+        var page = await instructor.GetStringAsync("/instructor/register");
+        Assert.Contains("data-status=\"Verified\"", page);
+        Assert.Contains(UiCopy.RegisterVerifiedLead, page);
+        Assert.Contains("https://meet.google.com/abc-defg-hij", page);
+        Assert.Contains("href=\"/instructor/bookings\"", page);
+        Assert.Contains(UiCopy.InstructorStatusNav, page);
+        Assert.DoesNotContain(UiCopy.RegisterSubmit, page);
+        Assert.DoesNotContain(UiCopy.BecomeInstructor, page);
+
+        var inbox = await instructor.GetStringAsync("/instructor/bookings");
+        Assert.Contains("href=\"/instructor/register\"", inbox);
+
+        var denied = await instructor.GetAsync("/bookings");
+        Assert.Equal(HttpStatusCode.Redirect, denied.StatusCode);
+        var deniedPage = await instructor.GetStringAsync(denied.Headers.Location);
+        Assert.Contains("href=\"/instructor/register\"", deniedPage);
+        Assert.Contains(UiCopy.InstructorStatusNav, deniedPage);
+    }
+
     private async Task<RegisteredProvider> RegisterPendingAsync(string name)
     {
         var client = _api.CreateClient();

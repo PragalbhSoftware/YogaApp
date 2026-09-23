@@ -90,6 +90,7 @@ Web: `http://localhost:5081`
 4. **Book and pay.** Choose a slot. Home asks for an address and a landmark before the order is created. Studio and Online go straight to checkout. Development uses a local stand-in for Razorpay Checkout (`Payments:UseFakeCheckout`). Pay calls `POST /api/bookings/confirm` and the booking is `PendingAccept`. Payment failed and Cancel payment do not confirm, so no booking is created.
 5. **My bookings.** `GET /api/bookings/me` for the signed-in customer. The page is `/bookings`. Cancel is on `PendingAccept` and `Upcoming` until the session's Mumbai start (`POST /api/bookings/{id}/cancel`). Reschedule is on `Upcoming` only: the page loads open slots for that instructor and mode from `GET /api/providers/{id}/slots?mode=`, then posts `{ "slotId" }` to `POST /api/bookings/{id}/reschedule`. A taken slot stays on the page with the API error (409). The 12-hour window and 50% late fee are not applied. After a session is `Completed`, the customer can leave one rating (1–5) and an optional comment. The form stays hidden until then, and after the review is saved.
 6. **Instructor requests.** Ananya (and any provider account) signs in with the same phone OTP. The role on the JWT is `Provider`, and the app opens `/instructor/bookings`. Filter by status, accept or decline `PendingAccept`, and mark `Upcoming` complete. Customers cannot open that page. A provider cannot open My bookings.
+7. **Instructor register.** A signed-in customer opens `/instructor/register` (linked from sign-in, access denied, and the customer nav). The form posts `POST /api/providers/register`. The new token replaces `ym.session` with role `Provider`. The same page then shows `GET /api/providers/me` (Pending, Verified, or Rejected, and the Meet link when present) instead of the form. Pending profiles stay off public browse until an admin verifies them at `/admin/approvals`.
 
 The API JWT from `POST /api/auth/otp/verify` is stored in the encrypted `ym.session` cookie and sent as `Authorization: Bearer` on later API calls. The chosen area is the `ym.area` cookie.
 
@@ -103,7 +104,7 @@ Labels live in `src/YogaMarketplace.Web/Copy/UiCopy.cs` so the first category an
 
 Local only. These pages are not part of the YogaDemo deploy. They live in `src/YogaMarketplace.Web` and call `/api/admin` with the JWT from the encrypted `ym.session` cookie. The web app does not open SQL Server.
 
-The cookie stores the role on the same claim customers and instructors already use (`Customer`, `Provider`, or `Admin`). `/bookings` requires `Customer`, `/instructor/bookings` requires `Provider`, and `/admin` requires `Admin`. Anyone else is sent to `/account/access-denied`.
+The cookie stores the role on the same claim customers and instructors already use (`Customer`, `Provider`, or `Admin`). `/bookings` requires `Customer`. `/instructor/bookings` and `/instructor/availability` require `Provider`. `/instructor/register` allows a signed-in customer or instructor. `/admin` requires `Admin`. Anyone else is sent to `/account/access-denied`.
 
 Sign in at `http://localhost:5081/account/sign-in` as an existing account (leave "I'm new" off):
 

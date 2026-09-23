@@ -33,6 +33,28 @@ public static class AuthSession
         var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
         await http.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identity));
     }
+
+    public static async Task SignInProviderAsync(HttpContext http, string token, ProviderSelfDto provider)
+    {
+        var phone = http.User.FindFirst(ClaimTypes.MobilePhone)?.Value;
+        var name = http.User.FindFirst(ClaimTypes.Name)?.Value;
+        if (string.IsNullOrWhiteSpace(name))
+            name = provider.DisplayName;
+
+        var claims = new List<Claim>
+        {
+            new(ClaimTypes.NameIdentifier, provider.UserId.ToString()),
+            new(ClaimTypes.Role, AccountRoles.Provider),
+            new(ApiTokenClaim, token)
+        };
+        if (!string.IsNullOrWhiteSpace(phone))
+            claims.Add(new Claim(ClaimTypes.MobilePhone, phone));
+        if (!string.IsNullOrWhiteSpace(name))
+            claims.Add(new Claim(ClaimTypes.Name, name));
+
+        var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+        await http.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identity));
+    }
 }
 
 public static class AreaCookie

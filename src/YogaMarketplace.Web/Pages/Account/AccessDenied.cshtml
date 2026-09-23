@@ -14,10 +14,12 @@ else if (User.IsInRole(AccountRoles.Provider))
 {
     <a class="button" asp-page="/Instructor/Bookings">@UiCopy.InstructorInboxNav</a>
     <a class="button secondary" asp-page="/Instructor/Availability">@UiCopy.InstructorAvailabilityNav</a>
+    <a class="button secondary" asp-page="/Instructor/Register">@UiCopy.InstructorStatusNav</a>
 }
 else if (User.IsInRole(AccountRoles.Customer))
 {
     <a class="button" asp-page="/Bookings/Index">@UiCopy.BookingsNav</a>
+    <a class="button secondary" asp-page="/Instructor/Register">@UiCopy.BecomeInstructor</a>
 }
 else
 {

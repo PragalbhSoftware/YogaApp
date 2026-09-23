@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc.Authorization;
 using Microsoft.Extensions.Options;
 using YogaMarketplace.Web.Services;
 
@@ -11,6 +13,14 @@ builder.Services.AddRazorPages(options =>
     options.Conventions.AuthorizeFolder("/Bookings", "Customer");
     options.Conventions.AuthorizeFolder("/Instructor", "Provider");
     options.Conventions.AuthorizeFolder("/Admin", "Admin");
+    options.Conventions.AddPageApplicationModelConvention("/Instructor/Register", model =>
+    {
+        foreach (var attribute in model.EndpointMetadata.OfType<AuthorizeAttribute>().ToList())
+            model.EndpointMetadata.Remove(attribute);
+        foreach (var filter in model.Filters.OfType<AuthorizeFilter>().ToList())
+            model.Filters.Remove(filter);
+        model.EndpointMetadata.Add(new AuthorizeAttribute("CustomerOrProvider"));
+    });
 });
 
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
@@ -30,6 +40,7 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("Customer", policy => policy.RequireRole(AccountRoles.Customer));
     options.AddPolicy("Provider", policy => policy.RequireRole(AccountRoles.Provider));
     options.AddPolicy("Admin", policy => policy.RequireRole(AccountRoles.Admin));
+    options.AddPolicy("CustomerOrProvider", policy => policy.RequireRole(AccountRoles.Customer, AccountRoles.Provider));
 });
 builder.Services.AddHttpContextAccessor();
 

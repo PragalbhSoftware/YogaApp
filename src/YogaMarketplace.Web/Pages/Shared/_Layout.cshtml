@@ -18,6 +18,7 @@
                     var who = string.IsNullOrWhiteSpace(User.Identity.Name)
                         ? User.FindFirst(ClaimTypes.MobilePhone)?.Value
                         : User.Identity.Name;
+                    var path = Context.Request.Path;
                     <span class="who">@who</span>
                     @if (User.IsInRole(AccountRoles.Admin))
                     {
@@ -25,7 +26,7 @@
                     }
                     else if (User.IsInRole(AccountRoles.Provider))
                     {
-                        var path = Context.Request.Path;
+                        <a asp-page="/Instructor/Register" aria-current="@(path.StartsWithSegments("/instructor/register") ? "page" : null)">@UiCopy.InstructorStatusNav</a>
                         <a asp-page="/Instructor/Bookings" aria-current="@(path.StartsWithSegments("/instructor/bookings") ? "page" : null)">@UiCopy.InstructorInboxNav</a>
                         <a asp-page="/Instructor/Availability" aria-current="@(path.StartsWithSegments("/instructor/availability") ? "page" : null)">@UiCopy.InstructorAvailabilityNav</a>
                     }
@@ -34,6 +35,7 @@
                         <a asp-page="/Areas/Select">@UiCopy.AreaNav</a>
                         <a asp-page="/Instructors/Index">@UiCopy.ProviderPlural</a>
                         <a asp-page="/Bookings/Index">@UiCopy.BookingsNav</a>
+                        <a asp-page="/Instructor/Register" aria-current="@(path.StartsWithSegments("/instructor/register") ? "page" : null)">@UiCopy.BecomeInstructor</a>
                     }
                     <form method="post" asp-page="/Account/SignOut">
                         <button type="submit" class="link">@UiCopy.SignOut</button>
