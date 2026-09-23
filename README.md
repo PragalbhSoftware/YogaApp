@@ -8,7 +8,7 @@ Yoga is the first `Category`. The model is generic enough for another category l
 
 | Project | Role |
 | --- | --- |
-| `src/YogaMarketplace.Api` | Controllers, OTP/JWT, browse, slots, book and pay |
+| `src/YogaMarketplace.Api` | Controllers, OTP/JWT, browse, slots, book and pay, instructor handshake |
 | `src/YogaMarketplace.Domain` | Entities and booking rules |
 | `src/YogaMarketplace.Infrastructure` | EF Core, SQL Server, seed |
 | `src/YogaMarketplace.Web` | Razor Pages customer app (OTP, area, browse, book and pay) |
@@ -130,7 +130,7 @@ New customer: `name` + `gender` + `phone`, then OTP. Existing customer: `phone`,
 | GET | `/api/providers/me` | Bearer | Own profile, including Meet link |
 | POST | `/api/providers/me/slots` | Bearer | Add slots for a mode the instructor offers |
 
-Booking states: `PendingAccept` → `Upcoming` or `Declined` → `Completed`, `NoShow`, or `Cancelled`. A captured Razorpay payment creates `PendingAccept`. Decline (refund) and complete (review + payout) stay domain rules without HTTP in this slice. Complete would record a pending payout (`gross − fee%`). The fee is **not** copied onto the payment at book time.
+Booking states: `PendingAccept` → `Upcoming` or `Declined`. `Upcoming` → `Completed`, `NoShow`, or `Cancelled`. A captured Razorpay payment creates `PendingAccept`. The instructor accepts, declines, or completes on the handshake endpoints. Decline refunds the captured payment and frees the slot. Complete records a pending payout (`gross − fee%`) and unlocks one customer review. The fee is **not** copied onto the payment at book time. Cancel and reschedule stay domain rules without HTTP.
 
 ## Book and pay (local)
 
@@ -150,7 +150,21 @@ Rules enforced here:
 - Online stores the instructor's Google Meet link on the booking at capture. Public browse still omits it.
 - Studio stores the studio address on the booking.
 - The same Razorpay payment id cannot create a second booking. A second captured payment for a slot that was just taken is rejected and does not insert a booking. Refund of that losing payment is a later slice.
-- Platform fee percent stays on `MarketplacePolicy`. Payout rows are still created only when a booking is completed.
+- Platform fee percent stays on `MarketplacePolicy`. A payout row is created only when the instructor completes the booking.
+
+## Instructor handshake (local)
+
+Provider JWT, and only for that instructor's booking. Customer JWT for the review. No admin routes in this slice.
+
+| Method | Path | Auth | Purpose |
+| --- | --- | --- | --- |
+| GET | `/api/bookings/instructor?status=` | Provider Bearer | That instructor's bookings. `status` is optional (`PendingAccept`, `Upcoming`, `Declined`, `Completed`, `NoShow`, `Cancelled`). |
+| POST | `/api/bookings/{id}/accept` | Provider Bearer | `PendingAccept` → `Upcoming`. |
+| POST | `/api/bookings/{id}/decline` | Provider Bearer | `PendingAccept` → `Declined`, payment `Refunded`, Razorpay refund. The slot is free again. No payout. |
+| POST | `/api/bookings/{id}/complete` | Provider Bearer | `Upcoming` → `Completed`. Writes `PayoutPending` from `MarketplacePolicy.PlatformFeePercent`. |
+| POST | `/api/bookings/{id}/reviews` | Customer Bearer | One review on a `Completed` booking the customer owns. Rating 1–5, optional comment up to 1000 characters. |
+
+Illegal transitions, another instructor's booking, and a second review return `{ error }`. Decline calls `IRazorpayClient.RefundPaymentAsync`. Development and tests use the fake client, which records the refund and does not call Razorpay.
 
 ### Razorpay configuration
 

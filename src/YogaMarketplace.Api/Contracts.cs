@@ -152,6 +152,20 @@ public class ConfirmBookingPaymentRequest
     public string? Signature { get; set; }
 }
 
+public class CreateReviewRequest
+{
+    public int Rating { get; set; }
+    public string? Comment { get; set; }
+}
+
+public record ReviewResponse(
+    Guid Id,
+    Guid BookingId,
+    Guid ProviderId,
+    int Rating,
+    string? Comment,
+    DateTimeOffset CreatedAt);
+
 public record BookingResponse(
     Guid Id,
     Guid ProviderId,

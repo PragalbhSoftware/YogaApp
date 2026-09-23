@@ -65,6 +65,33 @@ GET {{host}}/api/bookings/me
 Authorization: Bearer {{token}}
 
 ###
+# Instructor JWT (seeded Ananya: phone 9876543210, existing user).
+GET {{host}}/api/bookings/instructor?status=PendingAccept
+Authorization: Bearer {{instructorToken}}
+
+###
+POST {{host}}/api/bookings/00000000-0000-0000-0000-000000000000/accept
+Authorization: Bearer {{instructorToken}}
+
+###
+POST {{host}}/api/bookings/00000000-0000-0000-0000-000000000000/decline
+Authorization: Bearer {{instructorToken}}
+
+###
+POST {{host}}/api/bookings/00000000-0000-0000-0000-000000000000/complete
+Authorization: Bearer {{instructorToken}}
+
+###
+POST {{host}}/api/bookings/00000000-0000-0000-0000-000000000000/reviews
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "rating": 5,
+  "comment": "Calm and clear"
+}
+
+###
 POST {{host}}/api/webhooks/razorpay
 Content-Type: application/json
 X-Razorpay-Signature: hex hmac sha256 of the raw body using Razorpay:WebhookSecret
