@@ -12,15 +12,15 @@ public static class UiCopy
     public const string ProviderSingular = "Instructor";
     public const string ProviderPlural = "Instructors";
 
-    public const string Tagline = "Find a yoga instructor";
+    public const string Tagline = "Find verified yoga instructors";
     public const string SkipToContent = "Skip to content";
     public const string SignOut = "Sign out";
     public const string AreaNav = "Area";
     public const string FooterNote = "Home, studio, and online";
 
-    public const string HomeTitle = "Find a yoga instructor";
+    public const string HomeTitle = "Find verified yoga instructors · home, studio, or online";
     public const string HomeLead = "Sign in with your phone, choose an area, then browse verified instructors for home, studio, or online sessions.";
-    public const string HomeDescription = "Find a verified yoga instructor for a home, studio, or online session.";
+    public const string HomeDescription = "Find verified yoga instructors for home, studio, or online sessions.";
     public const string OgLocale = "en_IN";
     public const string SignInCta = "Sign in with phone";
     public const string Continue = "Continue";

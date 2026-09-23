@@ -30,7 +30,10 @@ public class InstructorBrowsePageTests : IClassFixture<YogaApiFactory>
         var client = web.CreateClient();
 
         var home = await client.GetStringAsync("/");
-        Assert.Contains(UiCopy.HomeDescription, home);
+        Assert.Contains("<title>Find verified yoga instructors", home);
+        Assert.Contains("home, studio, or online", home);
+        Assert.Contains($"content=\"{UiCopy.HomeDescription}\"", home);
+        Assert.DoesNotContain(UiCopy.CityName, home);
         Assert.Contains("property=\"og:title\"", home);
         Assert.Contains("property=\"og:description\"", home);
         Assert.Contains($"property=\"og:locale\" content=\"{UiCopy.OgLocale}\"", home);
@@ -80,6 +83,7 @@ public class InstructorBrowsePageTests : IClassFixture<YogaApiFactory>
         Assert.Contains($"data-heading=\"{UiCopy.BrowseHeading}\"", html);
         Assert.Contains("<title>Home yoga instructors in Bandra", html);
         Assert.Contains("Yoga Marketplace</title>", html);
+        Assert.DoesNotContain(UiCopy.CityName, TitleAndDescription(html));
         Assert.Contains(string.Format(UiCopy.BrowseDescriptionWithMode, "Home", "Bandra"), html);
         Assert.Contains("name=\"description\"", html);
         Assert.Contains("property=\"og:title\"", html);
@@ -124,6 +128,7 @@ public class InstructorBrowsePageTests : IClassFixture<YogaApiFactory>
         var profile = await client.GetStringAsync($"/instructors/{SeedIds.AnanyaProviderId}?mode=Home");
         var profileText = WebUtility.HtmlDecode(profile);
         Assert.Contains("<title>Ananya Desai, yoga in Bandra", profile);
+        Assert.DoesNotContain(UiCopy.CityName, TitleAndDescription(profile));
         Assert.Contains(string.Format(UiCopy.ProfileDescription, "Ananya Desai", "Bandra"), profile);
         Assert.Contains("property=\"og:description\"", profile);
         Assert.DoesNotContain("noindex", profile);
@@ -199,6 +204,15 @@ public class InstructorBrowsePageTests : IClassFixture<YogaApiFactory>
         }));
         Assert.Equal(HttpStatusCode.Redirect, verified.StatusCode);
         return client;
+    }
+
+    private static string TitleAndDescription(string html)
+    {
+        var title = Regex.Match(html, "<title>(.*?)</title>", RegexOptions.Singleline).Value;
+        var description = Regex.Match(html, "name=\"description\" content=\"(.*?)\"", RegexOptions.Singleline).Value;
+        var ogTitle = Regex.Match(html, "property=\"og:title\" content=\"(.*?)\"", RegexOptions.Singleline).Value;
+        var ogDescription = Regex.Match(html, "property=\"og:description\" content=\"(.*?)\"", RegexOptions.Singleline).Value;
+        return title + description + ogTitle + ogDescription;
     }
 
     private static FormUrlEncodedContent Form(string html, IDictionary<string, string> fields)
