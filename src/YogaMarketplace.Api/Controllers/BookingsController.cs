@@ -60,6 +60,21 @@ public class BookingsController : ControllerBase
     public async Task<ActionResult<BookingResponse>> Complete(Guid id, CancellationToken cancellationToken) =>
         Ok(await _handshake.CompleteAsync(id, cancellationToken));
 
+    [HttpPost("{id:guid}/cancel")]
+    public async Task<ActionResult<BookingResponse>> Cancel(Guid id, CancellationToken cancellationToken) =>
+        Ok(await _bookings.CancelAsync(id, cancellationToken));
+
+    [HttpPost("{id:guid}/reschedule")]
+    public async Task<ActionResult<BookingResponse>> Reschedule(
+        Guid id,
+        [FromBody] RescheduleBookingRequest? request,
+        CancellationToken cancellationToken)
+    {
+        if (request is null)
+            return BadRequest(new { error = "Invalid request." });
+        return Ok(await _bookings.RescheduleAsync(id, request, cancellationToken));
+    }
+
     [HttpPost("{id:guid}/reviews")]
     public async Task<ActionResult<ReviewResponse>> Review(
         Guid id,

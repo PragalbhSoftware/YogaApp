@@ -158,6 +158,11 @@ public class CreateReviewRequest
     public string? Comment { get; set; }
 }
 
+public class RescheduleBookingRequest
+{
+    public Guid SlotId { get; set; }
+}
+
 public record ReviewResponse(
     Guid Id,
     Guid BookingId,

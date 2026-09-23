@@ -67,8 +67,9 @@ public class BookingRulesTests
         Assert.Equal(BookingStatus.NoShow, noShow.Status);
         Assert.True(BookingRules.OccupiesSlot(noShow.Status));
 
+        var when = DateTimeOffset.UtcNow;
         var cancelled = Sample(BookingStatus.Upcoming);
-        BookingRules.Cancel(cancelled);
+        BookingRules.Cancel(cancelled, when.AddHours(1), when);
         Assert.Equal(BookingStatus.Cancelled, cancelled.Status);
         Assert.False(BookingRules.OccupiesSlot(cancelled.Status));
 
@@ -82,6 +83,28 @@ public class BookingRulesTests
         var otherMode = Slot(SessionMode.Online);
         otherMode.ProviderId = booking.ProviderId;
         Assert.Throws<DomainException>(() => BookingRules.Reschedule(booking, otherMode));
+    }
+
+    [Fact]
+    public void Cancel_allows_pending_or_upcoming_only_before_the_session_starts()
+    {
+        var start = new DateTimeOffset(2026, 9, 24, 1, 30, 0, TimeSpan.Zero);
+        var pending = Sample(BookingStatus.PendingAccept);
+        BookingRules.Cancel(pending, start, start.AddMinutes(-1));
+        Assert.Equal(BookingStatus.Cancelled, pending.Status);
+        Assert.False(BookingRules.OccupiesSlot(pending.Status));
+
+        var started = Sample(BookingStatus.Upcoming);
+        var tooLate = Assert.Throws<DomainException>(() => BookingRules.Cancel(started, start, start));
+        Assert.Contains("started", tooLate.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(BookingStatus.Upcoming, started.Status);
+
+        foreach (var status in new[] { BookingStatus.Declined, BookingStatus.Completed, BookingStatus.NoShow, BookingStatus.Cancelled })
+        {
+            var booking = Sample(status);
+            Assert.Throws<DomainException>(() => BookingRules.Cancel(booking, start, start.AddHours(-1)));
+            Assert.Equal(status, booking.Status);
+        }
     }
 
     [Fact]

@@ -21,6 +21,10 @@ public interface IBookingService
     Task<BookingResponse> ConfirmAsync(ConfirmBookingPaymentRequest request, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<BookingResponse>> ListMineAsync(CancellationToken cancellationToken);
+
+    Task<BookingResponse> CancelAsync(Guid bookingId, CancellationToken cancellationToken);
+
+    Task<BookingResponse> RescheduleAsync(Guid bookingId, RescheduleBookingRequest request, CancellationToken cancellationToken);
 }
 
 public interface IBookingHandshake
@@ -43,6 +47,8 @@ public interface IRazorpayWebhookHandler
 
 public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebhookHandler
 {
+    private const string CustomerChangeForbidden = "Only the customer who booked can change this booking.";
+
     private static readonly BookingStatus[] Occupying =
         Enum.GetValues<BookingStatus>().Where(BookingRules.OccupiesSlot).ToArray();
 
@@ -209,25 +215,80 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
     public async Task<BookingResponse> DeclineAsync(Guid bookingId, CancellationToken cancellationToken)
     {
         var (booking, currency) = await LoadForInstructorAsync(bookingId, cancellationToken);
-        var payment = booking.Payment ?? throw new DomainException("This booking has no payment to refund.");
-        var gatewayPaymentId = payment.GatewayPaymentId;
-        if (string.IsNullOrWhiteSpace(gatewayPaymentId))
-            throw new DomainException("This payment cannot be refunded.");
-
+        var payment = RequireRefundablePayment(booking);
         BookingRules.Decline(booking);
-        PaymentRules.MarkRefunded(payment);
-        await _razorpay.RefundPaymentAsync(
-            gatewayPaymentId,
-            RazorpayMoney.ToPaise(payment.Amount),
-            booking.Id.ToString("N"),
-            cancellationToken);
+        await RefundCapturedPaymentAsync(booking, payment, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
         _logger.LogInformation(
             "Instructor {ProviderId} declined booking {BookingId} and refunded payment {PaymentId}.",
             booking.ProviderId,
             booking.Id,
-            gatewayPaymentId);
+            payment.GatewayPaymentId);
         return ToResponse(booking, payment, currency);
+    }
+
+    public async Task<BookingResponse> CancelAsync(Guid bookingId, CancellationToken cancellationToken)
+    {
+        var (booking, currency) = await LoadForCustomerAsync(bookingId, cancellationToken);
+        var slot = booking.Slot ?? throw new InvalidOperationException("Slot was not loaded.");
+        var payment = RequireRefundablePayment(booking);
+        // Free-window hours and LateCancelFeePercent stay TBD on MarketplacePolicy. A cancel before the session starts refunds the full capture.
+        BookingRules.Cancel(booking, MumbaiClock.SessionStart(slot.Date, slot.StartTime), DateTimeOffset.UtcNow);
+        await RefundCapturedPaymentAsync(booking, payment, cancellationToken);
+        await _db.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation(
+            "Customer {CustomerId} cancelled booking {BookingId} and refunded payment {PaymentId}.",
+            booking.CustomerId,
+            booking.Id,
+            payment.GatewayPaymentId);
+        return ToResponse(booking, payment, currency);
+    }
+
+    public async Task<BookingResponse> RescheduleAsync(
+        Guid bookingId,
+        RescheduleBookingRequest request,
+        CancellationToken cancellationToken)
+    {
+        // RescheduleFreeWindowHours is a TBD default and does not block a move onto another open slot.
+        var customer = await RequireCustomerAsync(CustomerChangeForbidden, cancellationToken);
+        if (request.SlotId == Guid.Empty)
+            throw new DomainException("Slot is required.");
+        await using var transaction = await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        try
+        {
+            var booking = await BookingsWithDetails(tracking: true)
+                .SingleOrDefaultAsync(b => b.Id == bookingId, cancellationToken)
+                ?? throw new DomainException("Booking not found.", 404);
+            if (booking.CustomerId != customer.Id)
+                throw new DomainException("This booking belongs to another account.", 403);
+
+            var newSlot = await _db.AvailabilitySlots
+                .SingleOrDefaultAsync(s => s.Id == request.SlotId, cancellationToken)
+                ?? throw new DomainException("That slot is no longer available.", 404);
+
+            BookingRules.Reschedule(booking, newSlot);
+            if (MumbaiClock.SessionStart(newSlot.Date, newSlot.EndTime) <= DateTimeOffset.UtcNow)
+                throw new DomainException("That slot has already ended.", 409);
+            if (await SlotIsTakenAsync(newSlot.Id, cancellationToken, booking.Id))
+                throw new DomainException("That slot is no longer available.", 409);
+
+            booking.Slot = newSlot;
+            await _db.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+
+            var currency = await CurrencyAsync(cancellationToken);
+            _logger.LogInformation(
+                "Customer {CustomerId} rescheduled booking {BookingId} to slot {SlotId}.",
+                booking.CustomerId,
+                booking.Id,
+                newSlot.Id);
+            return ToResponse(booking, booking.Payment, currency);
+        }
+        catch (DbUpdateException ex)
+        {
+            _logger.LogWarning(ex, "Reschedule conflict for booking {BookingId}.", bookingId);
+            throw new DomainException("That slot was just booked.", 409);
+        }
     }
 
     public async Task<BookingResponse> CompleteAsync(Guid bookingId, CancellationToken cancellationToken)
@@ -435,6 +496,18 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
         return user.Provider;
     }
 
+    private async Task<(Booking Booking, string Currency)> LoadForCustomerAsync(Guid bookingId, CancellationToken cancellationToken)
+    {
+        var customer = await RequireCustomerAsync(CustomerChangeForbidden, cancellationToken);
+        var booking = await BookingsWithDetails(tracking: true)
+            .SingleOrDefaultAsync(b => b.Id == bookingId, cancellationToken)
+            ?? throw new DomainException("Booking not found.", 404);
+        if (booking.CustomerId != customer.Id)
+            throw new DomainException("This booking belongs to another account.", 403);
+
+        return (booking, await CurrencyAsync(cancellationToken));
+    }
+
     private async Task<(Booking Booking, string Currency)> LoadForInstructorAsync(Guid bookingId, CancellationToken cancellationToken)
     {
         var provider = await RequireInstructorAsync(cancellationToken);
@@ -492,8 +565,31 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
             : "Choose a service.");
     }
 
-    private Task<bool> SlotIsTakenAsync(Guid slotId, CancellationToken cancellationToken) =>
-        _db.Bookings.AnyAsync(b => b.SlotId == slotId && Occupying.Contains(b.Status), cancellationToken);
+    private Task<bool> SlotIsTakenAsync(Guid slotId, CancellationToken cancellationToken, Guid? exceptBookingId = null)
+    {
+        var query = _db.Bookings.Where(b => b.SlotId == slotId && Occupying.Contains(b.Status));
+        if (exceptBookingId is Guid bookingId)
+            query = query.Where(b => b.Id != bookingId);
+        return query.AnyAsync(cancellationToken);
+    }
+
+    private static Payment RequireRefundablePayment(Booking booking)
+    {
+        var payment = booking.Payment ?? throw new DomainException("This booking has no payment to refund.");
+        if (string.IsNullOrWhiteSpace(payment.GatewayPaymentId))
+            throw new DomainException("This payment cannot be refunded.");
+        return payment;
+    }
+
+    private async Task RefundCapturedPaymentAsync(Booking booking, Payment payment, CancellationToken cancellationToken)
+    {
+        PaymentRules.MarkRefunded(payment);
+        await _razorpay.RefundPaymentAsync(
+            payment.GatewayPaymentId!,
+            RazorpayMoney.ToPaise(payment.Amount),
+            booking.Id.ToString("N"),
+            cancellationToken);
+    }
 
     private async Task<LoadedBooking?> LoadByPaymentIdAsync(string paymentId, CancellationToken cancellationToken)
     {

@@ -154,7 +154,7 @@ New customer: `name` + `gender` + `phone`, then OTP. Existing customer: `phone`,
 | GET | `/api/providers/me` | Bearer | Own profile, including Meet link |
 | POST | `/api/providers/me/slots` | Bearer | Add slots for a mode the instructor offers |
 
-Booking states: `PendingAccept` → `Upcoming` or `Declined`. `Upcoming` → `Completed`, `NoShow`, or `Cancelled`. A captured Razorpay payment creates `PendingAccept`. The instructor accepts, declines, or completes on the handshake endpoints. Decline refunds the captured payment and frees the slot. Complete records a pending payout (`gross − fee%`) and unlocks one customer review. The fee is **not** copied onto the payment at book time. Cancel and reschedule stay domain rules without HTTP.
+Booking states: `PendingAccept` → `Upcoming`, `Declined`, or `Cancelled`. `Upcoming` → `Completed`, `NoShow`, `Cancelled`, or another slot while staying `Upcoming`. A captured Razorpay payment creates `PendingAccept`. The instructor accepts, declines, or completes on the handshake endpoints. Decline refunds the captured payment and frees the slot. Complete records a pending payout (`gross − fee%`) and unlocks one customer review. The fee is **not** copied onto the payment at book time. The customer who booked can cancel or reschedule on the endpoints below.
 
 ## Book and pay (local)
 
@@ -189,6 +189,19 @@ Provider JWT, and only for that instructor's booking. Customer JWT for the revie
 | POST | `/api/bookings/{id}/reviews` | Customer Bearer | One review on a `Completed` booking the customer owns. Rating 1–5, optional comment up to 1000 characters. |
 
 Illegal transitions, another instructor's booking, and a second review return `{ error }`. Decline calls `IRazorpayClient.RefundPaymentAsync`. Development and tests use the fake client, which records the refund and does not call Razorpay.
+
+## Customer cancel and reschedule (local)
+
+Customer JWT, and only for that customer's booking. An instructor or admin JWT receives 403. Another customer receives 403. Admin oversight stays on `/api/admin` and does not force-cancel.
+
+| Method | Path | Auth | Purpose |
+| --- | --- | --- | --- |
+| POST | `/api/bookings/{id}/cancel` | Customer Bearer | `PendingAccept` or `Upcoming` → `Cancelled` when the request is before the session's Mumbai start. Payment becomes `Refunded`, `IRazorpayClient.RefundPaymentAsync` runs for the captured amount, and the slot is free (`Cancelled` is outside `BookingRules.OccupiesSlot`). |
+| POST | `/api/bookings/{id}/reschedule` | Customer Bearer | JSON body `{ "slotId": "<guid>" }`. `Upcoming` only. `BookingRules.Reschedule` moves that same booking onto an open slot with the same instructor and the same mode. Payment stays `Paid`. One booking row, not a second one. |
+
+A missing body on reschedule is 400 `{ error }`. An illegal status, the same slot, a different instructor, a different mode, or a session that has already started is 400 `{ error }`. An unknown booking or slot is 404. A slot that is already taken or has ended is 409 `{ error }`.
+
+`MarketplacePolicy` still stores the TBD defaults: `CancelFreeWindowHours` 12, `RescheduleFreeWindowHours` 12, and `LateCancelFeePercent` 50. `BookingRules.IsFreeWindow` is the predicate for those hours. This slice does not apply them. Cancel before the session starts refunds the full captured amount, and reschedule is not limited to the free window. The late-cancel fee is not charged until ops confirms it.
 
 ### Razorpay configuration
 
@@ -225,7 +238,7 @@ curl -s -X POST http://localhost:5080/api/bookings/orders \
 
 Sign `orderId|paymentId` with `dev-only-not-a-live-key-secret` (the Development placeholder) and `POST /api/bookings/confirm`.
 
-Cancel / reschedule free-window hours and the platform fee are stored on `MarketplacePolicy` (12 hours, 15% fee, 50% late-cancel fee). The note says they are TBD. Admin can patch the stored numbers (see the admin section). The free window is enforced in a later slice.
+Cancel / reschedule free-window hours and the platform fee are stored on `MarketplacePolicy` (12 hours, 15% fee, 50% late-cancel fee). The note says they are TBD. Admin can patch the stored numbers (see the admin section). Customer cancel and reschedule HTTP does not apply those windows or the late-cancel fee. The platform fee is still applied only when the instructor completes a booking.
 
 ## Admin API (local)
 
@@ -256,7 +269,7 @@ Provider, booking, payment, and payout lists return at most 100 rows, newest fir
 
 The admin Razor pages call these routes. See Admin web. Tradeoffs:
 
-- Bookings, payments, and payouts are read-only. Cancel, reschedule, no-show, and refund stay on the domain and the instructor decline path. This slice does not add an admin force-cancel or a second refund call.
+- Bookings, payments, and payouts are read-only on the admin routes. Customer cancel and reschedule use the customer endpoints above. Admin does not force-cancel or issue a second refund.
 - Rejecting a verified instructor removes them from `GET /api/providers`. Bookings they already have stay. Verifying a rejected instructor is allowed and clears the reason.
 - A policy edit applies to the next completion. `PayoutPending` rows keep the fee percent stored when the instructor completed the booking.
 - Deactivating an area hides it from the public area list. Instructors already placed there stay browsable.
@@ -317,7 +330,7 @@ Target is IIS on Plesk with SQL Server, subdomain `YogaDemo.psoftcs.com`.
 2. Customer web (OTP, area, verified browse, book and pay) and book + pay HTTP — already in the repo. Pay-at-book creates `PendingAccept`
 3. Accept / decline / complete, reviews, payout pending, and refund of a captured payment whose slot was lost — API and the instructor/customer pages are in the repo. Payout export UI is later
 4. Admin approve/reject, users, bookings, payments, masters, summary report, and the local admin Razor pages — already in the repo
-5. Reschedule, cancel, payout export
+5. Payout export. Customer cancel and reschedule HTTP are in the repo.
 
 ## Out of scope
 
