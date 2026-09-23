@@ -12,11 +12,14 @@ public static class UiCopy
     public const string ProviderSingular = "Instructor";
     public const string ProviderPlural = "Instructors";
 
-    public const string Tagline = "Find verified yoga instructors";
+    public const string Tagline = "Book verified yoga instructors — home, studio, or online";
     public const string SkipToContent = "Skip to content";
     public const string SignOut = "Sign out";
     public const string AreaNav = "Area";
-    public const string FooterNote = "Home, studio, and online";
+    public const string FooterNote = "Book verified yoga instructors for home, studio, or online sessions.";
+    public const string SupportEmail = "hello@yogamarketplace.example";
+    public const string PlaceholderAddress = "12 Sample Street, Example Nagar";
+    public const string FooterSignIn = "Sign in";
 
     public const string HomeTitle = "Find verified yoga instructors · home, studio, or online";
     public const string HomeLead = "Sign in with your phone, choose an area, then browse verified instructors for home, studio, or online sessions.";

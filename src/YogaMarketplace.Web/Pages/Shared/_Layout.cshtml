@@ -82,8 +82,19 @@
     </main>
     <footer class="site-footer">
         <div class="wrap footer-bar">
-            <p class="footer-brand">@UiCopy.AppName</p>
-            <p class="footer-note">@UiCopy.FooterNote</p>
+            <div class="footer-copy">
+                <p class="footer-brand">@UiCopy.AppName</p>
+                <p class="footer-note">@UiCopy.FooterNote</p>
+            </div>
+            <nav class="footer-links" aria-label="Footer">
+                <a asp-page="/Instructors/Index">@UiCopy.ProviderPlural</a>
+                <a asp-page="/Account/SignIn">@UiCopy.FooterSignIn</a>
+            </nav>
+            <address class="footer-address">
+                <a href="mailto:@UiCopy.SupportEmail">@UiCopy.SupportEmail</a>
+                <span>@UiCopy.PlaceholderAddress</span>
+            </address>
+            <p class="footer-legal">© @DateTime.UtcNow.Year @UiCopy.AppName</p>
         </div>
     </footer>
 </body>

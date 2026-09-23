@@ -33,7 +33,11 @@ public class InstructorBrowsePageTests : IClassFixture<YogaApiFactory>
         Assert.Contains("<title>Find verified yoga instructors", home);
         Assert.Contains("home, studio, or online", home);
         Assert.Contains($"content=\"{UiCopy.HomeDescription}\"", home);
+        Assert.Contains("Book verified yoga instructors", home);
+        Assert.Contains(UiCopy.SupportEmail, home);
+        Assert.Contains(UiCopy.PlaceholderAddress, home);
         Assert.DoesNotContain(UiCopy.CityName, home);
+        Assert.DoesNotContain("Yoga in Mumbai", home);
         Assert.Contains("property=\"og:title\"", home);
         Assert.Contains("property=\"og:description\"", home);
         Assert.Contains($"property=\"og:locale\" content=\"{UiCopy.OgLocale}\"", home);
