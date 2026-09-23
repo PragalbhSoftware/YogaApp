@@ -152,9 +152,19 @@ New customer: `name` + `gender` + `phone`, then OTP. Existing customer: `phone`,
 | GET | `/api/providers/{id}/slots?mode=Home` | | Open slots for that mode |
 | POST | `/api/providers/register` | Bearer | Creates a **Pending** instructor |
 | GET | `/api/providers/me` | Bearer | Own profile, including Meet link |
+| GET | `/api/providers/me/slots?mode=&from=&to=` | Provider Bearer | Own slots for that mode, including blocked |
 | POST | `/api/providers/me/slots` | Bearer | Add slots for a mode the instructor offers |
+| POST | `/api/providers/me/slots/{id}/block` | Provider Bearer | Block an unbooked future slot the instructor owns |
 
 Booking states: `PendingAccept` → `Upcoming`, `Declined`, or `Cancelled`. `Upcoming` → `Completed`, `NoShow`, `Cancelled`, or another slot while staying `Upcoming`. A captured Razorpay payment creates `PendingAccept`. The instructor accepts, declines, or completes on the handshake endpoints. Decline refunds the captured payment and frees the slot. Complete records a pending payout (`gross − fee%`) and unlocks one customer review. The fee is **not** copied onto the payment at book time. The customer who booked can cancel or reschedule on the endpoints below.
+
+## Instructor availability (local)
+
+Provider JWT, and only for that instructor. A customer JWT is 404 until they register. Pending instructors can list and block; public `GET /api/providers/{id}/slots` still returns 404 until they are verified.
+
+`GET /api/providers/me/slots` uses the same `mode`, `from`, and `to` query as the public slot list. `mode` is required (`Home`, `Studio`, or `Online`). `from` and `to` are inclusive Mumbai dates. Omitted `from` is today; omitted `to` is six days after `from`. `to` before `from` is 400. The list includes blocked slots and slots that already have a booking. Each item is `{ id, mode, date, start, end, isBlocked }`. `start` and `end` are `HH:mm`.
+
+`POST /api/providers/me/slots/{id}/block` has no body. It sets `isBlocked` and returns that same slot shape. The slot leaves the public list and stays on the instructor list. Blocking again is a no-op and returns 200. A past date (`date` before today in Mumbai) is 400 `{ error: "Past slots cannot be blocked." }`. An occupying booking (`PendingAccept`, `Upcoming`, `Completed`, `NoShow`, per `BookingRules.OccupiesSlot`) is 409 `{ error: "That slot has a booking." }` and the slot stays open. `Declined` and `Cancelled` do not occupy the slot. Another instructor's slot is 403. A missing id is 404.
 
 ## Book and pay (local)
 

@@ -113,6 +113,10 @@ public record SlotResponse(Guid Id, string Mode, DateOnly Date, string Start, st
 
 public record SlotListResponse(string Mode, DateOnly From, DateOnly To, IReadOnlyList<SlotResponse> Slots);
 
+public record OwnedSlotResponse(Guid Id, string Mode, DateOnly Date, string Start, string End, bool IsBlocked);
+
+public record OwnedSlotListResponse(string Mode, DateOnly From, DateOnly To, IReadOnlyList<OwnedSlotResponse> Slots);
+
 public class AddSlotsRequest
 {
     public string? Mode { get; set; }
