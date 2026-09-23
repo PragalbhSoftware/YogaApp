@@ -3,6 +3,7 @@
 @{
     ViewData["Title"] = Model.DocumentTitle;
     ViewData["Description"] = Model.MetaDescription;
+    ViewData["Shell"] = "shell-wide";
 }
 
 <div class="catalog">
@@ -17,6 +18,7 @@
     }
     else if (Model.Instructor is { } instructor)
     {
+        <div class="profile-split">
         <header class="identity">
             <span class="avatar avatar-lg" aria-hidden="true">@PersonMark.Initials(instructor.DisplayName)</span>
             <div class="person-copy">
@@ -36,19 +38,19 @@
                 {
                     <p class="rating">@string.Format(UiCopy.RatingLine, rating.ToString("0.0"), instructor.ReviewCount)</p>
                 }
+                @if (instructor.Modes.Count > 0)
+                {
+                    <ul class="mode-pills">
+                        @foreach (var mode in instructor.Modes)
+                        {
+                            <li>@mode.Mode</li>
+                        }
+                    </ul>
+                }
             </div>
         </header>
 
-        @if (!string.IsNullOrWhiteSpace(instructor.Bio))
-        {
-            <p class="prose-card">@instructor.Bio</p>
-        }
-        @if (!string.IsNullOrWhiteSpace(instructor.StudioAddress))
-        {
-            <p class="place-line"><strong>@UiCopy.StudioAddress.</strong> @instructor.StudioAddress</p>
-        }
-
-        <section class="profile-section" aria-labelledby="rates-heading">
+        <aside class="book-card">
             <h2 id="rates-heading">@UiCopy.SessionType</h2>
             @if (instructor.Modes.Count == 0)
             {
@@ -83,10 +85,6 @@
                     }
                 </ul>
             }
-        </section>
-
-        <section class="profile-section" aria-labelledby="slots-heading">
-            <h2 id="slots-heading">@UiCopy.SlotsTitle</h2>
             @if (Model.SelectedRate is { } rate)
             {
                 <div class="price-callout">
@@ -94,6 +92,21 @@
                     <p>@string.Format(UiCopy.ShowingMode, rate.Mode, Money.Inr(rate.Rate))</p>
                 </div>
             }
+            <a class="button" href="#open-slots">@UiCopy.BookCta</a>
+        </aside>
+
+        <div class="profile-story">
+        @if (!string.IsNullOrWhiteSpace(instructor.Bio))
+        {
+            <p class="prose-card">@instructor.Bio</p>
+        }
+        @if (!string.IsNullOrWhiteSpace(instructor.StudioAddress))
+        {
+            <p class="place-line"><strong>@UiCopy.StudioAddress.</strong> @instructor.StudioAddress</p>
+        }
+
+        <section class="profile-section" id="open-slots" aria-labelledby="slots-heading">
+            <h2 id="slots-heading">@UiCopy.SlotsTitle</h2>
             <p class="muted">@UiCopy.SlotsLead</p>
             @if (Model.From is DateOnly from && Model.To is DateOnly to)
             {
@@ -137,5 +150,7 @@
                 }
             }
         </section>
+        </div>
+        </div>
     }
 </div>

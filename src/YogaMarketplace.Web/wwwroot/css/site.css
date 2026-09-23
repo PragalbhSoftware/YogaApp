@@ -27,6 +27,10 @@ body {
   margin: 0 auto;
 }
 
+body.shell-wide .wrap {
+  width: min(72rem, calc(100% - 2rem));
+}
+
 .skip {
   position: absolute;
   left: -999px;
@@ -295,9 +299,9 @@ a:focus-visible {
 .catalog-intro h1,
 .identity h1 {
   margin: 0 0 0.35rem;
-  font-size: clamp(1.85rem, 7vw, 2.2rem);
+  font-size: clamp(2rem, 4.2vw, 2.75rem);
   letter-spacing: -0.03em;
-  line-height: 1.12;
+  line-height: 1.08;
 }
 
 .catalog .lead {
@@ -328,13 +332,39 @@ a:focus-visible {
 .back-link a:hover,
 .back-link a:focus-visible { text-decoration: underline; }
 
-.filter-tray {
-  margin: 0 0 1.35rem;
-  padding: 1rem 1rem 1.05rem;
+.catalog-layout {
+  display: grid;
+  gap: 1.15rem;
+}
+
+.filter-rail {
   background: #fff;
   border: 1px solid var(--line);
   border-radius: 1.15rem;
   box-shadow: 0 10px 28px rgba(28, 27, 25, 0.05);
+}
+
+.filter-rail summary {
+  display: flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: 0.85rem 1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.filter-rail summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.filter-tray {
+  margin: 0;
+  padding: 0 1rem 1.05rem;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .filter-tray .field { margin-bottom: 0.85rem; }
@@ -408,9 +438,9 @@ a:focus-visible {
 .filter-tray .button { margin-top: 0.85rem; }
 
 .results-count {
-  margin: 0 0 0.65rem;
-  color: var(--muted);
-  font-size: 0.92rem;
+  margin: 0.15rem 0 0.85rem;
+  color: var(--ink);
+  font-size: 1.05rem;
   font-weight: 600;
 }
 
@@ -442,7 +472,10 @@ a:focus-visible {
 .person-list { display: grid; gap: 1rem; }
 
 .person {
-  padding: 1.15rem 1.1rem 1.15rem;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 1.2rem 1.15rem 1.15rem;
   background: #fff;
   border: 1px solid var(--line);
   border-radius: 1.15rem;
@@ -522,24 +555,27 @@ a:focus-visible {
   margin: 0.9rem 0 0;
 }
 
-.rate-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(5.4rem, 1fr));
-  gap: 0.45rem;
-  margin: 1rem 0 0;
+.rate-grid,
+.mode-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.9rem 0 0;
   padding: 0;
   list-style: none;
 }
 
-.rate-grid li {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  min-height: 3.35rem;
-  padding: 0.45rem 0.4rem;
-  border-radius: 0.8rem;
+.rate-grid li,
+.mode-pills li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 2.25rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
   background: var(--bg);
-  text-align: center;
+  font-weight: 600;
 }
 
 .rate-mode {
@@ -556,8 +592,10 @@ a:focus-visible {
 
 .person .rating { color: var(--muted); }
 
+.rate-grid { margin-bottom: 1rem; }
+
 .person .button {
-  margin-top: 1rem;
+  margin-top: auto;
   min-height: 3rem;
   border-radius: 0.9rem;
 }
@@ -573,15 +611,30 @@ a:focus-visible {
 
 .place-line { margin-bottom: 0; }
 
-.profile-section { margin-top: 1.7rem; }
+.profile-section { margin-top: 1.35rem; }
 
-.profile-section h2 {
+.profile-section h2,
+.book-card h2 {
   margin: 0 0 0.7rem;
   font-size: 0.82rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--muted);
 }
+
+.book-card {
+  padding: 1.1rem 1.05rem 1.15rem;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 1.15rem;
+  box-shadow: 0 10px 28px rgba(28, 27, 25, 0.05);
+}
+
+.book-card .mode-list { margin-bottom: 0.9rem; }
+
+.book-card .price-callout { background: var(--bg); }
+
+.book-card .button { margin-top: 0.35rem; }
 
 .mode-list,
 .slot-list {
@@ -693,6 +746,42 @@ a:focus-visible {
   color: var(--muted);
 }
 
-@media (min-width: 36rem) {
-  .chip-row { grid-template-columns: repeat(4, 1fr); }
+@media (min-width: 52rem) {
+  .catalog-layout {
+    grid-template-columns: 16rem minmax(0, 1fr);
+    gap: 1.5rem 1.75rem;
+    align-items: start;
+  }
+
+  .filter-rail {
+    position: sticky;
+    top: 1rem;
+  }
+
+  .filter-rail summary { display: none; }
+
+  .filter-rail .filter-tray { display: block !important; }
+
+  .filter-rail .chip-row { grid-template-columns: 1fr; }
+
+  .person-list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.15rem; }
+
+  .profile-split {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(18rem, 22rem);
+    column-gap: 2rem;
+    row-gap: 0.35rem;
+    align-items: start;
+  }
+
+  .identity { grid-column: 1; grid-row: 1; margin-bottom: 0.4rem; }
+
+  .profile-story { grid-column: 1; grid-row: 2; }
+
+  .book-card {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    position: sticky;
+    top: 1rem;
+  }
 }

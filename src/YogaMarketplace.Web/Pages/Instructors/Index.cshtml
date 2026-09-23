@@ -3,6 +3,7 @@
 @{
     ViewData["Title"] = Model.DocumentTitle;
     ViewData["Description"] = Model.MetaDescription;
+    ViewData["Shell"] = "shell-wide";
 }
 
 <div class="catalog">
@@ -23,48 +24,55 @@
         <p class="alert" role="alert">@Model.AreasError</p>
     }
 
-    <form method="get" class="filter-tray" data-browse-filters action="@Url.Page("/Instructors/Index")" aria-controls="instructor-results">
-        <div class="field">
-            <label for="area">@UiCopy.Area</label>
-            <select id="area" name="area">
-                @foreach (var area in Model.AreaChoices)
-                {
-                    if (area == Model.Area)
-                    {
-                        <option value="@area" selected>@area</option>
-                    }
-                    else
-                    {
-                        <option value="@area">@area</option>
-                    }
-                }
-            </select>
-        </div>
-        <fieldset class="mode-chips">
-            <legend>@UiCopy.Mode</legend>
-            <div class="chip-row">
-                @foreach (var option in Model.ModeOptions)
-                {
-                    <label>
-                        @if (option.Selected)
+    <div class="catalog-layout">
+        <details class="filter-rail" open>
+            <summary>@UiCopy.FilterLegend</summary>
+            <form method="get" class="filter-tray" data-browse-filters action="@Url.Page("/Instructors/Index")" aria-controls="instructor-results">
+                <div class="field">
+                    <label for="area">@UiCopy.Area</label>
+                    <select id="area" name="area">
+                        @foreach (var area in Model.AreaChoices)
                         {
-                            <input type="radio" name="mode" value="@option.Value" checked />
+                            if (area == Model.Area)
+                            {
+                                <option value="@area" selected>@area</option>
+                            }
+                            else
+                            {
+                                <option value="@area">@area</option>
+                            }
                         }
-                        else
+                    </select>
+                </div>
+                <fieldset class="mode-chips">
+                    <legend>@UiCopy.Mode</legend>
+                    <div class="chip-row">
+                        @foreach (var option in Model.ModeOptions)
                         {
-                            <input type="radio" name="mode" value="@option.Value" />
+                            <label>
+                                @if (option.Selected)
+                                {
+                                    <input type="radio" name="mode" value="@option.Value" checked />
+                                }
+                                else
+                                {
+                                    <input type="radio" name="mode" value="@option.Value" />
+                                }
+                                <span>@option.Label</span>
+                            </label>
                         }
-                        <span>@option.Label</span>
-                    </label>
-                }
-            </div>
-        </fieldset>
-        <button type="submit" class="secondary">@UiCopy.ApplyFilters</button>
-    </form>
+                    </div>
+                </fieldset>
+                <button type="submit" class="secondary">@UiCopy.ApplyFilters</button>
+            </form>
+        </details>
 
-    <p id="browse-status" class="visually-hidden" data-browse-status aria-live="polite"></p>
-    <div id="instructor-results" data-browse-results data-updating="@UiCopy.UpdatingList">
-        <partial name="_InstructorList" model="Model" />
+        <div class="catalog-results">
+            <p id="browse-status" class="visually-hidden" data-browse-status aria-live="polite"></p>
+            <div id="instructor-results" data-browse-results data-updating="@UiCopy.UpdatingList">
+                <partial name="_InstructorList" model="Model" />
+            </div>
+        </div>
     </div>
 </div>
 
