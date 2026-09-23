@@ -456,7 +456,8 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
             .Include(b => b.Provider)
             .Include(b => b.Service)
             .Include(b => b.Slot)
-            .Include(b => b.Payment);
+            .Include(b => b.Payment)
+            .Include(b => b.Review);
     }
 
     private Task<string> CurrencyAsync(CancellationToken cancellationToken) =>
@@ -500,6 +501,7 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
             .Include(p => p.Booking!).ThenInclude(b => b.Provider)
             .Include(p => p.Booking!).ThenInclude(b => b.Service)
             .Include(p => p.Booking!).ThenInclude(b => b.Slot)
+            .Include(p => p.Booking!).ThenInclude(b => b.Review)
             .SingleOrDefaultAsync(p => p.GatewayPaymentId == paymentId, cancellationToken);
 
         if (payment?.Booking is null)
@@ -533,7 +535,8 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
             payment?.Status.ToString() ?? "",
             payment?.GatewayOrderId,
             payment?.GatewayPaymentId,
-            booking.CreatedAt);
+            booking.CreatedAt,
+            booking.Review is not null);
     }
 
     private static string Required(string? value, string message)

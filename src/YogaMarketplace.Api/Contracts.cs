@@ -187,4 +187,5 @@ public record BookingResponse(
     string PaymentStatus,
     string? GatewayOrderId,
     string? GatewayPaymentId,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    bool HasReviewed);

@@ -112,9 +112,15 @@ public class BookingHandshakeTests : IClassFixture<YogaApiFactory>
         Assert.Equal(749m, booked.Amount);
 
         var instructor = await InstructorClientAsync();
-        var declined = await PostAsync<BookingBody>(instructor, $"/api/bookings/{booked.Id}/decline", new { });
+        var declineResponse = await instructor.PostAsJsonAsync($"/api/bookings/{booked.Id}/decline", new { });
+        var declineJson = await declineResponse.Content.ReadAsStringAsync();
+        Assert.True(declineResponse.IsSuccessStatusCode, declineJson);
+        AssertCamelHasReviewed(declineJson, false);
+        var declined = JsonSerializer.Deserialize<BookingBody>(declineJson, Json);
+        Assert.NotNull(declined);
         Assert.Equal("Declined", declined.Status);
         Assert.Equal("Refunded", declined.PaymentStatus);
+        Assert.False(declined.HasReviewed);
 
         var refund = Assert.Single(RefundsFor(booked.GatewayPaymentId!));
         Assert.Equal(74900, refund.AmountPaise);
@@ -230,6 +236,55 @@ public class BookingHandshakeTests : IClassFixture<YogaApiFactory>
         Assert.Equal(4, blank.Rating);
         Assert.Equal(1, await PayoutCountAsync(booked.Id));
         Assert.Equal(PaymentStatus.Paid, await PaymentStatusAsync(booked.Id));
+    }
+
+    [Fact]
+    public async Task HasReviewed_is_true_only_when_a_review_row_exists()
+    {
+        var customer = _factory.CreateClient();
+        var (customerToken, _) = await SignUpAsync(customer, "Sana Kapoor", "Female");
+        customer.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", customerToken);
+        var instructor = await InstructorClientAsync();
+
+        var home = await FirstOpenSlotAsync(customer, "Home");
+        var pending = await BookHomeAsync(customer, home.Id, "pay_reviewed_flag_1");
+        Assert.Equal("PendingAccept", pending.Status);
+        Assert.False(pending.HasReviewed);
+        await AssertReviewFlagAsync(customer, "/api/bookings/me", pending.Id, "PendingAccept", expected: false);
+        await AssertReviewFlagAsync(instructor, "/api/bookings/instructor?status=PendingAccept", pending.Id, "PendingAccept", expected: false);
+
+        var accepted = await PostBookingAsync(instructor, $"/api/bookings/{pending.Id}/accept");
+        Assert.Equal("Upcoming", accepted.Status);
+        Assert.False(accepted.HasReviewed);
+        await AssertReviewFlagAsync(customer, "/api/bookings/me", pending.Id, "Upcoming", expected: false);
+        await AssertReviewFlagAsync(instructor, "/api/bookings/instructor?status=Upcoming", pending.Id, "Upcoming", expected: false);
+
+        var completed = await PostBookingAsync(instructor, $"/api/bookings/{pending.Id}/complete");
+        Assert.Equal("Completed", completed.Status);
+        Assert.False(completed.HasReviewed);
+        await AssertReviewFlagAsync(customer, "/api/bookings/me", pending.Id, "Completed", expected: false);
+        await AssertReviewFlagAsync(instructor, "/api/bookings/instructor?status=Completed", pending.Id, "Completed", expected: false);
+
+        var studio = await FirstOpenSlotAsync(customer, "Studio");
+        var open = await BookAsync(customer, studio.Id, "pay_reviewed_flag_2", homeAddress: null, landmark: null);
+        Assert.Equal("PendingAccept", open.Status);
+        Assert.False(open.HasReviewed);
+        var openAccepted = await PostBookingAsync(instructor, $"/api/bookings/{open.Id}/accept");
+        Assert.Equal("Upcoming", openAccepted.Status);
+        Assert.False(openAccepted.HasReviewed);
+        var openCompleted = await PostBookingAsync(instructor, $"/api/bookings/{open.Id}/complete");
+        Assert.Equal("Completed", openCompleted.Status);
+        Assert.False(openCompleted.HasReviewed);
+
+        await PostReviewAsync(customer, pending.Id, 5, "Calm and clear");
+
+        var mineJson = await customer.GetStringAsync("/api/bookings/me");
+        AssertCamelHasReviewed(mineJson, true);
+        AssertCamelHasReviewed(mineJson, false);
+        await AssertReviewFlagAsync(customer, "/api/bookings/me", pending.Id, "Completed", expected: true);
+        await AssertReviewFlagAsync(customer, "/api/bookings/me", open.Id, "Completed", expected: false);
+        await AssertReviewFlagAsync(instructor, "/api/bookings/instructor?status=Completed", pending.Id, "Completed", expected: true);
+        await AssertReviewFlagAsync(instructor, "/api/bookings/instructor?status=Completed", open.Id, "Completed", expected: false);
     }
 
     private async Task AssertForbiddenAsync(HttpClient client, string path)
@@ -352,6 +407,36 @@ public class BookingHandshakeTests : IClassFixture<YogaApiFactory>
         return await query(db);
     }
 
+    private async Task AssertReviewFlagAsync(HttpClient client, string url, Guid id, string status, bool expected)
+    {
+        var response = await client.GetAsync(url);
+        var json = await response.Content.ReadAsStringAsync();
+        Assert.True(response.IsSuccessStatusCode, json);
+        AssertCamelHasReviewed(json, expected);
+        var rows = JsonSerializer.Deserialize<List<BookingBody>>(json, Json);
+        var match = rows!.Single(b => b.Id == id);
+        Assert.Equal(status, match.Status);
+        Assert.Equal(expected, match.HasReviewed);
+    }
+
+    private async Task<BookingBody> PostBookingAsync(HttpClient client, string url)
+    {
+        var response = await client.PostAsJsonAsync(url, new { });
+        var json = await response.Content.ReadAsStringAsync();
+        Assert.True(response.IsSuccessStatusCode, json);
+        Assert.Contains("\"hasReviewed\":", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"HasReviewed\"", json, StringComparison.Ordinal);
+        var parsed = JsonSerializer.Deserialize<BookingBody>(json, Json);
+        Assert.NotNull(parsed);
+        return parsed;
+    }
+
+    private static void AssertCamelHasReviewed(string json, bool expected)
+    {
+        Assert.Contains(expected ? "\"hasReviewed\":true" : "\"hasReviewed\":false", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"HasReviewed\"", json, StringComparison.Ordinal);
+    }
+
     private static async Task<T> PostAsync<T>(HttpClient client, string url, object body)
     {
         var response = await client.PostAsJsonAsync(url, body);
@@ -389,6 +474,7 @@ public class BookingHandshakeTests : IClassFixture<YogaApiFactory>
         string Status,
         decimal Amount,
         string PaymentStatus,
-        string? GatewayPaymentId);
+        string? GatewayPaymentId,
+        bool HasReviewed);
     private sealed record ReviewBody(Guid Id, Guid BookingId, Guid ProviderId, int Rating, string? Comment);
 }
