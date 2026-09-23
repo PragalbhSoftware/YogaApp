@@ -15,6 +15,12 @@ public static class SessionClock
 
     public static bool HasStarted(DateOnly date, string start) => HasReached(date, start);
 
+    public static DateOnly Today(DateTimeOffset? utcNow = null)
+    {
+        var utc = (utcNow ?? DateTimeOffset.UtcNow).UtcDateTime;
+        return DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(utc, Zone));
+    }
+
     private static bool HasReached(DateOnly date, string clock)
     {
         if (!TimeOnly.TryParseExact(clock, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var time))

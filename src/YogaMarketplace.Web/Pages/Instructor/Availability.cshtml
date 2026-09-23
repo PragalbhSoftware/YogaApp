@@ -1,0 +1,83 @@
+@page "/instructor/availability"
+@model YogaMarketplace.Web.Pages.Instructor.AvailabilityModel
+@{
+    ViewData["Title"] = UiCopy.InstructorAvailabilityTitle;
+}
+
+@Html.AntiForgeryToken()
+<h1>@UiCopy.InstructorAvailabilityTitle</h1>
+<p class="lead">@UiCopy.InstructorAvailabilityLead</p>
+<p><a asp-page="/Instructor/Bookings">@UiCopy.InstructorInboxNav</a></p>
+
+<nav aria-label="@UiCopy.ModeFilter">
+    <ul class="pills">
+        @foreach (var mode in SessionModes.All)
+        {
+            var label = mode switch
+            {
+                SessionModes.Home => UiCopy.ModeHome,
+                SessionModes.Studio => UiCopy.ModeStudio,
+                _ => UiCopy.ModeOnline
+            };
+            <li>
+                <a class="pill @(Model.ModeKnown && Model.Mode == mode ? "active" : null)"
+                   asp-page="/Instructor/Availability"
+                   asp-route-mode="@mode"
+                   asp-route-from="@Model.FromQuery"
+                   asp-route-to="@Model.ToQuery">@label</a>
+            </li>
+        }
+    </ul>
+</nav>
+
+@if (!string.IsNullOrEmpty(Model.WindowLabel) && Model.WindowFrom is DateOnly from && Model.WindowTo is DateOnly to)
+{
+    <p class="muted" data-window-from="@from.ToString("yyyy-MM-dd")" data-window-to="@to.ToString("yyyy-MM-dd")">@Model.WindowLabel</p>
+}
+
+@if (!string.IsNullOrEmpty(Model.Notice))
+{
+    <p class="hint" role="status">@Model.Notice</p>
+}
+
+@if (!string.IsNullOrEmpty(Model.Error))
+{
+    <p class="alert" role="alert">@Model.Error</p>
+}
+
+@if (Model.ModeKnown && string.IsNullOrEmpty(Model.Error) && Model.Slots.Count == 0)
+{
+    <p role="status">@UiCopy.NoOwnedSlots</p>
+}
+else if (Model.Slots.Count > 0)
+{
+    @foreach (var slot in Model.Slots)
+    {
+        var state = Model.StateOf(slot);
+        <article class="card"
+                 data-slot-id="@slot.Id"
+                 data-blocked="@(slot.IsBlocked ? "true" : "false")"
+                 data-state="@state"
+                 data-mode="@slot.Mode">
+            <h2>@InstructorAvailability.FormatDay(slot.Date)</h2>
+            <p>@slot.Start–@slot.End</p>
+            <p>@InstructorAvailability.Label(state)</p>
+            @if (InstructorAvailability.Detail(state) is string detail)
+            {
+                <p class="muted">@detail</p>
+            }
+            @if (Model.CanBlock(slot))
+            {
+                <form method="post"
+                      data-action="block"
+                      asp-page-handler="Block"
+                      asp-route-id="@slot.Id"
+                      asp-route-mode="@Model.Mode"
+                      asp-route-from="@Model.FromQuery"
+                      asp-route-to="@Model.ToQuery">
+                    <button type="submit">@UiCopy.BlockSlot</button>
+                </form>
+            }
+        </article>
+    }
+}

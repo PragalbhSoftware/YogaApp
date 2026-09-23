@@ -46,6 +46,7 @@ builder.Services.AddHttpClient(MarketplaceApiClient.HttpClientName, (sp, client)
 builder.Services.AddScoped<IMarketplaceApi, MarketplaceApiClient>();
 builder.Services.AddScoped<IBookingApi, BookingApiClient>();
 builder.Services.AddScoped<IInstructorBookingApi, InstructorBookingApiClient>();
+builder.Services.AddScoped<IInstructorAvailabilityApi, InstructorAvailabilityApiClient>();
 builder.Services.AddScoped<IAdminReportApi, AdminReportClient>();
 builder.Services.AddScoped<IAdminProviderApi, AdminProviderClient>();
 builder.Services.AddScoped<IAdminUserApi, AdminUserClient>();

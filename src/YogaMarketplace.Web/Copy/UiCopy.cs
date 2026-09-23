@@ -139,6 +139,20 @@ public static class UiCopy
     public const string MeetLink = "Join the session";
 
     public const string InstructorInboxNav = "Requests";
+    public const string InstructorAvailabilityNav = "Availability";
+    public const string InstructorAvailabilityTitle = "Availability";
+    public const string InstructorAvailabilityLead = "Your slots for this week, including ones you have blocked. Block an open slot to hide it from customers. It stays on this list.";
+    public const string ModeFilter = "Session mode";
+    public const string SlotOpen = "Open";
+    public const string SlotBlocked = "Blocked";
+    public const string SlotOccupied = "Booked";
+    public const string SlotPast = "Past";
+    public const string SlotBlockedDetail = "Blocked. Customers do not see this slot.";
+    public const string SlotOccupiedDetail = "This slot has a booking, so it cannot be blocked.";
+    public const string SlotPastDetail = "Past slots cannot be blocked.";
+    public const string BlockSlot = "Block slot";
+    public const string BlockedNotice = "Blocked. Customers no longer see this slot.";
+    public const string NoOwnedSlots = "No slots in this range.";
     public const string InstructorInboxTitle = "Session requests";
     public const string InstructorInboxLead = "Accept or decline a new request. Mark an upcoming session complete when it is done.";
     public const string NoInstructorBookings = "No sessions in this list.";
@@ -172,7 +186,7 @@ public static class UiCopy
     public const string ReviewedAlready = "You reviewed this session.";
 
     public const string AccessDeniedTitle = "That page is not available for this account.";
-    public const string AccessDeniedLead = "Instructors open session requests. Customers open My bookings. Admins open the admin area.";
+    public const string AccessDeniedLead = "Instructors open session requests and availability. Customers open My bookings. Admins open the admin area.";
 
     public const string OpenAdmin = "Open admin";
     public const string AdminDashboardNav = "Dashboard";
