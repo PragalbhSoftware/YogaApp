@@ -41,6 +41,15 @@ public class ProvidersController : ControllerBase
         Ok(await _providers.GetMineAsync(cancellationToken));
 
     [Authorize]
+    [HttpGet("me/slots")]
+    public async Task<ActionResult<OwnedSlotListResponse>> MySlots(
+        [FromQuery] string? mode,
+        [FromQuery] DateOnly? from,
+        [FromQuery] DateOnly? to,
+        CancellationToken cancellationToken) =>
+        Ok(await _providers.GetMySlotsAsync(mode, from, to, cancellationToken));
+
+    [Authorize]
     [HttpPost("me/slots")]
     public async Task<ActionResult<IReadOnlyList<SlotResponse>>> AddSlots(
         [FromBody] AddSlotsRequest? request,
@@ -51,6 +60,11 @@ public class ProvidersController : ControllerBase
         var slots = await _providers.AddSlotsAsync(request, cancellationToken);
         return Ok(slots);
     }
+
+    [Authorize]
+    [HttpPost("me/slots/{id:guid}/block")]
+    public async Task<ActionResult<OwnedSlotResponse>> BlockSlot(Guid id, CancellationToken cancellationToken) =>
+        Ok(await _providers.BlockSlotAsync(id, cancellationToken));
 
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<ProviderDetail>> Get(Guid id, CancellationToken cancellationToken) =>

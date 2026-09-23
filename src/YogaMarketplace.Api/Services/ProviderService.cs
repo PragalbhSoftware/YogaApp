@@ -8,6 +8,9 @@ namespace YogaMarketplace.Api.Services;
 
 public class ProviderService
 {
+    private static readonly BookingStatus[] Occupying =
+        Enum.GetValues<BookingStatus>().Where(BookingRules.OccupiesSlot).ToArray();
+
     private readonly YogaDbContext _db;
     private readonly ICurrentUser _current;
     private readonly JwtTokenService _tokens;
@@ -74,14 +77,10 @@ public class ProviderService
             throw new DomainException("Instructor not found.", 404);
 
         var parsed = ParseRequiredMode(mode);
-        var start = from ?? MumbaiClock.Today();
-        var end = to ?? start.AddDays(6);
-        if (end < start)
-            throw new DomainException("The end date is before the start date.");
+        var (start, end) = ResolveWindow(from, to);
 
-        var occupying = Enum.GetValues<BookingStatus>().Where(BookingRules.OccupiesSlot).ToArray();
         var taken = _db.Bookings
-            .Where(b => b.ProviderId == providerId && occupying.Contains(b.Status))
+            .Where(b => b.ProviderId == providerId && Occupying.Contains(b.Status))
             .Select(b => b.SlotId);
 
         var slots = await _db.AvailabilitySlots.AsNoTracking()
@@ -234,6 +233,54 @@ public class ProviderService
         return created.Select(ToSlot).ToList();
     }
 
+    public async Task<OwnedSlotListResponse> GetMySlotsAsync(
+        string? mode,
+        DateOnly? from,
+        DateOnly? to,
+        CancellationToken cancellationToken)
+    {
+        var provider = await RequireCurrentProviderAsync(cancellationToken);
+        var parsed = ParseRequiredMode(mode);
+        var (start, end) = ResolveWindow(from, to);
+
+        var slots = await _db.AvailabilitySlots.AsNoTracking()
+            .Where(s => s.ProviderId == provider.Id && s.Mode == parsed)
+            .Where(s => s.Date >= start && s.Date <= end)
+            .OrderBy(s => s.Date).ThenBy(s => s.StartTime)
+            .ToListAsync(cancellationToken);
+
+        return new OwnedSlotListResponse(parsed.ToString(), start, end, slots.Select(ToOwnedSlot).ToList());
+    }
+
+    public async Task<OwnedSlotResponse> BlockSlotAsync(Guid slotId, CancellationToken cancellationToken)
+    {
+        var provider = await RequireCurrentProviderAsync(cancellationToken);
+        var slot = await _db.AvailabilitySlots.SingleOrDefaultAsync(s => s.Id == slotId, cancellationToken)
+            ?? throw new DomainException("Slot not found.", 404);
+        if (slot.ProviderId != provider.Id)
+            throw new DomainException("This slot belongs to another instructor.", 403);
+
+        var taken = await _db.Bookings.AnyAsync(
+            b => b.SlotId == slot.Id && Occupying.Contains(b.Status),
+            cancellationToken);
+        AvailabilityRules.Block(slot, taken, MumbaiClock.Today());
+        await _db.SaveChangesAsync(cancellationToken);
+        return ToOwnedSlot(slot);
+    }
+
+    private async Task<Provider> RequireCurrentProviderAsync(CancellationToken cancellationToken) =>
+        await _db.Providers.SingleOrDefaultAsync(p => p.UserId == _current.UserId, cancellationToken)
+            ?? throw new DomainException("Register as an instructor first.", 404);
+
+    private static (DateOnly Start, DateOnly End) ResolveWindow(DateOnly? from, DateOnly? to)
+    {
+        var start = from ?? MumbaiClock.Today();
+        var end = to ?? start.AddDays(6);
+        if (end < start)
+            throw new DomainException("The end date is before the start date.");
+        return (start, end);
+    }
+
     private IQueryable<Provider> VerifiedQuery() =>
         _db.Providers.AsNoTracking()
             .Include(p => p.Area)
@@ -325,6 +372,14 @@ public class ProviderService
         slot.Date,
         slot.StartTime.ToString("HH:mm", CultureInfo.InvariantCulture),
         slot.EndTime.ToString("HH:mm", CultureInfo.InvariantCulture));
+
+    private static OwnedSlotResponse ToOwnedSlot(AvailabilitySlot slot) => new(
+        slot.Id,
+        slot.Mode.ToString(),
+        slot.Date,
+        slot.StartTime.ToString("HH:mm", CultureInfo.InvariantCulture),
+        slot.EndTime.ToString("HH:mm", CultureInfo.InvariantCulture),
+        slot.IsBlocked);
 
     private static SessionMode? ParseOptionalMode(string? mode)
     {
