@@ -29,14 +29,20 @@
     {
         <meta name="robots" content="@PageSeo.RobotsNoIndex" />
     }
+    <link rel="icon" href="~/img/logo.png" asp-append-version="true" type="image/png" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
 </head>
 <body class="@ViewData["Shell"]">
     <a class="skip" href="#main">@UiCopy.SkipToContent</a>
     <header class="site-header">
         <div class="wrap header-bar">
-            <a class="brand" asp-page="/Index">@UiCopy.AppName</a>
-            <p class="tag">@UiCopy.Tagline</p>
+            <div class="brand-block">
+                <a class="brand" asp-page="/Index">
+                    <img class="brand-mark" src="~/img/logo.png" asp-append-version="true" alt="" width="36" height="36" />
+                    <span class="brand-name">@UiCopy.AppName</span>
+                </a>
+                <p class="tag">@UiCopy.Tagline</p>
+            </div>
             <nav class="nav" aria-label="Account">
                 @if (User.Identity?.IsAuthenticated == true)
                 {
@@ -75,7 +81,10 @@
         @RenderBody()
     </main>
     <footer class="site-footer">
-        <div class="wrap">@UiCopy.FooterNote</div>
+        <div class="wrap footer-bar">
+            <p class="footer-brand">@UiCopy.AppName</p>
+            <p class="footer-note">@UiCopy.FooterNote</p>
+        </div>
     </footer>
 </body>
 </html>
