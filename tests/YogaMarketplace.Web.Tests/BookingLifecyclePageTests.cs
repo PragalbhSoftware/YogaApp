@@ -148,7 +148,10 @@ public class BookingLifecyclePageTests : IClassFixture<YogaApiFactory>
             }));
         var reviewedBody = await reviewed.Content.ReadAsStringAsync();
         Assert.True(reviewed.StatusCode == HttpStatusCode.Redirect, reviewedBody);
-        Assert.Contains($"reviewed={bookingId}", reviewed.Headers.Location?.OriginalString, StringComparison.OrdinalIgnoreCase);
+        var location = reviewed.Headers.Location?.OriginalString ?? "";
+        Assert.Contains("/bookings", location, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("reviewed=", location, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("ym.reviewed", SetCookie(reviewed), StringComparison.OrdinalIgnoreCase);
 
         var saved = await customer.GetStringAsync(reviewed.Headers.Location);
         Assert.Contains(UiCopy.ReviewedAlready, saved);
@@ -166,6 +169,7 @@ public class BookingLifecyclePageTests : IClassFixture<YogaApiFactory>
         Assert.Contains("already", againBody, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("data-action=\"review\"", againBody);
         Assert.Contains(UiCopy.ReviewedAlready, againBody);
+        Assert.DoesNotContain("ym.reviewed", SetCookie(again), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -317,6 +321,9 @@ public class BookingLifecyclePageTests : IClassFixture<YogaApiFactory>
 
     private static string BookingArticle(Guid bookingId, Guid slotId, string status) =>
         $"data-booking-id=\"{bookingId}\" data-slot-id=\"{slotId}\" data-status=\"{status}\"";
+
+    private static string SetCookie(HttpResponseMessage response) =>
+        response.Headers.TryGetValues("Set-Cookie", out var values) ? string.Join(";", values) : "";
 
     private static IReadOnlyList<BookLink> BookLinks(string html, string mode)
     {

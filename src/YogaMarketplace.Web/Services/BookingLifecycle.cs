@@ -17,8 +17,8 @@ public static class CustomerReviews
     public const int MaxRating = 5;
     public const int MaxCommentLength = 1000;
 
-    public static bool CanSubmit(string status, bool alreadyReviewed) =>
-        status == BookingStatuses.Completed && !alreadyReviewed;
+    public static bool CanSubmit(string status, bool hasReviewed) =>
+        status == BookingStatuses.Completed && !hasReviewed;
 
     public static bool IsInRange(int rating) => rating is >= MinRating and <= MaxRating;
 }

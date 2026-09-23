@@ -44,7 +44,6 @@ builder.Services.AddHttpClient(MarketplaceApiClient.HttpClientName, (sp, client)
 builder.Services.AddScoped<IMarketplaceApi, MarketplaceApiClient>();
 builder.Services.AddScoped<IBookingApi, BookingApiClient>();
 builder.Services.AddScoped<IInstructorBookingApi, InstructorBookingApiClient>();
-builder.Services.AddScoped<IReviewedBookingStore, CookieReviewedBookingStore>();
 builder.Services.AddSingleton<ILocalRazorpayCheckout, LocalRazorpayCheckout>();
 builder.Services.AddScoped<ISlotQuoteReader, SlotQuoteReader>();
 builder.Services.AddScoped<IPaymentCheckout, PaymentCheckout>();
