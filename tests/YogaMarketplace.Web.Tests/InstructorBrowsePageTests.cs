@@ -80,7 +80,7 @@ public class InstructorBrowsePageTests : IClassFixture<YogaApiFactory>
         Assert.Contains($"data-heading=\"{UiCopy.BrowseHeading}\"", html);
         Assert.Contains("<title>Home yoga instructors in Bandra", html);
         Assert.Contains("Yoga Marketplace</title>", html);
-        Assert.Contains("Verified Home yoga instructors in Bandra, Mumbai.", html);
+        Assert.Contains(string.Format(UiCopy.BrowseDescriptionWithMode, "Home", "Bandra"), html);
         Assert.Contains("name=\"description\"", html);
         Assert.Contains("property=\"og:title\"", html);
         Assert.Contains("property=\"og:url\"", html);
@@ -124,7 +124,7 @@ public class InstructorBrowsePageTests : IClassFixture<YogaApiFactory>
         var profile = await client.GetStringAsync($"/instructors/{SeedIds.AnanyaProviderId}?mode=Home");
         var profileText = WebUtility.HtmlDecode(profile);
         Assert.Contains("<title>Ananya Desai, yoga in Bandra", profile);
-        Assert.Contains("Ananya Desai teaches yoga in Bandra, Mumbai.", profile);
+        Assert.Contains(string.Format(UiCopy.ProfileDescription, "Ananya Desai", "Bandra"), profile);
         Assert.Contains("property=\"og:description\"", profile);
         Assert.DoesNotContain("noindex", profile);
         Assert.Contains(UiCopy.TrustVerified, profile);

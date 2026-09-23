@@ -22,7 +22,7 @@
         <header class="identity">
             <span class="avatar avatar-lg" aria-hidden="true">@PersonMark.Initials(instructor.DisplayName)</span>
             <div class="person-copy">
-                <p class="kicker">@UiCopy.CategoryName · @instructor.Area, @UiCopy.CityName</p>
+                <p class="kicker">@UiCopy.CategoryName · @instructor.Area, @instructor.City</p>
                 <div class="name-row">
                     <h1>@instructor.DisplayName</h1>
                     @if (string.Equals(instructor.Status, ProviderStatuses.Verified, StringComparison.OrdinalIgnoreCase))

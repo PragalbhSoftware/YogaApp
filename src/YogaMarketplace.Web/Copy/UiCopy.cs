@@ -1,8 +1,8 @@
 namespace YogaMarketplace.Web.Copy;
 
 /// <summary>
-/// User-facing labels. Yoga is the first category and Mumbai the first city;
-/// swap these strings (or move them to resources) without changing the page flow.
+/// User-facing labels. Yoga is the first category. City and area come from
+/// catalog data, not from the brand. Swap these strings without changing the page flow.
 /// </summary>
 public static class UiCopy
 {
@@ -12,15 +12,15 @@ public static class UiCopy
     public const string ProviderSingular = "Instructor";
     public const string ProviderPlural = "Instructors";
 
-    public const string Tagline = "Yoga in Mumbai";
+    public const string Tagline = "Find a yoga instructor";
     public const string SkipToContent = "Skip to content";
     public const string SignOut = "Sign out";
     public const string AreaNav = "Area";
-    public const string FooterNote = "Mumbai · Yoga";
+    public const string FooterNote = "Home, studio, and online";
 
     public const string HomeTitle = "Find a yoga instructor";
-    public const string HomeLead = "Sign in with your phone, choose a Mumbai area, then browse verified instructors for home, studio, or online sessions.";
-    public const string HomeDescription = "Find a verified yoga instructor in Mumbai for a home, studio, or online session.";
+    public const string HomeLead = "Sign in with your phone, choose an area, then browse verified instructors for home, studio, or online sessions.";
+    public const string HomeDescription = "Find a verified yoga instructor for a home, studio, or online session.";
     public const string OgLocale = "en_IN";
     public const string SignInCta = "Sign in with phone";
     public const string Continue = "Continue";
@@ -54,7 +54,7 @@ public static class UiCopy
     public const string CodeRequired = "Enter the code we sent.";
 
     public const string AreaTitle = "Choose your area";
-    public const string AreaLead = "Mumbai neighbourhoods from the marketplace. You can change this while browsing.";
+    public const string AreaLead = "Neighbourhoods from the marketplace. You can change this while browsing.";
     public const string ChooseArea = "Choose an area to continue.";
     public const string NoAreas = "No areas are listed yet.";
 
@@ -62,9 +62,9 @@ public static class UiCopy
     public const string BrowseHeading = "Instructors in {0}";
     public const string BrowseDocumentTitle = "Yoga instructors in {0}";
     public const string BrowseDocumentTitleWithMode = "{0} yoga instructors in {1}";
-    public const string BrowseLead = "Verified yoga instructors in Mumbai. Compare home, studio, and online rates, then book.";
-    public const string BrowseDescription = "Verified yoga instructors in {0}, Mumbai. Compare home, studio, and online rates, then book an open slot.";
-    public const string BrowseDescriptionWithMode = "Verified {0} yoga instructors in {1}, Mumbai. See the rate and book an open slot.";
+    public const string BrowseLead = "Verified yoga instructors. Compare home, studio, and online rates, then book.";
+    public const string BrowseDescription = "Verified yoga instructors in {0}. Compare home, studio, and online rates, then book an open slot.";
+    public const string BrowseDescriptionWithMode = "Verified {0} yoga instructors in {1}. See the rate and book an open slot.";
     public const string VerifiedOnly = "Verified only";
     public const string Area = "Area";
     public const string Mode = "Mode";
@@ -92,8 +92,8 @@ public static class UiCopy
 
     public const string ProfileTitle = "Instructor";
     public const string ProfileDocumentTitle = "{0}, yoga in {1}";
-    public const string ProfileDescription = "{0} teaches yoga in {1}, Mumbai. See rates and book an open slot.";
-    public const string ProfileMissingDescription = "That yoga instructor is not listed in Mumbai.";
+    public const string ProfileDescription = "{0} teaches yoga in {1}. See rates and book an open slot.";
+    public const string ProfileMissingDescription = "That yoga instructor is not listed.";
     public const string BackToList = "Back to instructors";
     public const string RatesHeading = "Rates";
     public const string SessionType = "Session type";
@@ -104,7 +104,7 @@ public static class UiCopy
     public const string Age = "Age";
     public const string AgeLabel = "Age {0}";
     public const string SlotsTitle = "Open slots";
-    public const string SlotsLead = "Times are Mumbai local time. Book a slot to pay and request the session.";
+    public const string SlotsLead = "Times are local. Book a slot to pay and request the session.";
     public const string NoSlots = "No open slots in this range.";
     public const string SlotRange = "{0} to {1}";
     public const string BookSlot = "Book {0}–{1}";
