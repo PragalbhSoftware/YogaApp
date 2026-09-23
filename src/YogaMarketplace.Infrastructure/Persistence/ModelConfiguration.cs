@@ -6,7 +6,7 @@ namespace YogaMarketplace.Infrastructure.Persistence;
 
 internal static class ModelConfiguration
 {
-    public static void Configure(ModelBuilder modelBuilder)
+    public static void Configure(ModelBuilder modelBuilder, bool sqlite = false)
     {
         ConfigureCategory(modelBuilder.Entity<Category>());
         ConfigureArea(modelBuilder.Entity<Area>());
@@ -15,7 +15,8 @@ internal static class ModelConfiguration
         ConfigureService(modelBuilder.Entity<Service>());
         ConfigureSlot(modelBuilder.Entity<AvailabilitySlot>());
         ConfigureBooking(modelBuilder.Entity<Booking>());
-        ConfigurePayment(modelBuilder.Entity<Payment>());
+        ConfigureCheckout(modelBuilder.Entity<CheckoutIntent>());
+        ConfigurePayment(modelBuilder.Entity<Payment>(), sqlite);
         ConfigureReview(modelBuilder.Entity<Review>());
         ConfigurePayout(modelBuilder.Entity<PayoutPending>());
         ConfigurePolicy(modelBuilder.Entity<MarketplacePolicy>());
@@ -107,6 +108,10 @@ internal static class ModelConfiguration
         entity.Property(b => b.MeetLinkSnapshot).HasMaxLength(300);
         entity.Property(b => b.StudioAddressSnapshot).HasMaxLength(300);
         entity.HasIndex(b => new { b.ProviderId, b.Status });
+        // Keep this list aligned with BookingRules.OccupiesSlot so a slot cannot be double-booked.
+        entity.HasIndex(b => b.SlotId)
+            .IsUnique()
+            .HasFilter("Status IN ('PendingAccept', 'Upcoming', 'Completed', 'NoShow')");
 
         entity.HasOne(b => b.Customer).WithMany().HasForeignKey(b => b.CustomerId).OnDelete(DeleteBehavior.Restrict);
         entity.HasOne(b => b.Provider).WithMany().HasForeignKey(b => b.ProviderId).OnDelete(DeleteBehavior.Restrict);
@@ -114,7 +119,7 @@ internal static class ModelConfiguration
         entity.HasOne(b => b.Slot).WithMany().HasForeignKey(b => b.SlotId).OnDelete(DeleteBehavior.Restrict);
     }
 
-    private static void ConfigurePayment(EntityTypeBuilder<Payment> entity)
+    private static void ConfigurePayment(EntityTypeBuilder<Payment> entity, bool sqlite)
     {
         entity.Property(p => p.Amount).HasPrecision(10, 2);
         entity.Property(p => p.Status).HasConversion<string>().HasMaxLength(16);
@@ -122,11 +127,36 @@ internal static class ModelConfiguration
         entity.Property(p => p.GatewayOrderId).HasMaxLength(80);
         entity.Property(p => p.GatewayPaymentId).HasMaxLength(80);
         entity.HasIndex(p => p.BookingId).IsUnique();
+        // Payments are inserted only after capture, with a gateway id. The filter keeps
+        // SQL Server able to store a row that has not been assigned an id yet.
+        entity.HasIndex(p => p.GatewayPaymentId)
+            .IsUnique()
+            .HasFilter(sqlite ? "\"GatewayPaymentId\" IS NOT NULL" : "[GatewayPaymentId] IS NOT NULL");
 
         entity.HasOne(p => p.Booking)
             .WithOne(b => b.Payment)
             .HasForeignKey<Payment>(p => p.BookingId)
             .OnDelete(DeleteBehavior.Restrict);
+    }
+
+    private static void ConfigureCheckout(EntityTypeBuilder<CheckoutIntent> entity)
+    {
+        entity.Property(c => c.Mode).HasConversion<string>().HasMaxLength(16);
+        entity.Property(c => c.Status).HasConversion<string>().HasMaxLength(16);
+        entity.Property(c => c.Amount).HasPrecision(10, 2);
+        entity.Property(c => c.Currency).HasMaxLength(8);
+        entity.Property(c => c.HomeAddress).HasMaxLength(300);
+        entity.Property(c => c.Landmark).HasMaxLength(160);
+        entity.Property(c => c.Gateway).HasMaxLength(40);
+        entity.Property(c => c.GatewayOrderId).HasMaxLength(80);
+        entity.HasIndex(c => c.GatewayOrderId).IsUnique();
+        entity.HasIndex(c => new { c.CustomerId, c.Status });
+
+        entity.HasOne<User>().WithMany().HasForeignKey(c => c.CustomerId).OnDelete(DeleteBehavior.Restrict);
+        entity.HasOne<Provider>().WithMany().HasForeignKey(c => c.ProviderId).OnDelete(DeleteBehavior.Restrict);
+        entity.HasOne<Service>().WithMany().HasForeignKey(c => c.ServiceId).OnDelete(DeleteBehavior.Restrict);
+        entity.HasOne<AvailabilitySlot>().WithMany().HasForeignKey(c => c.SlotId).OnDelete(DeleteBehavior.Restrict);
+        entity.HasOne<Booking>().WithMany().HasForeignKey(c => c.BookingId).OnDelete(DeleteBehavior.Restrict);
     }
 
     private static void ConfigureReview(EntityTypeBuilder<Review> entity)

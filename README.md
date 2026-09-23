@@ -1,14 +1,14 @@
 # Yoga Marketplace
 
-Mumbai-first yoga instructor marketplace. This repository is **slice 1**: ASP.NET Core Web API, domain model, EF Core, and SQL Server. Customers can authenticate with a one-time passcode, instructors can register (they stay pending until a later admin slice), and verified instructors can be browsed with **mode-specific** slots (Home, Studio, Online).
+Mumbai-first yoga instructor marketplace. The API covers OTP auth, the domain model, EF Core, SQL Server, verified browse, and **pay-at-book** (Razorpay). Customers authenticate with a one-time passcode, instructors can register (they stay pending until a later admin slice), and verified instructors can be browsed with **mode-specific** slots (Home, Studio, Online). A captured payment creates a booking in `PendingAccept`.
 
-Yoga is the first `Category`. The model is generic enough for another category later. The customer web shell is `src/YogaMarketplace.Web`: phone OTP, Mumbai area, then verified instructors. Booking and payments are not in that shell.
+Yoga is the first `Category`. The model is generic enough for another category later. The customer web shell is `src/YogaMarketplace.Web`: phone OTP, Mumbai area, then verified instructors. That shell does not book or pay yet.
 
 ## Solution
 
 | Project | Role |
 | --- | --- |
-| `src/YogaMarketplace.Api` | Controllers, OTP/JWT, browse and slots |
+| `src/YogaMarketplace.Api` | Controllers, OTP/JWT, browse, slots, book and pay |
 | `src/YogaMarketplace.Domain` | Entities and booking rules |
 | `src/YogaMarketplace.Infrastructure` | EF Core, SQL Server, seed |
 | `src/YogaMarketplace.Web` | Razor Pages customer shell (OTP, area, browse) |
@@ -86,7 +86,7 @@ Web: `http://localhost:5081`
 
 1. **Account.** New customers send name, gender (Female, Male, or Other), and phone. Existing customers send phone only. Verify the code.
 2. **Area.** Pick a Mumbai neighbourhood from `GET /api/areas`.
-3. **Instructors.** Filter by area and Home / Studio / Online. The list is verified instructors for the `yoga` category (`Api:CategorySlug`). Open a profile to see this week's slots. There is no book or pay action.
+3. **Instructors.** Filter by area and Home / Studio / Online. The list is verified instructors for the `yoga` category (`Api:CategorySlug`). Open a profile to see this week's slots. The shell has no book or pay action. Booking is the API below.
 
 The API JWT from `POST /api/auth/otp/verify` is stored in the encrypted `ym.session` cookie and sent as `Authorization: Bearer` on later API calls. The chosen area is the `ym.area` cookie.
 
@@ -109,7 +109,7 @@ New customer: `name` + `gender` + `phone`, then OTP. Existing customer: `phone`,
 
 `Seed:DemoData` is off in Production. `appsettings.Development.json` is excluded from `dotnet publish`.
 
-## HTTP API (slice 1)
+## HTTP API
 
 | Method | Path | Auth | Purpose |
 | --- | --- | --- | --- |
@@ -128,9 +128,60 @@ New customer: `name` + `gender` + `phone`, then OTP. Existing customer: `phone`,
 | GET | `/api/providers/me` | Bearer | Own profile, including Meet link |
 | POST | `/api/providers/me/slots` | Bearer | Add slots for a mode the instructor offers |
 
-Pay-at-book, accept/decline, reviews, and payouts are domain rules in `BookingRules` (covered by tests) and are not HTTP endpoints yet.
+Booking states: `PendingAccept` → `Upcoming` or `Declined` → `Completed`, `NoShow`, or `Cancelled`. A captured Razorpay payment creates `PendingAccept`. Decline (refund) and complete (review + payout) stay domain rules without HTTP in this slice. Complete would record a pending payout (`gross − fee%`). The fee is **not** copied onto the payment at book time.
 
-Booking states: `PendingAccept` → `Upcoming` or `Declined` → `Completed`, `NoShow`, or `Cancelled`. A captured payment creates `PendingAccept`. Decline is the refund path and frees the slot. Complete unlocks one review and a pending payout (`gross − fee%`).
+## Book and pay (local)
+
+Customer JWT only. Create a Razorpay order for a free slot, then confirm from the checkout callback or from the `payment.captured` webhook. Nothing is written to `Bookings` until the payment is captured. An unpaid checkout is a `CheckoutIntent` row only.
+
+| Method | Path | Auth | Purpose |
+| --- | --- | --- | --- |
+| POST | `/api/bookings/orders` | Customer Bearer | Razorpay order for one slot. Home requires `homeAddress` and `landmark`. |
+| POST | `/api/bookings/confirm` | Customer Bearer | Verify `orderId`, `paymentId`, and HMAC signature. Idempotent for the same payment id. |
+| GET | `/api/bookings/me` | Customer Bearer | That customer's bookings, including the Meet link snapshot after an online booking. |
+| POST | `/api/webhooks/razorpay` | `X-Razorpay-Signature` | `payment.captured` creates the same booking. Other events are acknowledged and do not book. |
+
+Rules enforced here:
+
+- Verified instructors only. The slot's mode (Home, Studio, Online) must be one they offer, and the slot must be free under `BookingRules.OccupiesSlot`.
+- Price is the instructor's rate for that mode. The client does not send an amount.
+- Online stores the instructor's Google Meet link on the booking at capture. Public browse still omits it.
+- Studio stores the studio address on the booking.
+- The same Razorpay payment id cannot create a second booking. A second captured payment for a slot that was just taken is rejected and does not insert a booking. Refund of that losing payment is a later slice.
+- Platform fee percent stays on `MarketplacePolicy`. Payout rows are still created only when a booking is completed.
+
+### Razorpay configuration
+
+Do not commit live keys. `appsettings.json` leaves them empty. Development uses a **fake gateway** (`Razorpay:UseFakeGateway` true) and placeholder secrets that are not Razorpay credentials. Production refuses to start when the fake gateway is on.
+
+| Configuration | Environment variable | Purpose |
+| --- | --- | --- |
+| `Razorpay:KeyId` | `Razorpay__KeyId` | Key id. Returned to the customer when an order is created. |
+| `Razorpay:KeySecret` | `Razorpay__KeySecret` | HMAC secret for the checkout signature (`orderId\|paymentId`). |
+| `Razorpay:WebhookSecret` | `Razorpay__WebhookSecret` | HMAC secret for the raw webhook body. |
+| `Razorpay:UseFakeGateway` | `Razorpay__UseFakeGateway` | `true` skips Razorpay HTTP and issues `order_fake_…` ids. Signatures are still checked. |
+
+Fake mode is on in `appsettings.Development.json` and in the API tests. To call Razorpay's test API from this machine, put real **test** keys in user secrets or the environment and turn the fake gateway off:
+
+```bash
+dotnet user-secrets set "Razorpay:KeyId" "rzp_test_..." --project src/YogaMarketplace.Api
+dotnet user-secrets set "Razorpay:KeySecret" "..." --project src/YogaMarketplace.Api
+dotnet user-secrets set "Razorpay:WebhookSecret" "..." --project src/YogaMarketplace.Api
+dotnet user-secrets set "Razorpay:UseFakeGateway" "false" --project src/YogaMarketplace.Api
+```
+
+The checkout signature is hex HMAC-SHA256 of `{orderId}|{paymentId}` with `Razorpay:KeySecret`. The webhook signature is hex HMAC-SHA256 of the raw body with `Razorpay:WebhookSecret`, sent in `X-Razorpay-Signature`. Subscribe the webhook to `payment.captured`.
+
+Local fake example, after OTP verify and `GET /api/providers/{id}/slots?mode=Home`:
+
+```bash
+curl -s -X POST http://localhost:5080/api/bookings/orders \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"slotId":"<slot>","homeAddress":"14th Road, Bandra West","landmark":"Near the station"}'
+```
+
+Sign `orderId|paymentId` with `dev-only-not-a-live-key-secret` (the Development placeholder) and `POST /api/bookings/confirm`.
 
 Cancel / reschedule free-window hours and the platform fee are stored on `MarketplacePolicy` (12 hours, 15% fee, 50% late-cancel fee). The note says they are TBD. The window is not enforced until ops confirms it.
 
@@ -162,6 +213,10 @@ Target is IIS on Plesk with SQL Server, subdomain `YogaDemo.psoftcs.com`.
    | `Otp__UseFixedCode` | `false` |
    | `Database__AutoMigrate` | `false` |
    | `Seed__DemoData` | `false` |
+   | `Razorpay__KeyId` | Razorpay key id. Required before any live checkout. |
+   | `Razorpay__KeySecret` | Razorpay key secret. |
+   | `Razorpay__WebhookSecret` | Razorpay webhook signing secret. |
+   | `Razorpay__UseFakeGateway` | `false` |
 
    The app refuses to start when `Jwt:Key` is missing. Production also forces the demo OTP and demo seed off via `appsettings.Production.json`.
 7. Apply the schema before the first request. From a machine that can reach the database:
@@ -173,13 +228,13 @@ Target is IIS on Plesk with SQL Server, subdomain `YogaDemo.psoftcs.com`.
    Or run `deploy.sql` from `dotnet ef migrations script --idempotent` in SSMS.
 8. Bind `YogaDemo.psoftcs.com` and the Plesk certificate. TLS terminates at Plesk; the app listens on HTTP behind it.
 9. Startup seeds Mumbai areas, the Yoga category, and the TBD policy row. It does not seed Ananya when `Seed__DemoData` is false.
-10. OTP delivery is still the log stub. Wire a real SMS or WhatsApp sender before any public login. Razorpay is the next slice, not this deploy.
+10. OTP delivery is still the log stub. Wire a real SMS or WhatsApp sender before any public login. Book and pay is in the API; set the Razorpay variables above before taking a live payment. `Razorpay__UseFakeGateway` must stay `false` on this host.
 
 ## Later slices
 
-1. **This PR** — auth, domain, EF, browse/slots skeleton
-2. Customer web shell (OTP, area, verified browse) is in this repo. Book + pay (Razorpay) is still later. Pay-at-book creates `PendingAccept`
-3. Accept / decline / complete, reviews, payout pending
+1. Auth, domain, EF, browse/slots — already in the repo
+2. Customer web shell (OTP, area, verified browse) and book + pay HTTP — already in the repo. The Razor web UI does not call book/pay yet. Pay-at-book creates `PendingAccept`
+3. Accept / decline / complete, reviews, payout pending, and refund of a captured payment whose slot was lost
 4. Admin approve/reject and oversight
 5. Reschedule, cancel, payout export
 

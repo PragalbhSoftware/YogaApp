@@ -118,6 +118,30 @@ public class Booking
     public PayoutPending? Payout { get; set; }
 }
 
+/// <summary>
+/// Holds a Razorpay order until payment is captured. Not a booking.
+/// Abandoning checkout leaves this row and creates no <see cref="Booking"/>.
+/// </summary>
+public class CheckoutIntent
+{
+    public Guid Id { get; set; }
+    public Guid CustomerId { get; set; }
+    public Guid ProviderId { get; set; }
+    public Guid ServiceId { get; set; }
+    public Guid SlotId { get; set; }
+    public SessionMode Mode { get; set; }
+    public decimal Amount { get; set; }
+    public string Currency { get; set; } = "INR";
+    public string? HomeAddress { get; set; }
+    public string? Landmark { get; set; }
+    public string Gateway { get; set; } = PaymentGateways.Razorpay;
+    public string GatewayOrderId { get; set; } = "";
+    public CheckoutStatus Status { get; set; } = CheckoutStatus.Open;
+    public Guid? BookingId { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset? CompletedAt { get; set; }
+}
+
 public class Payment
 {
     public Guid Id { get; set; }

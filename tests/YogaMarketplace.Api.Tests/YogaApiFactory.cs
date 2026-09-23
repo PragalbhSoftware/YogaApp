@@ -30,7 +30,11 @@ public sealed class YogaApiFactory : WebApplicationFactory<Program>
                 ["Otp:ExpiryMinutes"] = "5",
                 ["Otp:MaxAttempts"] = "5",
                 ["Database:AutoMigrate"] = "false",
-                ["Seed:DemoData"] = "true"
+                ["Seed:DemoData"] = "true",
+                ["Razorpay:KeyId"] = "rzp_test_placeholder",
+                ["Razorpay:KeySecret"] = "dev-only-not-a-live-key-secret",
+                ["Razorpay:WebhookSecret"] = "dev-only-not-a-live-webhook-secret",
+                ["Razorpay:UseFakeGateway"] = "true"
             });
         });
 
