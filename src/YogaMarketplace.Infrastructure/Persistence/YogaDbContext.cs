@@ -5,8 +5,11 @@ namespace YogaMarketplace.Infrastructure.Persistence;
 
 public class YogaDbContext : DbContext
 {
+    private readonly bool _sqlite;
+
     public YogaDbContext(DbContextOptions<YogaDbContext> options) : base(options)
     {
+        _sqlite = options.Extensions.Any(e => e.GetType().Name.Contains("Sqlite", StringComparison.Ordinal));
     }
 
     public DbSet<Category> Categories => Set<Category>();
@@ -16,6 +19,7 @@ public class YogaDbContext : DbContext
     public DbSet<Service> Services => Set<Service>();
     public DbSet<AvailabilitySlot> AvailabilitySlots => Set<AvailabilitySlot>();
     public DbSet<Booking> Bookings => Set<Booking>();
+    public DbSet<CheckoutIntent> CheckoutIntents => Set<CheckoutIntent>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<Review> Reviews => Set<Review>();
     public DbSet<PayoutPending> PayoutsPending => Set<PayoutPending>();
@@ -24,6 +28,6 @@ public class YogaDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        ModelConfiguration.Configure(modelBuilder);
+        ModelConfiguration.Configure(modelBuilder, _sqlite);
     }
 }

@@ -125,3 +125,52 @@ public class SlotInput
     public string? Start { get; set; }
     public string? End { get; set; }
 }
+
+public class CreateBookingOrderRequest
+{
+    public Guid SlotId { get; set; }
+    public Guid? ServiceId { get; set; }
+    public string? HomeAddress { get; set; }
+    public string? Landmark { get; set; }
+}
+
+public record CheckoutOrderResponse(
+    Guid CheckoutId,
+    string KeyId,
+    string OrderId,
+    long AmountPaise,
+    decimal Amount,
+    string Currency,
+    Guid SlotId,
+    string Mode,
+    string ProviderName);
+
+public class ConfirmBookingPaymentRequest
+{
+    public string? OrderId { get; set; }
+    public string? PaymentId { get; set; }
+    public string? Signature { get; set; }
+}
+
+public record BookingResponse(
+    Guid Id,
+    Guid ProviderId,
+    string ProviderName,
+    Guid ServiceId,
+    string ServiceTitle,
+    Guid SlotId,
+    string Mode,
+    string Status,
+    decimal Amount,
+    string Currency,
+    DateOnly Date,
+    string Start,
+    string End,
+    string? HomeAddress,
+    string? Landmark,
+    string? MeetLink,
+    string? StudioAddress,
+    string PaymentStatus,
+    string? GatewayOrderId,
+    string? GatewayPaymentId,
+    DateTimeOffset CreatedAt);

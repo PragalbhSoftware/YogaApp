@@ -1,0 +1,398 @@
+using System.Data;
+using System.Globalization;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using YogaMarketplace.Api.Options;
+using YogaMarketplace.Api.Security;
+using YogaMarketplace.Domain;
+using YogaMarketplace.Infrastructure.Persistence;
+
+namespace YogaMarketplace.Api.Services;
+
+public readonly record struct WebhookResult(bool Booked, Guid? BookingId)
+{
+    public static WebhookResult Ignored() => new(false, null);
+
+    public static WebhookResult ForBooking(Guid bookingId) => new(true, bookingId);
+}
+
+public class BookingService
+{
+    private static readonly BookingStatus[] Occupying =
+        Enum.GetValues<BookingStatus>().Where(BookingRules.OccupiesSlot).ToArray();
+
+    private readonly YogaDbContext _db;
+    private readonly ICurrentUser _current;
+    private readonly IRazorpayGateway _gateway;
+    private readonly RazorpayOptions _razorpay;
+    private readonly ILogger<BookingService> _logger;
+
+    public BookingService(
+        YogaDbContext db,
+        ICurrentUser current,
+        IRazorpayGateway gateway,
+        IOptions<RazorpayOptions> razorpay,
+        ILogger<BookingService> logger)
+    {
+        _db = db;
+        _current = current;
+        _gateway = gateway;
+        _razorpay = razorpay.Value;
+        _logger = logger;
+    }
+
+    public async Task<CheckoutOrderResponse> CreateOrderAsync(CreateBookingOrderRequest request, CancellationToken cancellationToken)
+    {
+        var customer = await RequireCustomerAsync(cancellationToken);
+        if (request.SlotId == Guid.Empty)
+            throw new DomainException("Slot is required.");
+        if (string.IsNullOrWhiteSpace(_razorpay.KeyId) || (!_razorpay.UseFakeGateway && string.IsNullOrWhiteSpace(_razorpay.KeySecret)))
+            throw new DomainException("Razorpay is not configured.", 503);
+
+        var slot = await _db.AvailabilitySlots
+            .Include(s => s.Provider)
+            .SingleOrDefaultAsync(s => s.Id == request.SlotId, cancellationToken)
+            ?? throw new DomainException("That slot is no longer available.", 404);
+
+        var provider = slot.Provider ?? throw new DomainException("Instructor not found.", 404);
+        if (provider.Status != ProviderStatus.Verified)
+            throw new DomainException("Instructor not found.", 404);
+        if (slot.IsBlocked || !provider.Offers(slot.Mode))
+            throw new DomainException("That slot is no longer available.", 409);
+        if (MumbaiClock.SessionStart(slot.Date, slot.EndTime) <= DateTimeOffset.UtcNow)
+            throw new DomainException("That slot has already ended.", 409);
+        if (await SlotIsTakenAsync(slot.Id, cancellationToken))
+            throw new DomainException("That slot is no longer available.", 409);
+
+        var amount = provider.RateFor(slot.Mode) ?? throw new DomainException("This session has no price.");
+        if (amount <= 0)
+            throw new DomainException("This session has no price.");
+
+        var homeAddress = Clean(request.HomeAddress, 300, "Address");
+        var landmark = Clean(request.Landmark, 160, "Landmark");
+        BookingRules.EnsureSessionLocation(slot.Mode, homeAddress, landmark, provider.GoogleMeetLink, provider.StudioAddress);
+
+        var service = await ResolveServiceAsync(provider.Id, request.ServiceId, cancellationToken);
+        var policy = await _db.Policies.AsNoTracking().SingleAsync(cancellationToken);
+        var paise = RazorpayMoney.ToPaise(amount);
+        var checkoutId = Guid.NewGuid();
+
+        var created = await _gateway.CreateOrderAsync(
+            paise,
+            policy.Currency,
+            checkoutId.ToString("N"),
+            new Dictionary<string, string>
+            {
+                ["checkoutId"] = checkoutId.ToString(),
+                ["slotId"] = slot.Id.ToString(),
+                ["customerId"] = customer.Id.ToString()
+            },
+            cancellationToken);
+
+        var checkout = new CheckoutIntent
+        {
+            Id = checkoutId,
+            CustomerId = customer.Id,
+            ProviderId = provider.Id,
+            ServiceId = service.Id,
+            SlotId = slot.Id,
+            Mode = slot.Mode,
+            Amount = amount,
+            Currency = policy.Currency,
+            HomeAddress = slot.Mode == SessionMode.Home ? homeAddress : null,
+            Landmark = slot.Mode == SessionMode.Home ? landmark : null,
+            Gateway = "razorpay",
+            GatewayOrderId = created.OrderId,
+            Status = CheckoutStatus.Open,
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+        _db.CheckoutIntents.Add(checkout);
+        await _db.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation("Opened checkout {CheckoutId} for Razorpay order {OrderId}.", checkout.Id, checkout.GatewayOrderId);
+
+        return new CheckoutOrderResponse(
+            checkout.Id,
+            _razorpay.KeyId,
+            checkout.GatewayOrderId,
+            paise,
+            amount,
+            checkout.Currency,
+            slot.Id,
+            slot.Mode.ToString(),
+            provider.DisplayName);
+    }
+
+    public async Task<BookingResponse> ConfirmAsync(ConfirmBookingPaymentRequest request, CancellationToken cancellationToken)
+    {
+        var customer = await RequireCustomerAsync(cancellationToken);
+        var orderId = Required(request.OrderId, "Order id is required.");
+        var paymentId = Required(request.PaymentId, "Payment id is required.");
+        var signature = Required(request.Signature, "Payment signature is required.");
+
+        if (!_gateway.VerifyCheckoutSignature(orderId, paymentId, signature))
+            throw new DomainException("Payment signature is invalid.");
+
+        var preview = await _db.CheckoutIntents.AsNoTracking()
+            .SingleOrDefaultAsync(c => c.GatewayOrderId == orderId, cancellationToken)
+            ?? throw new DomainException("Unknown payment order.", 404);
+        if (preview.CustomerId != customer.Id)
+            throw new DomainException("This payment belongs to another account.", 403);
+
+        if (!_razorpay.UseFakeGateway)
+            await EnsureRemoteCaptureAsync(preview, paymentId, cancellationToken);
+
+        return await CaptureAsync(orderId, paymentId, customer.Id, amountPaise: null, currency: null, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<BookingResponse>> ListMineAsync(CancellationToken cancellationToken)
+    {
+        var customer = await RequireCustomerAsync(cancellationToken);
+        var currency = await _db.Policies.AsNoTracking().Select(p => p.Currency).SingleAsync(cancellationToken);
+        var bookings = await _db.Bookings.AsNoTracking()
+            .Include(b => b.Provider)
+            .Include(b => b.Service)
+            .Include(b => b.Slot)
+            .Include(b => b.Payment)
+            .Where(b => b.CustomerId == customer.Id)
+            .ToListAsync(cancellationToken);
+
+        return bookings
+            .OrderByDescending(b => b.CreatedAt)
+            .Select(b => ToResponse(b, b.Payment, currency))
+            .ToList();
+    }
+
+    public async Task<WebhookResult> HandleWebhookAsync(string rawBody, string? signature, CancellationToken cancellationToken)
+    {
+        if (!_gateway.VerifyWebhookSignature(rawBody, signature))
+            throw new DomainException("Webhook signature is invalid.");
+
+        if (!RazorpayWebhookParser.TryReadCapturedPayment(rawBody, out var captured))
+            return WebhookResult.Ignored();
+
+        try
+        {
+            var booking = await CaptureAsync(
+                captured.OrderId,
+                captured.PaymentId,
+                expectedCustomerId: null,
+                captured.AmountPaise,
+                captured.Currency,
+                cancellationToken);
+            return WebhookResult.ForBooking(booking.Id);
+        }
+        catch (DomainException ex) when (ex.StatusCode is 404 or 409)
+        {
+            _logger.LogWarning(ex, "Captured Razorpay payment {PaymentId} for order {OrderId} did not create a booking.", captured.PaymentId, captured.OrderId);
+            return WebhookResult.Ignored();
+        }
+    }
+
+    private async Task<BookingResponse> CaptureAsync(
+        string orderId,
+        string paymentId,
+        Guid? expectedCustomerId,
+        long? amountPaise,
+        string? currency,
+        CancellationToken cancellationToken)
+    {
+        await using var tx = await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        try
+        {
+            var checkout = await _db.CheckoutIntents.SingleOrDefaultAsync(c => c.GatewayOrderId == orderId, cancellationToken)
+                ?? throw new DomainException("Unknown payment order.", 404);
+
+            if (expectedCustomerId is Guid customerId && checkout.CustomerId != customerId)
+                throw new DomainException("This payment belongs to another account.", 403);
+
+            if (amountPaise is long paise && paise != RazorpayMoney.ToPaise(checkout.Amount))
+                throw new DomainException("Payment amount does not match the slot price.");
+            if (currency is not null && !currency.Equals(checkout.Currency, StringComparison.OrdinalIgnoreCase))
+                throw new DomainException("Payment currency does not match.");
+
+            var replay = await LoadByPaymentIdAsync(paymentId, cancellationToken);
+            if (replay is not null)
+            {
+                if (!string.Equals(replay.Payment.GatewayOrderId, orderId, StringComparison.Ordinal)
+                    || replay.Booking.CustomerId != checkout.CustomerId)
+                {
+                    throw new DomainException("This payment was already used.", 409);
+                }
+
+                return ToResponse(replay.Booking, replay.Payment, checkout.Currency);
+            }
+
+            if (checkout.Status == CheckoutStatus.Completed)
+                throw new DomainException("This order was already paid.", 409);
+
+            var slot = await _db.AvailabilitySlots
+                .Include(s => s.Provider)
+                .SingleOrDefaultAsync(s => s.Id == checkout.SlotId, cancellationToken)
+                ?? throw new DomainException("That slot is no longer available.", 409);
+
+            var provider = slot.Provider ?? throw new DomainException("Instructor not found.", 404);
+            if (provider.Status != ProviderStatus.Verified || slot.IsBlocked || !provider.Offers(slot.Mode))
+                throw new DomainException("That slot is no longer available.", 409);
+            if (MumbaiClock.SessionStart(slot.Date, slot.EndTime) <= DateTimeOffset.UtcNow)
+                throw new DomainException("That slot has already ended.", 409);
+            if (await SlotIsTakenAsync(slot.Id, cancellationToken))
+                throw new DomainException("That slot was just booked.", 409);
+
+            var service = await _db.Services.SingleOrDefaultAsync(
+                s => s.Id == checkout.ServiceId && s.ProviderId == slot.ProviderId && s.IsActive,
+                cancellationToken) ?? throw new DomainException("This session is no longer available.", 409);
+
+            var booking = BookingRules.CreateAfterPayment(
+                checkout.CustomerId,
+                service,
+                slot,
+                checkout.Amount,
+                checkout.HomeAddress,
+                checkout.Landmark,
+                provider.GoogleMeetLink,
+                provider.StudioAddress);
+
+            var now = DateTimeOffset.UtcNow;
+            var payment = new Payment
+            {
+                Id = Guid.NewGuid(),
+                BookingId = booking.Id,
+                Amount = checkout.Amount,
+                Status = PaymentStatus.Pending,
+                Gateway = "razorpay",
+                GatewayOrderId = orderId,
+                CreatedAt = now
+            };
+            PaymentRules.MarkPaid(payment, paymentId);
+
+            checkout.Status = CheckoutStatus.Completed;
+            checkout.BookingId = booking.Id;
+            checkout.CompletedAt = now;
+
+            booking.Provider = provider;
+            booking.Service = service;
+            booking.Slot = slot;
+            booking.Payment = payment;
+
+            _db.Bookings.Add(booking);
+            await _db.SaveChangesAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
+            return ToResponse(booking, payment, checkout.Currency);
+        }
+        catch (DbUpdateException ex)
+        {
+            _logger.LogWarning(ex, "Booking save conflict for Razorpay order {OrderId}.", orderId);
+            throw new DomainException("That slot was just booked.", 409);
+        }
+    }
+
+    private async Task EnsureRemoteCaptureAsync(CheckoutIntent checkout, string paymentId, CancellationToken cancellationToken)
+    {
+        var remote = await _gateway.FetchPaymentAsync(paymentId, cancellationToken)
+            ?? throw new DomainException("Payment was not found at Razorpay.");
+        if (!string.Equals(remote.Status, "captured", StringComparison.OrdinalIgnoreCase))
+            throw new DomainException("Payment is not captured.");
+        if (!string.Equals(remote.OrderId, checkout.GatewayOrderId, StringComparison.Ordinal))
+            throw new DomainException("Payment does not match this order.");
+        if (remote.AmountPaise != RazorpayMoney.ToPaise(checkout.Amount)
+            || !remote.Currency.Equals(checkout.Currency, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new DomainException("Payment amount does not match the slot price.");
+        }
+    }
+
+    private async Task<User> RequireCustomerAsync(CancellationToken cancellationToken)
+    {
+        var user = await _db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Id == _current.UserId, cancellationToken)
+            ?? throw new DomainException("Sign in required.", 401);
+        if (user.Role != UserRole.Customer)
+            throw new DomainException("Only customers can book a session.", 403);
+        return user;
+    }
+
+    private async Task<Service> ResolveServiceAsync(Guid providerId, Guid? serviceId, CancellationToken cancellationToken)
+    {
+        var services = await _db.Services.AsNoTracking()
+            .Where(s => s.ProviderId == providerId && s.IsActive)
+            .ToListAsync(cancellationToken);
+
+        if (serviceId is Guid requested && requested != Guid.Empty)
+        {
+            return services.SingleOrDefault(s => s.Id == requested)
+                ?? throw new DomainException("Choose a service this instructor offers.");
+        }
+
+        if (services.Count == 1)
+            return services[0];
+
+        throw new DomainException(services.Count == 0
+            ? "This instructor has no bookable service."
+            : "Choose a service.");
+    }
+
+    private Task<bool> SlotIsTakenAsync(Guid slotId, CancellationToken cancellationToken) =>
+        _db.Bookings.AnyAsync(b => b.SlotId == slotId && Occupying.Contains(b.Status), cancellationToken);
+
+    private async Task<LoadedBooking?> LoadByPaymentIdAsync(string paymentId, CancellationToken cancellationToken)
+    {
+        var payment = await _db.Payments
+            .Include(p => p.Booking!).ThenInclude(b => b.Provider)
+            .Include(p => p.Booking!).ThenInclude(b => b.Service)
+            .Include(p => p.Booking!).ThenInclude(b => b.Slot)
+            .SingleOrDefaultAsync(p => p.GatewayPaymentId == paymentId, cancellationToken);
+
+        if (payment?.Booking is null)
+            return null;
+        return new LoadedBooking(payment.Booking, payment);
+    }
+
+    private static BookingResponse ToResponse(Booking booking, Payment? payment, string currency)
+    {
+        var slot = booking.Slot ?? throw new InvalidOperationException("Slot was not loaded.");
+        var provider = booking.Provider ?? throw new InvalidOperationException("Provider was not loaded.");
+        var service = booking.Service ?? throw new InvalidOperationException("Service was not loaded.");
+        return new BookingResponse(
+            booking.Id,
+            provider.Id,
+            provider.DisplayName,
+            service.Id,
+            service.Title,
+            slot.Id,
+            booking.Mode.ToString(),
+            booking.Status.ToString(),
+            booking.Amount,
+            currency,
+            slot.Date,
+            slot.StartTime.ToString("HH:mm", CultureInfo.InvariantCulture),
+            slot.EndTime.ToString("HH:mm", CultureInfo.InvariantCulture),
+            booking.HomeAddress,
+            booking.Landmark,
+            booking.MeetLinkSnapshot,
+            booking.StudioAddressSnapshot,
+            payment?.Status.ToString() ?? "",
+            payment?.GatewayOrderId,
+            payment?.GatewayPaymentId,
+            booking.CreatedAt);
+    }
+
+    private static string Required(string? value, string message)
+    {
+        var trimmed = (value ?? "").Trim();
+        if (trimmed.Length == 0)
+            throw new DomainException(message);
+        return trimmed;
+    }
+
+    private static string? Clean(string? value, int max, string label)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+        var trimmed = value.Trim();
+        if (trimmed.Length > max)
+            throw new DomainException($"{label} must be {max} characters or less.");
+        return trimmed;
+    }
+
+    private sealed record LoadedBooking(Booking Booking, Payment Payment);
+}

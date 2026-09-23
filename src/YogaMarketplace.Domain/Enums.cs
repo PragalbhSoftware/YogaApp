@@ -46,6 +46,15 @@ public enum PaymentStatus
     Refunded
 }
 
+/// <summary>
+/// Unpaid Razorpay checkout. A booking row is created only after capture.
+/// </summary>
+public enum CheckoutStatus
+{
+    Open,
+    Completed
+}
+
 public enum PayoutStatus
 {
     Pending,

@@ -36,3 +36,50 @@ GET {{host}}/api/providers?area=Bandra&mode=Home&category=yoga
 
 ###
 GET {{host}}/api/providers/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4/slots?mode=Home
+
+###
+# Customer JWT from POST /api/auth/otp/verify. slotId comes from the slots call above.
+POST {{host}}/api/bookings/orders
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "slotId": "00000000-0000-0000-0000-000000000000",
+  "homeAddress": "14th Road, Bandra West",
+  "landmark": "Near the station"
+}
+
+###
+POST {{host}}/api/bookings/confirm
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "orderId": "order_fake_example",
+  "paymentId": "pay_example",
+  "signature": "hex hmac sha256 of orderId|paymentId using Razorpay:KeySecret"
+}
+
+###
+GET {{host}}/api/bookings/me
+Authorization: Bearer {{token}}
+
+###
+POST {{host}}/api/webhooks/razorpay
+Content-Type: application/json
+X-Razorpay-Signature: hex hmac sha256 of the raw body using Razorpay:WebhookSecret
+
+{
+  "event": "payment.captured",
+  "payload": {
+    "payment": {
+      "entity": {
+        "id": "pay_example",
+        "order_id": "order_fake_example",
+        "status": "captured",
+        "amount": 89900,
+        "currency": "INR"
+      }
+    }
+  }
+}

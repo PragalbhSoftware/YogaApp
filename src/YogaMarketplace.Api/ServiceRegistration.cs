@@ -17,6 +17,21 @@ public static class ServiceRegistration
         services.AddScoped<JwtTokenService>();
         services.AddScoped<ProviderService>();
         services.AddScoped<CatalogService>();
+        services.AddScoped<BookingService>();
+        services.Configure<RazorpayOptions>(configuration.GetSection(RazorpayOptions.Section));
+
+        var razorpay = configuration.GetSection(RazorpayOptions.Section).Get<RazorpayOptions>() ?? new RazorpayOptions();
+        if (razorpay.UseFakeGateway)
+            services.AddSingleton<IRazorpayGateway, FakeRazorpayGateway>();
+        else
+        {
+            services.AddHttpClient<IRazorpayGateway, RazorpayHttpGateway>(client =>
+            {
+                client.BaseAddress = new Uri("https://api.razorpay.com/");
+                client.Timeout = TimeSpan.FromSeconds(20);
+            });
+        }
+
         return services;
     }
 }

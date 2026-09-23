@@ -36,7 +36,7 @@ builder.Services.AddSwaggerGen(options =>
     {
         Title = "Yoga Marketplace API",
         Version = "v1",
-        Description = "Slice 1: OTP auth, instructor registration, Mumbai catalog, and mode-specific slots."
+        Description = "OTP auth, Mumbai catalog, mode-specific slots, and pay-at-book with Razorpay."
     });
     options.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
     {
@@ -76,6 +76,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 builder.Services.AddAuthorization();
+
+var razorpay = builder.Configuration.GetSection(RazorpayOptions.Section).Get<RazorpayOptions>() ?? new RazorpayOptions();
+if (builder.Environment.IsProduction() && razorpay.UseFakeGateway)
+    throw new InvalidOperationException("Razorpay:UseFakeGateway must be false in Production.");
 
 var app = builder.Build();
 
