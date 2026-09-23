@@ -1,0 +1,18 @@
+@page
+@model YogaMarketplace.Web.Pages.IndexModel
+@{
+    ViewData["Title"] = UiCopy.HomeTitle;
+}
+
+<h1>@UiCopy.HomeTitle</h1>
+<p class="lead">@UiCopy.HomeLead</p>
+
+@if (User.Identity?.IsAuthenticated == true)
+{
+    <a class="button" asp-page="/Areas/Select">@UiCopy.AreaTitle</a>
+    <a class="button secondary" asp-page="/Instructors/Index">@UiCopy.BrowseTitle</a>
+}
+else
+{
+    <a class="button" asp-page="/Account/SignIn">@UiCopy.SignInCta</a>
+}

@@ -1,0 +1,86 @@
+@page "/account/sign-in"
+@model YogaMarketplace.Web.Pages.Account.SignInModel
+@{
+    ViewData["Title"] = UiCopy.SignInTitle;
+}
+
+<h1>@UiCopy.SignInTitle</h1>
+<p class="lead">@UiCopy.SignInLead</p>
+
+@if (Model.ShowDevOtpHint && !Model.CodeSent)
+{
+    <p class="hint">@UiCopy.DevOtpHint</p>
+}
+
+@if (!string.IsNullOrEmpty(Model.Error))
+{
+    <p class="alert" role="alert">@Model.Error</p>
+}
+
+@if (!Model.CodeSent)
+{
+    <form method="post" asp-page-handler="Request">
+        <input type="hidden" asp-for="ReturnUrl" />
+        <fieldset>
+            <legend>@UiCopy.AccountType</legend>
+            <label class="choice">
+                <input asp-for="AccountKind" type="radio" value="existing" />
+                @UiCopy.ExistingAccount
+            </label>
+            <label class="choice">
+                <input asp-for="AccountKind" type="radio" value="new" />
+                @UiCopy.NewAccount
+            </label>
+        </fieldset>
+        <div id="new-fields">
+            <div class="field">
+                <label asp-for="Name">@UiCopy.Name</label>
+                <input asp-for="Name" autocomplete="name" maxlength="80" />
+            </div>
+            <div class="field">
+                <label asp-for="Gender">@UiCopy.Gender</label>
+                <select asp-for="Gender">
+                    <option value="">@UiCopy.GenderSelect</option>
+                    <option value="Female">@UiCopy.GenderFemale</option>
+                    <option value="Male">@UiCopy.GenderMale</option>
+                    <option value="Other">@UiCopy.GenderOther</option>
+                </select>
+            </div>
+        </div>
+        <div class="field">
+            <label asp-for="Phone">@UiCopy.Phone</label>
+            <input asp-for="Phone" type="tel" inputmode="tel" autocomplete="tel" maxlength="16" placeholder="@UiCopy.PhonePlaceholder" />
+        </div>
+        <button type="submit">@UiCopy.SendCode</button>
+    </form>
+}
+else
+{
+    <p>@string.Format(UiCopy.CodeSentTo, Model.Phone)</p>
+    @if (!string.IsNullOrEmpty(Model.DevCode))
+    {
+        <p class="hint dev-code" data-dev-code="@Model.DevCode">@string.Format(UiCopy.DevCodeLabel, Model.DevCode)</p>
+    }
+    @if (!string.IsNullOrEmpty(Model.ExpiresLocal))
+    {
+        <p class="muted">@string.Format(UiCopy.CodeExpires, Model.ExpiresLocal)</p>
+    }
+
+    <form method="post" asp-page-handler="Verify">
+        <input type="hidden" asp-for="Phone" />
+        <input type="hidden" asp-for="DevCode" />
+        <input type="hidden" asp-for="ReturnUrl" />
+        <div class="field">
+            <label asp-for="Code">@UiCopy.Code</label>
+            <input asp-for="Code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" />
+        </div>
+        <button type="submit">@UiCopy.Verify</button>
+    </form>
+    <form method="post" asp-page-handler="Resend">
+        <input type="hidden" asp-for="Phone" />
+        <input type="hidden" asp-for="DevCode" />
+        <input type="hidden" asp-for="ReturnUrl" />
+        <button type="submit" class="secondary">@UiCopy.Resend</button>
+    </form>
+    <p><a asp-page="/Account/SignIn">@UiCopy.UseDifferentPhone</a></p>
+}

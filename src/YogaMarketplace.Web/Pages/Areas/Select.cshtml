@@ -1,0 +1,30 @@
+@page "/areas"
+@model YogaMarketplace.Web.Pages.Areas.SelectModel
+@{
+    ViewData["Title"] = UiCopy.AreaTitle;
+}
+
+<h1>@UiCopy.AreaTitle</h1>
+<p class="lead">@UiCopy.AreaLead</p>
+
+@if (!string.IsNullOrEmpty(Model.Error))
+{
+    <p class="alert" role="alert">@Model.Error</p>
+}
+
+@if (Model.Areas.Count == 0 && string.IsNullOrEmpty(Model.Error))
+{
+    <p>@UiCopy.NoAreas</p>
+}
+
+@if (Model.Areas.Count > 0)
+{
+    <form method="post">
+        @foreach (var area in Model.Areas)
+        {
+            <button type="submit" name="area" value="@area.Name" class="secondary @(area.Name == Model.Selected ? "selected" : null)" aria-pressed="@(area.Name == Model.Selected ? "true" : "false")">
+                @area.Name<span class="muted"> · @area.City</span>
+            </button>
+        }
+    </form>
+}
