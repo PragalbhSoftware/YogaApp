@@ -1,0 +1,50 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{2C10B14C-1F0B-409B-9A94-C095147228CC}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "YogaMarketplace.Domain", "src\YogaMarketplace.Domain\YogaMarketplace.Domain.csproj", "{BEE9597A-34C0-4BD3-9017-076EF18A3518}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "YogaMarketplace.Infrastructure", "src\YogaMarketplace.Infrastructure\YogaMarketplace.Infrastructure.csproj", "{669F18DA-EC8B-4902-92DB-36C9413C166E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "YogaMarketplace.Api", "src\YogaMarketplace.Api\YogaMarketplace.Api.csproj", "{7C906A91-286C-4F91-A213-E4757F755BDB}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{639326A0-AEEC-495D-937C-03C981F64E95}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "YogaMarketplace.Api.Tests", "tests\YogaMarketplace.Api.Tests\YogaMarketplace.Api.Tests.csproj", "{D2A08369-C579-465C-B1E7-A38799ACA407}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{BEE9597A-34C0-4BD3-9017-076EF18A3518}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BEE9597A-34C0-4BD3-9017-076EF18A3518}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BEE9597A-34C0-4BD3-9017-076EF18A3518}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BEE9597A-34C0-4BD3-9017-076EF18A3518}.Release|Any CPU.Build.0 = Release|Any CPU
+		{669F18DA-EC8B-4902-92DB-36C9413C166E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{669F18DA-EC8B-4902-92DB-36C9413C166E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{669F18DA-EC8B-4902-92DB-36C9413C166E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{669F18DA-EC8B-4902-92DB-36C9413C166E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7C906A91-286C-4F91-A213-E4757F755BDB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7C906A91-286C-4F91-A213-E4757F755BDB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7C906A91-286C-4F91-A213-E4757F755BDB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7C906A91-286C-4F91-A213-E4757F755BDB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D2A08369-C579-465C-B1E7-A38799ACA407}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D2A08369-C579-465C-B1E7-A38799ACA407}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D2A08369-C579-465C-B1E7-A38799ACA407}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D2A08369-C579-465C-B1E7-A38799ACA407}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{BEE9597A-34C0-4BD3-9017-076EF18A3518} = {2C10B14C-1F0B-409B-9A94-C095147228CC}
+		{669F18DA-EC8B-4902-92DB-36C9413C166E} = {2C10B14C-1F0B-409B-9A94-C095147228CC}
+		{7C906A91-286C-4F91-A213-E4757F755BDB} = {2C10B14C-1F0B-409B-9A94-C095147228CC}
+		{D2A08369-C579-465C-B1E7-A38799ACA407} = {639326A0-AEEC-495D-937C-03C981F64E95}
+	EndGlobalSection
+EndGlobal
