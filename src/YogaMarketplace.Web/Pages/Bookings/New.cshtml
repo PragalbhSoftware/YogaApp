@@ -1,0 +1,66 @@
+@page "/bookings/new"
+@model YogaMarketplace.Web.Pages.Bookings.NewModel
+@{
+    ViewData["Title"] = UiCopy.BookTitle;
+}
+
+@if (Model.Quote is { } quote)
+{
+    <p><a asp-page="/Instructors/Profile" asp-route-id="@quote.ProviderId" asp-route-mode="@quote.Mode">@UiCopy.BackToInstructor</a></p>
+}
+else
+{
+    <p><a asp-page="/Instructors/Index">@UiCopy.BackToList</a></p>
+}
+
+<h1>@UiCopy.BookTitle</h1>
+
+@if (!string.IsNullOrEmpty(Model.Error))
+{
+    <p class="alert" role="alert">@Model.Error</p>
+}
+
+@if (Model.Quote is { } session)
+{
+    <dl class="summary">
+        <div>
+            <dt>@UiCopy.ProviderSingular</dt>
+            <dd>@session.ProviderName</dd>
+        </div>
+        <div>
+            <dt>@UiCopy.Mode</dt>
+            <dd>@session.Mode</dd>
+        </div>
+        <div>
+            <dt>@UiCopy.When</dt>
+            <dd>@session.Date.ToString("dddd d MMM") · @session.Start–@session.End</dd>
+        </div>
+        <div>
+            <dt>@UiCopy.AmountDue</dt>
+            <dd>@Money.Inr(session.Rate)</dd>
+        </div>
+    </dl>
+    @if (session.Mode == SessionModes.Studio && !string.IsNullOrWhiteSpace(session.StudioAddress))
+    {
+        <p><strong>@UiCopy.StudioAddress.</strong> @session.StudioAddress</p>
+    }
+
+    <form method="post" asp-route-providerId="@Model.ProviderId" asp-route-slotId="@Model.SlotId" asp-route-mode="@Model.Mode">
+        <input type="hidden" asp-for="ProviderId" />
+        <input type="hidden" asp-for="SlotId" />
+        <input type="hidden" asp-for="Mode" />
+        @if (Model.NeedsHomeAddress)
+        {
+            <p class="lead">@UiCopy.HomeAddressLead</p>
+            <div class="field">
+                <label asp-for="HomeAddress">@UiCopy.HomeAddress</label>
+                <input asp-for="HomeAddress" autocomplete="street-address" maxlength="@HomeVisitLimits.AddressMaxLength" />
+            </div>
+            <div class="field">
+                <label asp-for="Landmark">@UiCopy.Landmark</label>
+                <input asp-for="Landmark" maxlength="@HomeVisitLimits.LandmarkMaxLength" />
+            </div>
+        }
+        <button type="submit">@UiCopy.ContinueToPayment</button>
+    </form>
+}

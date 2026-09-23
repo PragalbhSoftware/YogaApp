@@ -41,9 +41,9 @@ public class IndexModel : PageModel
         ModeOptions =
         [
             new ModeOption("", UiCopy.AnyMode, Mode is null),
-            new ModeOption(SessionModes.All[0], UiCopy.ModeHome, Mode == "Home"),
-            new ModeOption(SessionModes.All[1], UiCopy.ModeStudio, Mode == "Studio"),
-            new ModeOption(SessionModes.All[2], UiCopy.ModeOnline, Mode == "Online")
+            new ModeOption(SessionModes.Home, UiCopy.ModeHome, Mode == SessionModes.Home),
+            new ModeOption(SessionModes.Studio, UiCopy.ModeStudio, Mode == SessionModes.Studio),
+            new ModeOption(SessionModes.Online, UiCopy.ModeOnline, Mode == SessionModes.Online)
         ];
 
         var areas = await _api.GetAreasAsync(cancellationToken);
@@ -74,7 +74,7 @@ public class IndexModel : PageModel
         }
 
         Instructors = providers.Data
-            .Where(p => string.Equals(p.Status, "Verified", StringComparison.OrdinalIgnoreCase))
+            .Where(p => string.Equals(p.Status, ProviderStatuses.Verified, StringComparison.OrdinalIgnoreCase))
             .Select(p => p with { Modes = p.Modes ?? [] })
             .ToList();
         return Page();

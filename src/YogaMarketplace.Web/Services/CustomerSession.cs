@@ -49,9 +49,21 @@ public static class AreaCookie
     }
 }
 
+public static class ProviderStatuses
+{
+    public const string Verified = "Verified";
+}
+
 public static class SessionModes
 {
-    public static readonly string[] All = ["Home", "Studio", "Online"];
+    public const string Home = "Home";
+    public const string Studio = "Studio";
+    public const string Online = "Online";
+
+    public static readonly string[] All = [Home, Studio, Online];
+
+    public static bool IsHome(string? mode) =>
+        string.Equals(Normalize(mode), Home, StringComparison.Ordinal);
 
     public static string? Normalize(string? mode)
     {

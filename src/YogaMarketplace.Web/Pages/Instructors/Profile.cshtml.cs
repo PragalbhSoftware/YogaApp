@@ -14,7 +14,9 @@ public class ProfileModel : PageModel
     }
 
     public ProviderDetailDto? Instructor { get; private set; }
-    public string Mode { get; private set; } = "Home";
+    public string Mode { get; private set; } = SessionModes.Home;
+
+    public bool CanBook(SlotDto slot) => !SessionClock.HasEnded(slot.Date, slot.End);
     public List<SlotDto> Slots { get; private set; } = [];
     public DateOnly? From { get; private set; }
     public DateOnly? To { get; private set; }
@@ -32,7 +34,7 @@ public class ProfileModel : PageModel
             return;
         }
 
-        if (!string.Equals(provider.Data.Status, "Verified", StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(provider.Data.Status, ProviderStatuses.Verified, StringComparison.OrdinalIgnoreCase))
         {
             Error = UiCopy.InstructorNotFound;
             return;
@@ -41,7 +43,7 @@ public class ProfileModel : PageModel
         Instructor = provider.Data with { Modes = provider.Data.Modes ?? [] };
         Mode = SessionModes.Normalize(mode)
             ?? Instructor.Modes.Select(m => SessionModes.Normalize(m.Mode)).FirstOrDefault(m => m is not null)
-            ?? "Home";
+            ?? SessionModes.Home;
 
         var slots = await _api.GetSlotsAsync(id, Mode, cancellationToken);
         if (!slots.Ok || slots.Data is null)

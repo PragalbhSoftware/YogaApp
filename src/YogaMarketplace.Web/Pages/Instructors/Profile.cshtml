@@ -66,7 +66,16 @@ else if (Model.Instructor is { } instructor)
             <ul class="slots">
                 @foreach (var slot in day)
                 {
-                    <li>@slot.Start–@slot.End</li>
+                    <li>
+                        @if (Model.CanBook(slot))
+                        {
+                            <a class="button" asp-page="/Bookings/New" asp-route-providerId="@instructor.Id" asp-route-slotId="@slot.Id" asp-route-mode="@Model.Mode">@string.Format(UiCopy.BookSlot, slot.Start, slot.End)</a>
+                        }
+                        else
+                        {
+                            <span class="muted">@slot.Start–@slot.End · @UiCopy.SlotEnded</span>
+                        }
+                    </li>
                 }
             </ul>
         }
