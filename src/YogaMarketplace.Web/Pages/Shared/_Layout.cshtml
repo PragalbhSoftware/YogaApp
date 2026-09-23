@@ -25,7 +25,9 @@
                     }
                     else if (User.IsInRole(AccountRoles.Provider))
                     {
-                        <a asp-page="/Instructor/Bookings">@UiCopy.InstructorInboxNav</a>
+                        var path = Context.Request.Path;
+                        <a asp-page="/Instructor/Bookings" aria-current="@(path.StartsWithSegments("/instructor/bookings") ? "page" : null)">@UiCopy.InstructorInboxNav</a>
+                        <a asp-page="/Instructor/Availability" aria-current="@(path.StartsWithSegments("/instructor/availability") ? "page" : null)">@UiCopy.InstructorAvailabilityNav</a>
                     }
                     else
                     {
