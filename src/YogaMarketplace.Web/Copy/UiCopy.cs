@@ -1,8 +1,8 @@
 namespace YogaMarketplace.Web.Copy;
 
 /// <summary>
-/// User-facing labels. Yoga is the first category and Mumbai the first city;
-/// swap these strings (or move them to resources) without changing the page flow.
+/// User-facing labels. Yoga is the first category. City and area come from
+/// catalog data, not from the brand. Swap these strings without changing the page flow.
 /// </summary>
 public static class UiCopy
 {
@@ -12,14 +12,20 @@ public static class UiCopy
     public const string ProviderSingular = "Instructor";
     public const string ProviderPlural = "Instructors";
 
-    public const string Tagline = "Yoga in Mumbai";
+    public const string Tagline = "Book verified yoga instructors — home, studio, or online";
     public const string SkipToContent = "Skip to content";
+    public const string BackToTop = "Back to top";
     public const string SignOut = "Sign out";
     public const string AreaNav = "Area";
-    public const string FooterNote = "Mumbai · Yoga";
+    public const string FooterNote = "Book verified yoga instructors for home, studio, or online sessions.";
+    public const string SupportEmail = "hello@yogamarketplace.example";
+    public const string PlaceholderAddress = "12 Sample Street, Example Nagar";
+    public const string FooterSignIn = "Sign in";
 
-    public const string HomeTitle = "Find a yoga instructor";
-    public const string HomeLead = "Sign in with your phone, choose a Mumbai area, then browse verified instructors for home, studio, or online sessions.";
+    public const string HomeTitle = "Find verified yoga instructors · home, studio, or online";
+    public const string HomeLead = "Sign in with your phone, choose an area, then browse verified instructors for home, studio, or online sessions.";
+    public const string HomeDescription = "Find verified yoga instructors for home, studio, or online sessions.";
+    public const string OgLocale = "en_IN";
     public const string SignInCta = "Sign in with phone";
     public const string Continue = "Continue";
 
@@ -52,12 +58,17 @@ public static class UiCopy
     public const string CodeRequired = "Enter the code we sent.";
 
     public const string AreaTitle = "Choose your area";
-    public const string AreaLead = "Mumbai neighbourhoods from the marketplace. You can change this while browsing.";
+    public const string AreaLead = "Neighbourhoods from the marketplace. You can change this while browsing.";
     public const string ChooseArea = "Choose an area to continue.";
     public const string NoAreas = "No areas are listed yet.";
 
     public const string BrowseTitle = "Instructors";
-    public const string BrowseLead = "Verified instructors only. Filter by area and session mode.";
+    public const string BrowseHeading = "Instructors in {0}";
+    public const string BrowseDocumentTitle = "Yoga instructors in {0}";
+    public const string BrowseDocumentTitleWithMode = "{0} yoga instructors in {1}";
+    public const string BrowseLead = "Verified yoga instructors. Compare home, studio, and online rates, then book.";
+    public const string BrowseDescription = "Verified yoga instructors in {0}. Compare home, studio, and online rates, then book an open slot.";
+    public const string BrowseDescriptionWithMode = "Verified {0} yoga instructors in {1}. See the rate and book an open slot.";
     public const string VerifiedOnly = "Verified only";
     public const string Area = "Area";
     public const string Mode = "Mode";
@@ -66,18 +77,38 @@ public static class UiCopy
     public const string ModeStudio = "Studio";
     public const string ModeOnline = "Online";
     public const string ApplyFilters = "Show instructors";
+    public const string FilterLegend = "Filter by area and mode";
+    public const string TrustVerified = "Verified";
+    public const string ModeHomeHint = "At your address";
+    public const string ModeStudioHint = "At the studio";
+    public const string ModeOnlineHint = "Live from home";
+    public const string BookCta = "Book";
+    public const string BookInstructor = "Book {0}";
     public const string ViewProfile = "View profile and slots";
     public const string NoInstructors = "No verified instructors in {0} for {1} yet.";
+    public const string EmptyBrowseHint = "Try another area, or any mode.";
+    public const string OneResult = "1 instructor";
+    public const string ResultCount = "{0} instructors";
+    public const string UpdatingList = "Updating the list.";
     public const string AnyModePhrase = "any mode";
     public const string RatingLine = "{0} · {1} reviews";
+    public const string ReviewsFromCompleted = "Reviews are from completed sessions only.";
 
     public const string ProfileTitle = "Instructor";
+    public const string ProfileDocumentTitle = "{0}, yoga in {1}";
+    public const string ProfileDescription = "{0} teaches yoga in {1}. See rates and book an open slot.";
+    public const string ProfileMissingDescription = "That yoga instructor is not listed.";
     public const string BackToList = "Back to instructors";
+    public const string RatesHeading = "Rates";
+    public const string SessionType = "Session type";
+    public const string Selected = "Selected";
+    public const string ShowingMode = "{0} is {1} a session. Choose an open time to book.";
+    public const string NoModes = "No session modes are listed.";
     public const string StudioAddress = "Studio";
     public const string Age = "Age";
     public const string AgeLabel = "Age {0}";
     public const string SlotsTitle = "Open slots";
-    public const string SlotsLead = "Times are Mumbai local time. Book a slot to pay and request the session.";
+    public const string SlotsLead = "Times are local. Book a slot to pay and request the session.";
     public const string NoSlots = "No open slots in this range.";
     public const string SlotRange = "{0} to {1}";
     public const string BookSlot = "Book {0}–{1}";

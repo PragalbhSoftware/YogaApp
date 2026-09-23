@@ -31,7 +31,8 @@ public class CustomerShellTests : IClassFixture<YogaApiFactory>
         var home = await client.GetStringAsync("/");
         Assert.Contains(UiCopy.SignInCta, home);
         Assert.Contains(UiCopy.CategoryName, home);
-        Assert.Contains(UiCopy.CityName, home);
+        Assert.Contains(UiCopy.HomeLead, home);
+        Assert.DoesNotContain(UiCopy.CityName, home);
 
         var browse = await client.GetAsync("/instructors");
         Assert.Equal(HttpStatusCode.Redirect, browse.StatusCode);

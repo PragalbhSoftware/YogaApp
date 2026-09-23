@@ -3,15 +3,50 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>@(ViewData["Title"] == null ? UiCopy.AppName : ViewData["Title"] + " · " + UiCopy.AppName)</title>
+    @{
+        var pageTitle = ViewData["Title"] == null ? UiCopy.AppName : ViewData["Title"] + " · " + UiCopy.AppName;
+        var description = ViewData["Description"] as string;
+        var indexable = PageSeo.IsIndexable(Context.Request.Path);
+        var canonical = $"{Context.Request.Scheme}://{Context.Request.Host}{Context.Request.PathBase}{Context.Request.Path}{Context.Request.QueryString}";
+    }
+    <title>@pageTitle</title>
+    @if (!string.IsNullOrWhiteSpace(description))
+    {
+        <meta name="description" content="@description" />
+    }
+    @if (indexable)
+    {
+        <meta property="og:title" content="@pageTitle" />
+        @if (!string.IsNullOrWhiteSpace(description))
+        {
+            <meta property="og:description" content="@description" />
+        }
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="@canonical" />
+        <meta property="og:locale" content="@UiCopy.OgLocale" />
+    }
+    else
+    {
+        <meta name="robots" content="@PageSeo.RobotsNoIndex" />
+    }
+    <link rel="icon" href="~/img/logo.png" asp-append-version="true" type="image/png" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
 </head>
-<body>
+<body class="@ViewData["Shell"]">
     <a class="skip" href="#main">@UiCopy.SkipToContent</a>
+    <div class="tag-row">
+        <div class="wrap">
+            <p class="tag">@UiCopy.Tagline</p>
+        </div>
+    </div>
     <header class="site-header">
         <div class="wrap header-bar">
-            <a class="brand" asp-page="/Index">@UiCopy.AppName</a>
-            <p class="tag">@UiCopy.Tagline</p>
+            <div class="brand-block">
+                <a class="brand" asp-page="/Index">
+                    <img class="brand-mark" src="~/img/logo.png" asp-append-version="true" alt="" width="36" height="36" />
+                    <span class="brand-name">@UiCopy.AppName</span>
+                </a>
+            </div>
             <nav class="nav" aria-label="Account">
                 @if (User.Identity?.IsAuthenticated == true)
                 {
@@ -52,7 +87,25 @@
         @RenderBody()
     </main>
     <footer class="site-footer">
-        <div class="wrap">@UiCopy.FooterNote</div>
+        <div class="wrap footer-bar">
+            <div class="footer-copy">
+                <p class="footer-brand">@UiCopy.AppName</p>
+                <p class="footer-note">@UiCopy.FooterNote</p>
+            </div>
+            <nav class="footer-links" aria-label="Footer">
+                <a asp-page="/Instructors/Index">@UiCopy.ProviderPlural</a>
+                <a asp-page="/Account/SignIn">@UiCopy.FooterSignIn</a>
+            </nav>
+            <address class="footer-address">
+                <a href="mailto:@UiCopy.SupportEmail">@UiCopy.SupportEmail</a>
+                <span>@UiCopy.PlaceholderAddress</span>
+            </address>
+            <p class="footer-legal">© @DateTime.UtcNow.Year @UiCopy.AppName</p>
+        </div>
     </footer>
+    <button type="button" class="to-top" data-to-top hidden aria-label="@UiCopy.BackToTop">
+        <span aria-hidden="true">↑</span>
+    </button>
+    <script src="~/js/site.js" asp-append-version="true"></script>
 </body>
 </html>

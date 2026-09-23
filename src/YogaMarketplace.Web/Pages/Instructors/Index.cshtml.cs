@@ -20,6 +20,26 @@ public class IndexModel : PageModel
     public string Area { get; private set; } = "";
     public string? Mode { get; private set; }
     public string ModePhrase => Mode ?? UiCopy.AnyModePhrase;
+    public string? ModeLabel => Mode switch
+    {
+        SessionModes.Home => UiCopy.ModeHome,
+        SessionModes.Studio => UiCopy.ModeStudio,
+        SessionModes.Online => UiCopy.ModeOnline,
+        _ => null
+    };
+
+    public string DocumentTitle => ModeLabel is null
+        ? string.Format(UiCopy.BrowseDocumentTitle, Area)
+        : string.Format(UiCopy.BrowseDocumentTitleWithMode, ModeLabel, Area);
+
+    public string MetaDescription => ModeLabel is null
+        ? string.Format(UiCopy.BrowseDescription, Area)
+        : string.Format(UiCopy.BrowseDescriptionWithMode, ModeLabel, Area);
+
+    public string ResultsLabel => Instructors.Count == 1
+        ? UiCopy.OneResult
+        : string.Format(UiCopy.ResultCount, Instructors.Count);
+
     public List<string> AreaChoices { get; private set; } = [];
     public List<ModeOption> ModeOptions { get; private set; } = [];
     public List<ProviderSummaryDto> Instructors { get; private set; } = [];
@@ -28,6 +48,26 @@ public class IndexModel : PageModel
     public bool Unreachable { get; private set; }
 
     public async Task<IActionResult> OnGetAsync(string? area, string? mode, CancellationToken cancellationToken)
+    {
+        if (await LoadAsync(area, mode, includeAreas: true, cancellationToken) is { } redirect)
+            return redirect;
+        return Page();
+    }
+
+    public async Task<IActionResult> OnGetListAsync(string? area, string? mode, CancellationToken cancellationToken)
+    {
+        if (await LoadAsync(area, mode, includeAreas: false, cancellationToken) is { } redirect)
+            return redirect;
+
+        Response.Headers["X-Robots-Tag"] = PageSeo.RobotsNoIndex;
+        return Partial("_InstructorList", this);
+    }
+
+    private async Task<IActionResult?> LoadAsync(
+        string? area,
+        string? mode,
+        bool includeAreas,
+        CancellationToken cancellationToken)
     {
         var saved = AreaCookie.Read(Request);
         Area = string.IsNullOrWhiteSpace(area) ? saved ?? "" : area.Trim();
@@ -46,23 +86,8 @@ public class IndexModel : PageModel
             new ModeOption(SessionModes.Online, UiCopy.ModeOnline, Mode == SessionModes.Online)
         ];
 
-        var areas = await _api.GetAreasAsync(cancellationToken);
-        if (!areas.Ok || areas.Data is null)
-        {
-            AreasError = areas.Error ?? UiCopy.GenericError;
-            AreaChoices = [Area];
-        }
-        else
-        {
-            AreaChoices = areas.Data
-                .Select(a => a.Name)
-                .Where(name => !string.IsNullOrWhiteSpace(name))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
-                .ToList();
-            if (!AreaChoices.Contains(Area, StringComparer.OrdinalIgnoreCase))
-                AreaChoices.Insert(0, Area);
-        }
+        if (includeAreas)
+            await LoadAreasAsync(cancellationToken);
 
         var providers = await _api.BrowseAsync(Area, Mode, _options.CategorySlug, cancellationToken);
         if (!providers.Ok || providers.Data is null)
@@ -70,14 +95,34 @@ public class IndexModel : PageModel
             Error = providers.Error ?? UiCopy.GenericError;
             Unreachable = providers.Unreachable;
             Instructors = [];
-            return Page();
+            return null;
         }
 
         Instructors = providers.Data
             .Where(p => string.Equals(p.Status, ProviderStatuses.Verified, StringComparison.OrdinalIgnoreCase))
             .Select(p => p with { Modes = p.Modes ?? [] })
             .ToList();
-        return Page();
+        return null;
+    }
+
+    private async Task LoadAreasAsync(CancellationToken cancellationToken)
+    {
+        var areas = await _api.GetAreasAsync(cancellationToken);
+        if (!areas.Ok || areas.Data is null)
+        {
+            AreasError = areas.Error ?? UiCopy.GenericError;
+            AreaChoices = [Area];
+            return;
+        }
+
+        AreaChoices = areas.Data
+            .Select(a => a.Name)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (!AreaChoices.Contains(Area, StringComparer.OrdinalIgnoreCase))
+            AreaChoices.Insert(0, Area);
     }
 
     public sealed record ModeOption(string Value, string Label, bool Selected);
