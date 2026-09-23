@@ -1,0 +1,116 @@
+@page "/admin/bookings/{id:guid}"
+@model YogaMarketplace.Web.Pages.Admin.Bookings.BookingModel
+@{
+    ViewData["Title"] = UiCopy.BookingDetailTitle;
+    var booking = Model.Booking;
+    var meet = AdminLinks.Http(booking?.MeetLink);
+}
+
+<h1>@UiCopy.BookingDetailTitle</h1>
+<p class="lead">@UiCopy.AdminBookingsLead</p>
+<p><a asp-page="/Admin/Bookings/Index" asp-route-status="@Model.Status" asp-route-from="@Model.From" asp-route-to="@Model.To">@UiCopy.BackToBookings</a></p>
+
+@if (!string.IsNullOrEmpty(Model.Error))
+{
+    <p class="alert" role="alert">@Model.Error</p>
+}
+else if (booking is not null)
+{
+    <article class="card" data-readonly="true" data-booking-id="@booking.Id" data-status="@booking.Status">
+        <h2>@booking.ServiceTitle</h2>
+        <dl class="summary">
+            <div>
+                <dt>@UiCopy.ProviderSingular</dt>
+                <dd>@booking.ProviderName</dd>
+            </div>
+            <div>
+                <dt>@UiCopy.Customer</dt>
+                <dd>@(string.IsNullOrWhiteSpace(booking.CustomerName) ? booking.CustomerPhone : booking.CustomerName + " · " + booking.CustomerPhone)</dd>
+            </div>
+            <div>
+                <dt>@UiCopy.When</dt>
+                <dd>@AdminFormat.SessionWhen(booking.Date, booking.Start, booking.End)</dd>
+            </div>
+            <div>
+                <dt>@UiCopy.Mode</dt>
+                <dd>@booking.Mode</dd>
+            </div>
+            <div>
+                <dt>@UiCopy.AmountDue</dt>
+                <dd>@Money.Inr(booking.Amount) · @booking.Currency</dd>
+            </div>
+            <div>
+                <dt>@UiCopy.StatusFilter</dt>
+                <dd>@BookingStatusText.Detail(booking.Status)</dd>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(booking.HomeAddress))
+            {
+                <div>
+                    <dt>@UiCopy.HomeAddress</dt>
+                    <dd>@booking.HomeAddress</dd>
+                </div>
+            }
+            @if (!string.IsNullOrWhiteSpace(booking.Landmark))
+            {
+                <div>
+                    <dt>@UiCopy.Landmark</dt>
+                    <dd>@booking.Landmark</dd>
+                </div>
+            }
+            @if (!string.IsNullOrWhiteSpace(booking.StudioAddress))
+            {
+                <div>
+                    <dt>@UiCopy.StudioAddress</dt>
+                    <dd>@booking.StudioAddress</dd>
+                </div>
+            }
+            @if (!string.IsNullOrWhiteSpace(booking.PaymentStatus))
+            {
+                <div>
+                    <dt>@UiCopy.Payment</dt>
+                    <dd>@booking.PaymentStatus</dd>
+                </div>
+            }
+            @if (!string.IsNullOrWhiteSpace(booking.GatewayOrderId))
+            {
+                <div>
+                    <dt>@UiCopy.GatewayOrder</dt>
+                    <dd>@booking.GatewayOrderId</dd>
+                </div>
+            }
+            @if (!string.IsNullOrWhiteSpace(booking.GatewayPaymentId))
+            {
+                <div>
+                    <dt>@UiCopy.GatewayPayment</dt>
+                    <dd>@booking.GatewayPaymentId</dd>
+                </div>
+            }
+            @if (booking.ReviewRating is int rating)
+            {
+                <div>
+                    <dt>@UiCopy.ReviewRating</dt>
+                    <dd>@rating</dd>
+                </div>
+            }
+            @if (booking.PayoutNet is decimal net)
+            {
+                <div>
+                    <dt>@UiCopy.Payout</dt>
+                    <dd>@Money.Inr(net)@(string.IsNullOrWhiteSpace(booking.PayoutStatus) ? "" : " · " + booking.PayoutStatus)</dd>
+                </div>
+            }
+            <div>
+                <dt>@UiCopy.Created</dt>
+                <dd>@AdminFormat.When(booking.CreatedAt)</dd>
+            </div>
+        </dl>
+        @if (meet is not null)
+        {
+            <p><a href="@meet">@UiCopy.MeetLink</a></p>
+        }
+        else if (!string.IsNullOrWhiteSpace(booking.MeetLink))
+        {
+            <p class="muted">@booking.MeetLink</p>
+        }
+    </article>
+}

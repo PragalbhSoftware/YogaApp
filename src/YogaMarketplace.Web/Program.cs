@@ -10,6 +10,7 @@ builder.Services.AddRazorPages(options =>
     options.Conventions.AuthorizeFolder("/Instructors");
     options.Conventions.AuthorizeFolder("/Bookings", "Customer");
     options.Conventions.AuthorizeFolder("/Instructor", "Provider");
+    options.Conventions.AuthorizeFolder("/Admin", "Admin");
 });
 
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
@@ -28,6 +29,7 @@ builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("Customer", policy => policy.RequireRole(AccountRoles.Customer));
     options.AddPolicy("Provider", policy => policy.RequireRole(AccountRoles.Provider));
+    options.AddPolicy("Admin", policy => policy.RequireRole(AccountRoles.Admin));
 });
 builder.Services.AddHttpContextAccessor();
 
@@ -44,6 +46,12 @@ builder.Services.AddHttpClient(MarketplaceApiClient.HttpClientName, (sp, client)
 builder.Services.AddScoped<IMarketplaceApi, MarketplaceApiClient>();
 builder.Services.AddScoped<IBookingApi, BookingApiClient>();
 builder.Services.AddScoped<IInstructorBookingApi, InstructorBookingApiClient>();
+builder.Services.AddScoped<IAdminReportApi, AdminReportClient>();
+builder.Services.AddScoped<IAdminProviderApi, AdminProviderClient>();
+builder.Services.AddScoped<IAdminUserApi, AdminUserClient>();
+builder.Services.AddScoped<IAdminBookingApi, AdminBookingClient>();
+builder.Services.AddScoped<IAdminTransactionApi, AdminTransactionClient>();
+builder.Services.AddScoped<IAdminMasterApi, AdminMasterClient>();
 builder.Services.AddSingleton<ILocalRazorpayCheckout, LocalRazorpayCheckout>();
 builder.Services.AddScoped<ISlotQuoteReader, SlotQuoteReader>();
 builder.Services.AddScoped<IPaymentCheckout, PaymentCheckout>();

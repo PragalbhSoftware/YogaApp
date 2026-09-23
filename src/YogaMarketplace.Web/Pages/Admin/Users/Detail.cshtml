@@ -1,0 +1,59 @@
+@page "/admin/users/{id:guid}"
+@model YogaMarketplace.Web.Pages.Admin.Users.UserModel
+@{
+    ViewData["Title"] = UiCopy.UserDetailTitle;
+    var account = Model.Account;
+    var heading = account is null
+        ? UiCopy.UserDetailTitle
+        : string.IsNullOrWhiteSpace(account.Name) ? account.Phone : account.Name;
+}
+
+<h1>@heading</h1>
+<p><a asp-page="/Admin/Users/Index" asp-route-q="@Model.Query" asp-route-role="@Model.Role">@UiCopy.BackToUsers</a></p>
+
+@if (!string.IsNullOrEmpty(Model.Error))
+{
+    <p class="alert" role="alert">@Model.Error</p>
+}
+else if (account is not null)
+{
+    <article class="card" data-user-id="@account.Id" data-role="@account.Role">
+        <dl class="summary">
+            <div>
+                <dt>@UiCopy.Phone</dt>
+                <dd>@account.Phone</dd>
+            </div>
+            <div>
+                <dt>@UiCopy.Role</dt>
+                <dd>@AdminRoleFilters.Label(account.Role)</dd>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(account.Email))
+            {
+                <div>
+                    <dt>@UiCopy.Email</dt>
+                    <dd>@account.Email</dd>
+                </div>
+            }
+            @if (!string.IsNullOrWhiteSpace(account.Gender))
+            {
+                <div>
+                    <dt>@UiCopy.Gender</dt>
+                    <dd>@account.Gender</dd>
+                </div>
+            }
+            <div>
+                <dt>@UiCopy.Created</dt>
+                <dd>@AdminFormat.When(account.CreatedAt)</dd>
+            </div>
+        </dl>
+        @if (account.Provider is AdminProviderDto provider)
+        {
+            <h2>@UiCopy.ProviderSingular</h2>
+            <partial name="_AdminProvider" model="provider" />
+        }
+        else
+        {
+            <p>@UiCopy.NoProviderRecord</p>
+        }
+    </article>
+}

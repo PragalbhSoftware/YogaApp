@@ -1,6 +1,6 @@
 # Yoga Marketplace
 
-Mumbai-first yoga instructor marketplace. The API covers OTP auth, the domain model, EF Core, SQL Server, verified browse, **pay-at-book** (Razorpay), the instructor handshake, and admin oversight. Customers authenticate with a one-time passcode, instructors register as **Pending** until an admin verifies them, and verified instructors can be browsed with **mode-specific** slots (Home, Studio, Online). A captured payment creates a booking in `PendingAccept`.
+Mumbai-first yoga instructor marketplace. The API covers OTP auth, the domain model, EF Core, SQL Server, verified browse, **pay-at-book** (Razorpay), the instructor handshake, and admin oversight. Customers authenticate with a one-time passcode, instructors register as **Pending** until an admin verifies them, and verified instructors can be browsed with **mode-specific** slots (Home, Studio, Online). A captured payment creates a booking in `PendingAccept`. The web app includes a local admin area for that oversight.
 
 Yoga is the first `Category`. The model is generic enough for another category later. The customer web app is `src/YogaMarketplace.Web`: phone OTP, Mumbai area, verified instructors, then book and pay. The browser never calls the Razorpay webhook.
 
@@ -11,7 +11,7 @@ Yoga is the first `Category`. The model is generic enough for another category l
 | `src/YogaMarketplace.Api` | Controllers, OTP/JWT, browse, slots, book and pay, instructor handshake, admin APIs |
 | `src/YogaMarketplace.Domain` | Entities, booking rules, provider approval, catalog edits |
 | `src/YogaMarketplace.Infrastructure` | EF Core, SQL Server, seed |
-| `src/YogaMarketplace.Web` | Razor Pages app (OTP, area, browse, book and pay, instructor requests, reviews) |
+| `src/YogaMarketplace.Web` | Razor Pages app (OTP, area, browse, book and pay, instructor requests, reviews, local admin) |
 | `tests/YogaMarketplace.Api.Tests` | Domain rules and API tests (SQLite) |
 | `tests/YogaMarketplace.Web.Tests` | Customer shell against the API test host |
 
@@ -93,11 +93,34 @@ Web: `http://localhost:5081`
 
 The API JWT from `POST /api/auth/otp/verify` is stored in the encrypted `ym.session` cookie and sent as `Authorization: Bearer` on later API calls. The chosen area is the `ym.area` cookie.
 
-In Development the API code is `123456` and the response includes `devCode`. The verify step shows that code (and fills it in) when the API returns it. `Api:ShowDevOtpHint` is true only in `appsettings.Development.json`, which is not published. Seeded instructor Ananya Desai (`+919876543210`, Bandra) can sign in with her phone.
+In Development the API code is `123456` and the response includes `devCode`. The verify step shows that code (and fills it in) when the API returns it. `Api:ShowDevOtpHint` is true only in `appsettings.Development.json`, which is not published. Seeded instructor Ananya Desai (`+919876543210`, Bandra) can sign in with her phone. The seeded admin (`+919000000001`) uses the same existing-account OTP and lands on `/admin` (see Admin web).
 
 If the API is stopped, pages show an error and empty lists. The web app does not keep a second catalog or a fake OTP store.
 
 Labels live in `src/YogaMarketplace.Web/Copy/UiCopy.cs` so the first category and city can be renamed later without changing the flow.
+
+## Admin web
+
+Local only. These pages are not part of the YogaDemo deploy. They live in `src/YogaMarketplace.Web` and call `/api/admin` with the JWT from the encrypted `ym.session` cookie. The web app does not open SQL Server.
+
+The cookie stores the role on the same claim customers and instructors already use (`Customer`, `Provider`, or `Admin`). `/bookings` requires `Customer`, `/instructor/bookings` requires `Provider`, and `/admin` requires `Admin`. Anyone else is sent to `/account/access-denied`.
+
+Sign in at `http://localhost:5081/account/sign-in` as an existing account (leave "I'm new" off):
+
+1. Phone `9000000001` or `+919000000001`. That user is seeded when `Seed:DemoData` is on.
+2. In Development the code is `123456`. The verify step shows it as `devCode` when the API returns it.
+3. The app opens `/admin`.
+
+| Page | Path | What it does |
+| --- | --- | --- |
+| Dashboard | `/admin` | Booking counts by status, paid GMV, pending payout count / gross / net |
+| Approvals | `/admin/approvals` | Pending instructors. Verify makes them public. Reject takes an optional reason up to 300 characters. Neither call creates a booking |
+| Users | `/admin/users` | Search and role filter, then a detail page. No OTP or other secrets |
+| Bookings | `/admin/bookings` | Read-only list and detail |
+| Transactions | `/admin/transactions` | Payments (`Paid`, `Refunded`, `Failed`) and payouts (`Pending`, `Exported`, `Paid`). Read-only |
+| Masters | `/admin/masters` | Areas (add, rename, active), category label, and policy. The category slug stays `yoga` |
+
+The customer neighbourhood picker stays at `/areas`. Admin pages are `/admin`, not under that folder.
 
 ## Dev OTP and seed
 
@@ -106,7 +129,7 @@ SMS is a log stub (`LoggingOtpSender`). In Development the code is fixed at `123
 | Who | Phone | Notes |
 | --- | --- | --- |
 | Ananya Desai | `+919876543210` | Verified, Bandra, Home ₹899 / Studio ₹749 / Online ₹599, Google Meet link on her own profile |
-| Marketplace admin | `+919000000001` | Seeded when `Seed:DemoData` is on. Sign in as an existing user (`isNewUser: false`). The JWT role is `Admin` |
+| Marketplace admin | `+919000000001` | Seeded when `Seed:DemoData` is on. Sign in as an existing user (`isNewUser: false`). Development code `123456`. The JWT role is `Admin` and the web app opens `/admin` |
 
 New customer: `name` + `gender` + `phone`, then OTP. Existing customer: `phone`, then OTP. Slots are Mumbai local time (`Asia/Kolkata`), separate per Home / Studio / Online. Bookings are not seeded.
 
@@ -206,9 +229,9 @@ Cancel / reschedule free-window hours and the platform fee are stored on `Market
 
 ## Admin API (local)
 
-Admin JWT only. Sign in with the seeded admin phone above (`POST /api/auth/otp/request` with `isNewUser: false`, then verify). Every route below is under `/api/admin`. A missing token is `401` `{ error: "Sign in required." }`. A customer or provider token is `403` `{ error: "Admin access required." }`. Other failures use the same `{ error }` body as the rest of the API.
+Admin JWT only. Sign in with the seeded admin phone above (`POST /api/auth/otp/request` with `isNewUser: false`, then verify). The same OTP on the web app opens `/admin`. Every route below is under `/api/admin`. A missing token is `401` `{ error: "Sign in required." }`. A customer or provider token is `403` `{ error: "Admin access required." }`. Other failures use the same `{ error }` body as the rest of the API.
 
-Provider, booking, payment, and payout lists return at most 100 rows, newest first. User search is ordered by name, then phone, and capped at 100. Area and category lists return every row, ordered by name. There is no cursor. The web app is unchanged; a later admin UI can call these routes.
+Provider, booking, payment, and payout lists return at most 100 rows, newest first. User search is ordered by name, then phone, and capped at 100. Area and category lists return every row, ordered by name. There is no cursor. The admin pages call these routes and show the same cap.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
@@ -231,7 +254,7 @@ Provider, booking, payment, and payout lists return at most 100 rows, newest fir
 | GET | `/api/admin/policy` | Same shape as `GET /api/policy`. |
 | PATCH | `/api/admin/policy` | Any of `platformFeePercent`, `cancelFreeWindowHours`, `rescheduleFreeWindowHours`, `lateCancelFeePercent`, `policyNote`. Omitted fields stay. Percents are 0–100 with at most 2 decimal places. Windows are 0–168 hours. |
 
-Tradeoffs for the web frontend:
+The admin Razor pages call these routes. See Admin web. Tradeoffs:
 
 - Bookings, payments, and payouts are read-only. Cancel, reschedule, no-show, and refund stay on the domain and the instructor decline path. This slice does not add an admin force-cancel or a second refund call.
 - Rejecting a verified instructor removes them from `GET /api/providers`. Bookings they already have stay. Verifying a rejected instructor is allowed and clears the reason.
@@ -293,7 +316,7 @@ Target is IIS on Plesk with SQL Server, subdomain `YogaDemo.psoftcs.com`.
 1. Auth, domain, EF, browse/slots — already in the repo
 2. Customer web (OTP, area, verified browse, book and pay) and book + pay HTTP — already in the repo. Pay-at-book creates `PendingAccept`
 3. Accept / decline / complete, reviews, payout pending, and refund of a captured payment whose slot was lost — API and the instructor/customer pages are in the repo. Payout export UI is later
-4. Admin approve/reject, users, bookings, payments, masters, and summary report — this API slice. No admin web UI yet
+4. Admin approve/reject, users, bookings, payments, masters, summary report, and the local admin Razor pages — already in the repo
 5. Reschedule, cancel, payout export
 
 ## Out of scope

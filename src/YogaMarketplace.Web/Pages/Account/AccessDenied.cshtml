@@ -6,7 +6,11 @@
 <h1>@UiCopy.AccessDeniedTitle</h1>
 <p class="lead">@UiCopy.AccessDeniedLead</p>
 
-@if (User.IsInRole(AccountRoles.Provider))
+@if (User.IsInRole(AccountRoles.Admin))
+{
+    <a class="button" asp-page="/Admin/Index">@UiCopy.OpenAdmin</a>
+}
+else if (User.IsInRole(AccountRoles.Provider))
 {
     <a class="button" asp-page="/Instructor/Bookings">@UiCopy.InstructorInboxNav</a>
 }

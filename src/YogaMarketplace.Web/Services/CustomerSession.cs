@@ -86,12 +86,17 @@ public static class CustomerFlow
     {
         if (!string.IsNullOrEmpty(returnUrl) && url.IsLocalUrl(returnUrl))
             return new RedirectResult(returnUrl);
+        if (IsAdmin(role))
+            return new RedirectToPageResult("/Admin/Index");
         if (IsProvider(role))
             return new RedirectToPageResult("/Instructor/Bookings");
         if (string.IsNullOrWhiteSpace(AreaCookie.Read(http.Request)))
             return new RedirectToPageResult("/Areas/Select");
         return new RedirectToPageResult("/Instructors/Index");
     }
+
+    public static bool IsAdmin(string? role) =>
+        string.Equals(role, AccountRoles.Admin, StringComparison.Ordinal);
 
     public static bool IsProvider(string? role) =>
         string.Equals(role, AccountRoles.Provider, StringComparison.Ordinal);

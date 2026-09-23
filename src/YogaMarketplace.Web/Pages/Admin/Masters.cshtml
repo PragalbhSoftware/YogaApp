@@ -1,0 +1,112 @@
+@page "/admin/masters"
+@model YogaMarketplace.Web.Pages.Admin.MastersModel
+@{
+    ViewData["Title"] = UiCopy.MastersTitle;
+}
+
+<h1>@UiCopy.MastersTitle</h1>
+<p class="lead">@UiCopy.MastersLead</p>
+
+@if (!string.IsNullOrEmpty(Model.Notice))
+{
+    <p class="hint" role="status">@Model.Notice</p>
+}
+
+@if (!string.IsNullOrEmpty(Model.Error))
+{
+    <p class="alert" role="alert">@Model.Error</p>
+}
+
+<h2>@UiCopy.AreasHeading</h2>
+<form method="post" class="card" data-action="create-area" asp-page-handler="CreateArea">
+    <h3>@UiCopy.AddArea</h3>
+    <div class="field">
+        <label for="area-name">@UiCopy.AreaName</label>
+        <input id="area-name" name="name" maxlength="@AdminInput.MaxNameLength" value="@Model.DraftAreaName" />
+    </div>
+    <div class="field">
+        <label for="area-city">@UiCopy.City</label>
+        <input id="area-city" name="city" maxlength="@AdminInput.MaxNameLength" value="@(Model.DraftCity ?? UiCopy.CityName)" />
+    </div>
+    <button type="submit">@UiCopy.AddArea</button>
+</form>
+
+@if (Model.AreasLoaded)
+{
+    @foreach (var area in Model.Areas)
+    {
+        <article class="card" data-area-id="@area.Id" data-area-name="@area.Name" data-active="@(area.IsActive ? "true" : "false")">
+            <h3>@area.Name</h3>
+            @if (!area.IsActive)
+            {
+                <p class="muted">@UiCopy.AreaInactive</p>
+            }
+            <form method="post" data-action="update-area" asp-page-handler="UpdateArea" asp-route-id="@area.Id">
+                <div class="field">
+                    <label for="area-@area.Id">@UiCopy.AreaName</label>
+                    <input id="area-@area.Id" name="name" maxlength="@AdminInput.MaxNameLength" value="@area.Name" />
+                </div>
+                <p class="muted">@area.City</p>
+                <label class="choice">
+                    @if (area.IsActive)
+                    {
+                        <input type="checkbox" name="isActive" value="true" checked />
+                    }
+                    else
+                    {
+                        <input type="checkbox" name="isActive" value="true" />
+                    }
+                    @UiCopy.AreaActive
+                </label>
+                <button type="submit">@UiCopy.SaveArea</button>
+            </form>
+        </article>
+    }
+}
+
+<h2>@UiCopy.CategoriesHeading</h2>
+@if (Model.CategoriesLoaded)
+{
+    @foreach (var category in Model.Categories)
+    {
+        <article class="card" data-category-id="@category.Id" data-slug="@category.Slug">
+            <form method="post" data-action="rename-category" asp-page-handler="RenameCategory" asp-route-id="@category.Id">
+                <div class="field">
+                    <label for="category-@category.Id">@UiCopy.CategoryName</label>
+                    <input id="category-@category.Id" name="name" maxlength="@AdminInput.MaxNameLength" value="@category.Name" />
+                </div>
+                <p class="muted">@string.Format(UiCopy.SlugFixed, category.Slug)</p>
+                <button type="submit">@UiCopy.SaveCategory</button>
+            </form>
+        </article>
+    }
+}
+
+<h2>@UiCopy.PolicyHeading</h2>
+@if (Model.Policy is not null)
+{
+    <form method="post" class="card" data-action="update-policy" asp-page-handler="UpdatePolicy">
+        <p class="muted">@Model.Policy.Currency</p>
+        <div class="field">
+            <label for="platform-fee">@UiCopy.PlatformFee</label>
+            <input id="platform-fee" name="platformFeePercent" inputmode="decimal" value="@Model.PolicyFee" />
+        </div>
+        <div class="field">
+            <label for="cancel-hours">@UiCopy.CancelWindow</label>
+            <input id="cancel-hours" name="cancelFreeWindowHours" inputmode="numeric" value="@Model.CancelHours" />
+        </div>
+        <div class="field">
+            <label for="reschedule-hours">@UiCopy.RescheduleWindow</label>
+            <input id="reschedule-hours" name="rescheduleFreeWindowHours" inputmode="numeric" value="@Model.RescheduleHours" />
+        </div>
+        <div class="field">
+            <label for="late-fee">@UiCopy.LateCancelFee</label>
+            <input id="late-fee" name="lateCancelFeePercent" inputmode="decimal" value="@Model.LateFee" />
+        </div>
+        <div class="field">
+            <label for="policy-note">@UiCopy.PolicyNote</label>
+            <textarea id="policy-note" name="policyNote" maxlength="@AdminInput.MaxPolicyNoteLength" rows="4">@Model.PolicyNote</textarea>
+        </div>
+        <button type="submit">@UiCopy.SavePolicy</button>
+    </form>
+}

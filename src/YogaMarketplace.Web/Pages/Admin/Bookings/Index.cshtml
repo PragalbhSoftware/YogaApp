@@ -1,0 +1,68 @@
+@page "/admin/bookings"
+@model YogaMarketplace.Web.Pages.Admin.Bookings.BookingsModel
+@{
+    ViewData["Title"] = UiCopy.AdminBookingsTitle;
+}
+
+<h1>@UiCopy.AdminBookingsTitle</h1>
+<p class="lead">@UiCopy.AdminBookingsLead</p>
+<p class="muted">@UiCopy.ListCap</p>
+
+<nav aria-label="@UiCopy.StatusFilter">
+    <ul class="pills">
+        <li>
+            <a class="pill @(Model.StatusKnown && Model.Status is null ? "active" : null)"
+               asp-page="/Admin/Bookings/Index"
+               asp-route-from="@Model.From"
+               asp-route-to="@Model.To">@UiCopy.FilterAll</a>
+        </li>
+        @foreach (var status in BookingStatuses.All)
+        {
+            <li>
+                <a class="pill @(Model.StatusKnown && Model.Status == status ? "active" : null)"
+                   asp-page="/Admin/Bookings/Index"
+                   asp-route-status="@status"
+                   asp-route-from="@Model.From"
+                   asp-route-to="@Model.To">@BookingStatusText.FilterLabel(status)</a>
+            </li>
+        }
+    </ul>
+</nav>
+
+<form method="get" class="card">
+    <input type="hidden" name="status" value="@Model.Status" />
+    <div class="field">
+        <label for="from">@UiCopy.FromDate</label>
+        <input id="from" name="from" type="date" value="@Model.From" />
+    </div>
+    <div class="field">
+        <label for="to">@UiCopy.ToDate</label>
+        <input id="to" name="to" type="date" value="@Model.To" />
+    </div>
+    <button type="submit">@UiCopy.Apply</button>
+</form>
+
+@if (!string.IsNullOrEmpty(Model.Error))
+{
+    <p class="alert" role="alert">@Model.Error</p>
+}
+
+@if (string.IsNullOrEmpty(Model.Error) && Model.Bookings.Count == 0)
+{
+    <p role="status">@UiCopy.NoAdminBookings</p>
+}
+else if (Model.Bookings.Count > 0)
+{
+    @foreach (var booking in Model.Bookings)
+    {
+        <article class="card" data-readonly="true" data-booking-id="@booking.Id" data-status="@booking.Status" data-provider-name="@booking.ProviderName">
+            <h2>@booking.ServiceTitle</h2>
+            <p>@booking.ProviderName</p>
+            <p class="muted">@(string.IsNullOrWhiteSpace(booking.CustomerName) ? booking.CustomerPhone : booking.CustomerName)</p>
+            <p>@AdminFormat.SessionWhen(booking.Date, booking.Start, booking.End)</p>
+            <p>@booking.Mode · @Money.Inr(booking.Amount)</p>
+            <p class="muted">@booking.Status · @booking.PaymentStatus</p>
+            <a class="button" asp-page="/Admin/Bookings/Detail" asp-route-id="@booking.Id" asp-route-status="@Model.Status" asp-route-from="@Model.From" asp-route-to="@Model.To">@UiCopy.ViewBooking</a>
+        </article>
+    }
+}

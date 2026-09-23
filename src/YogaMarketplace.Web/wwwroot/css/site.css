@@ -81,6 +81,8 @@ body {
   text-decoration: none;
 }
 
+.nav a[aria-current="page"] { text-decoration: underline; }
+
 .who { color: var(--ink); font-weight: 500; }
 
 .nav form { margin: 0; }
@@ -89,6 +91,7 @@ main { padding: 1.25rem 0 2.5rem; }
 
 h1 { font-size: 1.6rem; line-height: 1.2; margin: 0 0 0.5rem; }
 h2 { font-size: 1.15rem; margin: 1.25rem 0 0.5rem; }
+h3 { font-size: 1.05rem; margin: 0 0 0.5rem; }
 
 .lead, .muted { color: var(--muted); }
 .lead { margin-top: 0; }
@@ -190,6 +193,7 @@ body:has(input[name="AccountKind"][value="new"]:checked) #new-fields { display: 
   border-radius: 0.75rem;
   padding: 1rem;
   margin: 0.75rem 0;
+  overflow-wrap: anywhere;
 }
 
 .alert {
@@ -238,7 +242,7 @@ body:has(input[name="AccountKind"][value="new"]:checked) #new-fields { display: 
   border-bottom: 1px solid var(--line);
 }
 .summary dt { color: var(--muted); font-weight: 600; }
-.summary dd { margin: 0; text-align: right; }
+.summary dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
 
 .site-footer {
   color: var(--muted);
