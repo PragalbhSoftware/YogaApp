@@ -8,12 +8,10 @@ namespace YogaMarketplace.Web.Pages.Bookings;
 public class IndexModel : PageModel
 {
     private readonly IBookingApi _bookings;
-    private readonly IReviewedBookingStore _reviewed;
 
-    public IndexModel(IBookingApi bookings, IReviewedBookingStore reviewed)
+    public IndexModel(IBookingApi bookings)
     {
         _bookings = bookings;
-        _reviewed = reviewed;
     }
 
     public List<BookingDto> Bookings { get; private set; } = [];
@@ -23,10 +21,10 @@ public class IndexModel : PageModel
     public Guid? JustBookedId { get; private set; }
 
     public bool ShowReviewForm(BookingDto booking) =>
-        CustomerReviews.CanSubmit(booking.Status, _reviewed.Contains(booking.Id));
+        CustomerReviews.CanSubmit(booking.Status, booking.HasReviewed);
 
     public bool ShowReviewedNote(BookingDto booking) =>
-        booking.Status == BookingStatuses.Completed && _reviewed.Contains(booking.Id);
+        booking.Status == BookingStatuses.Completed && booking.HasReviewed;
 
     public async Task OnGetAsync(string? notice, Guid? booked, CancellationToken cancellationToken)
     {
@@ -52,13 +50,8 @@ public class IndexModel : PageModel
         {
             var result = await _bookings.CreateReviewAsync(id, new CreateReviewDto { Rating = rating, Comment = text }, cancellationToken);
             if (result.Ok)
-            {
-                _reviewed.Remember(id);
-                return RedirectToPage(new { reviewed = id });
-            }
+                return RedirectToPage();
 
-            if (result.StatusCode == StatusCodes.Status409Conflict)
-                _reviewed.Remember(id);
             Error = result.Error ?? UiCopy.GenericError;
         }
 

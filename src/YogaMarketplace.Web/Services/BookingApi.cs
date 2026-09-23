@@ -88,7 +88,8 @@ public sealed record BookingDto(
     string PaymentStatus,
     string? GatewayOrderId,
     string? GatewayPaymentId,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    bool HasReviewed);
 
 public sealed class CreateReviewDto
 {
