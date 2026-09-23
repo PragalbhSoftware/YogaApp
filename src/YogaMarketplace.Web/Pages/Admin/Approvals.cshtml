@@ -1,0 +1,63 @@
+@page "/admin/approvals"
+@model YogaMarketplace.Web.Pages.Admin.ApprovalsModel
+@{
+    ViewData["Title"] = UiCopy.ApprovalsTitle;
+}
+
+<h1>@UiCopy.ApprovalsTitle</h1>
+<p class="lead">@UiCopy.ApprovalsLead</p>
+<p class="muted">@UiCopy.ListCap</p>
+
+<nav aria-label="@UiCopy.InstructorStatus">
+    <ul class="pills">
+        @foreach (var status in ProviderApprovalStatuses.Filters)
+        {
+            <li>
+                <a class="pill @(Model.StatusKnown && Model.Status == status ? "active" : null)"
+                   asp-page="/Admin/Approvals"
+                   asp-route-status="@status">@ProviderApprovalStatuses.FilterLabel(status)</a>
+            </li>
+        }
+    </ul>
+</nav>
+
+@if (!string.IsNullOrEmpty(Model.Notice))
+{
+    <p class="hint" role="status">@Model.Notice</p>
+}
+
+@if (!string.IsNullOrEmpty(Model.Error))
+{
+    <p class="alert" role="alert">@Model.Error</p>
+}
+
+@if (string.IsNullOrEmpty(Model.Error) && Model.Providers.Count == 0)
+{
+    <p role="status">@UiCopy.NoApprovals</p>
+}
+else if (Model.Providers.Count > 0)
+{
+    @foreach (var provider in Model.Providers)
+    {
+        <article class="card" data-provider-id="@provider.Id" data-status="@provider.Status" data-provider-name="@provider.DisplayName" data-reason="@provider.RejectionReason">
+            <h2>@provider.DisplayName</h2>
+            <partial name="_AdminProvider" model="provider" />
+            @if (AdminProviderText.CanVerify(provider.Status))
+            {
+                <form method="post" data-action="verify" asp-page-handler="Verify" asp-route-id="@provider.Id" asp-route-status="@Model.Status">
+                    <button type="submit">@UiCopy.VerifyProvider</button>
+                </form>
+            }
+            @if (AdminProviderText.CanReject(provider.Status))
+            {
+                <form method="post" data-action="reject" asp-page-handler="Reject" asp-route-id="@provider.Id" asp-route-status="@Model.Status">
+                    <div class="field">
+                        <label for="reason-@provider.Id">@UiCopy.RejectionReason</label>
+                        <textarea id="reason-@provider.Id" name="Reason" maxlength="@AdminInput.MaxRejectionReasonLength" rows="3"></textarea>
+                    </div>
+                    <button type="submit" class="secondary">@UiCopy.RejectProvider</button>
+                </form>
+            }
+        </article>
+    }
+}

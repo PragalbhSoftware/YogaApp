@@ -1,0 +1,79 @@
+@page "/admin/users"
+@model YogaMarketplace.Web.Pages.Admin.Users.UsersModel
+@{
+    ViewData["Title"] = UiCopy.UsersTitle;
+}
+
+<h1>@UiCopy.UsersTitle</h1>
+<p class="lead">@UiCopy.UsersLead</p>
+<p class="muted">@UiCopy.ListCap</p>
+
+<form method="get" class="card">
+    <div class="field">
+        <label for="q">@UiCopy.Query</label>
+        <input id="q" name="q" value="@Model.Query" maxlength="80" autocomplete="off" />
+    </div>
+    <div class="field">
+        <label for="role">@UiCopy.Role</label>
+        <select id="role" name="role">
+            @if (string.IsNullOrEmpty(Model.Role))
+            {
+                <option value="" selected>@UiCopy.AnyRole</option>
+            }
+            else
+            {
+                <option value="">@UiCopy.AnyRole</option>
+            }
+            @foreach (var role in AdminRoleFilters.All)
+            {
+                if (Model.Role == role)
+                {
+                    <option value="@role" selected>@AdminRoleFilters.Label(role)</option>
+                }
+                else
+                {
+                    <option value="@role">@AdminRoleFilters.Label(role)</option>
+                }
+            }
+        </select>
+    </div>
+    <button type="submit">@UiCopy.Search</button>
+</form>
+
+@if (!string.IsNullOrEmpty(Model.Error))
+{
+    <p class="alert" role="alert">@Model.Error</p>
+}
+
+@if (string.IsNullOrEmpty(Model.Error) && Model.Users.Count == 0)
+{
+    <p role="status">@UiCopy.NoUsers</p>
+}
+else if (Model.Users.Count > 0)
+{
+    @foreach (var user in Model.Users)
+    {
+        var name = string.IsNullOrWhiteSpace(user.Name) ? user.Phone : user.Name;
+        <article class="card" data-user-id="@user.Id" data-role="@user.Role">
+            <h2>@name</h2>
+            <dl class="summary">
+                <div>
+                    <dt>@UiCopy.Phone</dt>
+                    <dd>@user.Phone</dd>
+                </div>
+                <div>
+                    <dt>@UiCopy.Role</dt>
+                    <dd>@AdminRoleFilters.Label(user.Role)</dd>
+                </div>
+                @if (user.Provider is AdminUserProviderDto provider)
+                {
+                    <div>
+                        <dt>@UiCopy.ProviderSingular</dt>
+                        <dd>@provider.DisplayName · @provider.Status · @provider.Area</dd>
+                    </div>
+                }
+            </dl>
+            <a class="button" asp-page="/Admin/Users/Detail" asp-route-id="@user.Id" asp-route-q="@Model.Query" asp-route-role="@Model.Role">@UiCopy.ViewUser</a>
+        </article>
+    }
+}

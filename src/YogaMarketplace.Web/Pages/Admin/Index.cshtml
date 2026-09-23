@@ -1,0 +1,52 @@
+@page "/admin"
+@model YogaMarketplace.Web.Pages.Admin.DashboardModel
+@{
+    ViewData["Title"] = UiCopy.AdminDashboardTitle;
+    var role = User.FindFirst(ClaimTypes.Role)?.Value;
+}
+
+<h1>@UiCopy.AdminDashboardTitle</h1>
+<p class="lead">@UiCopy.AdminDashboardLead</p>
+@if (!string.IsNullOrEmpty(role))
+{
+    <p class="muted" data-role="@role">@string.Format(UiCopy.SignedInRole, role)</p>
+}
+
+@if (!string.IsNullOrEmpty(Model.Error))
+{
+    <p class="alert" role="alert">@Model.Error</p>
+}
+else if (Model.Summary is AdminReportDto summary && summary.PendingPayouts is PendingPayoutTotalsDto payouts && summary.BookingsByStatus is List<BookingStatusCountDto> rows)
+{
+    <h2>@UiCopy.GmvPaid</h2>
+    <p data-gmv="@AdminFormat.Decimal(summary.GmvPaid)" data-currency="@summary.Currency">
+        @Money.Inr(summary.GmvPaid) · @summary.Currency
+    </p>
+
+    <h2>@UiCopy.PendingPayouts</h2>
+    <dl class="summary" data-payout-count="@payouts.Count" data-payout-gross="@AdminFormat.Decimal(payouts.Gross)" data-payout-net="@AdminFormat.Decimal(payouts.Net)">
+        <div>
+            <dt>@UiCopy.PayoutCount</dt>
+            <dd>@payouts.Count</dd>
+        </div>
+        <div>
+            <dt>@UiCopy.PayoutGross</dt>
+            <dd>@Money.Inr(payouts.Gross)</dd>
+        </div>
+        <div>
+            <dt>@UiCopy.PayoutNet</dt>
+            <dd>@Money.Inr(payouts.Net)</dd>
+        </div>
+    </dl>
+
+    <h2>@UiCopy.BookingsByStatus</h2>
+    <dl class="summary">
+        @foreach (var row in rows)
+        {
+            <div data-status="@row.Status" data-count="@row.Count">
+                <dt>@BookingStatusText.FilterLabel(row.Status)</dt>
+                <dd>@row.Count</dd>
+            </div>
+        }
+    </dl>
+}

@@ -1,0 +1,77 @@
+@model YogaMarketplace.Web.Services.AdminProviderDto
+<dl class="summary">
+    <div>
+        <dt>@UiCopy.Phone</dt>
+        <dd>@Model.Phone</dd>
+    </div>
+    <div>
+        <dt>@UiCopy.Area</dt>
+        <dd>@Model.Area · @Model.City</dd>
+    </div>
+    <div>
+        <dt>@UiCopy.InstructorStatus</dt>
+        <dd>@Model.Status</dd>
+    </div>
+    @if (!string.IsNullOrWhiteSpace(Model.Email))
+    {
+        <div>
+            <dt>@UiCopy.Email</dt>
+            <dd>@Model.Email</dd>
+        </div>
+    }
+    @if (Model.Age is int age)
+    {
+        <div>
+            <dt>@UiCopy.Age</dt>
+            <dd>@age</dd>
+        </div>
+    }
+    @if (!string.IsNullOrWhiteSpace(Model.StudioAddress))
+    {
+        <div>
+            <dt>@UiCopy.StudioAddress</dt>
+            <dd>@Model.StudioAddress</dd>
+        </div>
+    }
+    @if (Model.ReviewedAt is DateTimeOffset reviewed)
+    {
+        <div>
+            <dt>@UiCopy.ReviewedAt</dt>
+            <dd>@AdminFormat.When(reviewed)</dd>
+        </div>
+    }
+    @if (!string.IsNullOrWhiteSpace(Model.RejectionReason))
+    {
+        <div>
+            <dt>@UiCopy.RejectionReasonLabel</dt>
+            <dd>@Model.RejectionReason</dd>
+        </div>
+    }
+</dl>
+@if (!string.IsNullOrWhiteSpace(Model.Bio))
+{
+    <p>@Model.Bio</p>
+}
+@{
+    var modes = AdminProviderText.Modes(Model);
+}
+@if (modes.Count > 0)
+{
+    <ul class="slots">
+        @foreach (var mode in modes)
+        {
+            <li>@mode.Mode@(mode.Rate is decimal rate ? " · " + Money.Inr(rate) : "")</li>
+        }
+    </ul>
+}
+@{
+    var meet = AdminLinks.Http(Model.GoogleMeetLink);
+}
+@if (meet is not null)
+{
+    <p><a href="@meet">@UiCopy.MeetLink</a></p>
+}
+else if (!string.IsNullOrWhiteSpace(Model.GoogleMeetLink))
+{
+    <p class="muted">@Model.GoogleMeetLink</p>
+}

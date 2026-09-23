@@ -45,6 +45,20 @@ internal sealed class ApiExchange
         }
     }
 
+    public async Task<ApiResult<T>> PatchAsync<T>(string path, object body, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var response = await _http.PatchAsJsonAsync(path, body, Json, cancellationToken);
+            return await ReadAsync<T>(response, path, cancellationToken);
+        }
+        catch (Exception ex) when (IsTransportFailure(ex, cancellationToken))
+        {
+            _logger.LogWarning(ex, "Marketplace API PATCH {Path} was unreachable.", path);
+            return ApiResult<T>.Down(UiCopy.ApiUnreachable);
+        }
+    }
+
     private async Task<ApiResult<T>> ReadAsync<T>(HttpResponseMessage response, string path, CancellationToken cancellationToken)
     {
         if (!response.IsSuccessStatusCode)

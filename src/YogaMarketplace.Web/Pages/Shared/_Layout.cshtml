@@ -19,7 +19,11 @@
                         ? User.FindFirst(ClaimTypes.MobilePhone)?.Value
                         : User.Identity.Name;
                     <span class="who">@who</span>
-                    @if (User.IsInRole(AccountRoles.Provider))
+                    @if (User.IsInRole(AccountRoles.Admin))
+                    {
+                        <partial name="_AdminNav" />
+                    }
+                    else if (User.IsInRole(AccountRoles.Provider))
                     {
                         <a asp-page="/Instructor/Bookings">@UiCopy.InstructorInboxNav</a>
                     }

@@ -1,0 +1,13 @@
+@{
+    var path = Context.Request.Path;
+    string? Current(string prefix, bool exact = false) =>
+        exact
+            ? path.Equals(prefix, StringComparison.OrdinalIgnoreCase) ? "page" : null
+            : path.StartsWithSegments(prefix, StringComparison.OrdinalIgnoreCase) ? "page" : null;
+}
+<a asp-page="/Admin/Index" aria-current="@Current("/admin", exact: true)">@UiCopy.AdminDashboardNav</a>
+<a asp-page="/Admin/Approvals" aria-current="@Current("/admin/approvals")">@UiCopy.AdminApprovalsNav</a>
+<a asp-page="/Admin/Users/Index" aria-current="@Current("/admin/users")">@UiCopy.AdminUsersNav</a>
+<a asp-page="/Admin/Bookings/Index" aria-current="@Current("/admin/bookings")">@UiCopy.AdminBookingsNav</a>
+<a asp-page="/Admin/Transactions" aria-current="@Current("/admin/transactions")">@UiCopy.AdminTransactionsNav</a>
+<a asp-page="/Admin/Masters" aria-current="@Current("/admin/masters")">@UiCopy.AdminMastersNav</a>

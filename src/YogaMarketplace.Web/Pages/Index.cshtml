@@ -7,7 +7,11 @@
 <h1>@UiCopy.HomeTitle</h1>
 <p class="lead">@UiCopy.HomeLead</p>
 
-@if (User.IsInRole(AccountRoles.Provider))
+@if (User.IsInRole(AccountRoles.Admin))
+{
+    <a class="button" asp-page="/Admin/Index">@UiCopy.OpenAdmin</a>
+}
+else if (User.IsInRole(AccountRoles.Provider))
 {
     <a class="button" asp-page="/Instructor/Bookings">@UiCopy.InstructorInboxTitle</a>
 }

@@ -1,0 +1,102 @@
+@page "/admin/transactions"
+@model YogaMarketplace.Web.Pages.Admin.TransactionsModel
+@{
+    ViewData["Title"] = UiCopy.TransactionsTitle;
+}
+
+<h1>@UiCopy.TransactionsTitle</h1>
+<p class="lead">@UiCopy.TransactionsLead</p>
+<p class="muted">@UiCopy.ListCap</p>
+
+@if (!string.IsNullOrEmpty(Model.Error))
+{
+    <p class="alert" role="alert">@Model.Error</p>
+}
+
+<h2>@UiCopy.PaymentsHeading</h2>
+<nav aria-label="@UiCopy.PaymentStatus">
+    <ul class="pills">
+        <li>
+            <a class="pill @(Model.PaymentStatus is null ? "active" : null)"
+               asp-page="/Admin/Transactions"
+               asp-route-payouts="@Model.PayoutStatus">@UiCopy.FilterAll</a>
+        </li>
+        @foreach (var status in AdminPaymentStatuses.Filters)
+        {
+            <li>
+                <a class="pill @(Model.PaymentStatus == status ? "active" : null)"
+                   asp-page="/Admin/Transactions"
+                   asp-route-payments="@status"
+                   asp-route-payouts="@Model.PayoutStatus">@AdminPaymentStatuses.FilterLabel(status)</a>
+            </li>
+        }
+    </ul>
+</nav>
+@if (Model.PaymentsLoaded && Model.Payments.Count == 0)
+{
+    <p role="status">@UiCopy.NoPayments</p>
+}
+else if (Model.Payments.Count > 0)
+{
+    @foreach (var payment in Model.Payments)
+    {
+        <article class="card" data-readonly="true" data-payment-id="@payment.Id" data-status="@payment.Status">
+            <h3>@Money.Inr(payment.Amount) · @payment.Status</h3>
+            <p>@payment.ProviderName</p>
+            <p class="muted">@(string.IsNullOrWhiteSpace(payment.CustomerName) ? payment.CustomerPhone : payment.CustomerName)</p>
+            <p class="muted">@AdminFormat.When(payment.CreatedAt)</p>
+            @if (!string.IsNullOrWhiteSpace(payment.GatewayOrderId))
+            {
+                <p class="muted">@UiCopy.GatewayOrder @payment.GatewayOrderId</p>
+            }
+            <a class="button secondary" asp-page="/Admin/Bookings/Detail" asp-route-id="@payment.BookingId">@UiCopy.ViewBooking</a>
+        </article>
+    }
+}
+
+<h2>@UiCopy.PayoutsHeading</h2>
+<nav aria-label="@UiCopy.PayoutStatus">
+    <ul class="pills">
+        @foreach (var status in PayoutStatuses.Filters)
+        {
+            <li>
+                <a class="pill @(Model.PayoutStatus == status ? "active" : null)"
+                   asp-page="/Admin/Transactions"
+                   asp-route-payments="@Model.PaymentStatus"
+                   asp-route-payouts="@status">@PayoutStatuses.FilterLabel(status)</a>
+            </li>
+        }
+    </ul>
+</nav>
+@if (Model.PayoutsLoaded && Model.Payouts.Count == 0)
+{
+    <p role="status">@UiCopy.NoPayouts</p>
+}
+else if (Model.Payouts.Count > 0)
+{
+    @foreach (var payout in Model.Payouts)
+    {
+        <article class="card" data-readonly="true" data-payout-id="@payout.Id" data-status="@payout.Status">
+            <h3>@payout.ProviderName</h3>
+            <dl class="summary">
+                <div>
+                    <dt>@UiCopy.PayoutGross</dt>
+                    <dd>@Money.Inr(payout.GrossAmount)</dd>
+                </div>
+                <div>
+                    <dt>@UiCopy.Fee</dt>
+                    <dd>@AdminFormat.Decimal(payout.FeePercent)% · @Money.Inr(payout.FeeAmount)</dd>
+                </div>
+                <div>
+                    <dt>@UiCopy.PayoutNet</dt>
+                    <dd>@Money.Inr(payout.NetAmount)</dd>
+                </div>
+                <div>
+                    <dt>@UiCopy.PayoutStatus</dt>
+                    <dd>@payout.Status</dd>
+                </div>
+            </dl>
+            <a class="button secondary" asp-page="/Admin/Bookings/Detail" asp-route-id="@payout.BookingId">@UiCopy.ViewBooking</a>
+        </article>
+    }
+}
