@@ -1,6 +1,6 @@
 # Yoga Marketplace
 
-Mumbai-first yoga instructor marketplace. The API covers OTP auth, the domain model, EF Core, SQL Server, verified browse, and **pay-at-book** (Razorpay). Customers authenticate with a one-time passcode, instructors can register (they stay pending until a later admin slice), and verified instructors can be browsed with **mode-specific** slots (Home, Studio, Online). A captured payment creates a booking in `PendingAccept`.
+Mumbai-first yoga instructor marketplace. The API covers OTP auth, the domain model, EF Core, SQL Server, verified browse, **pay-at-book** (Razorpay), the instructor handshake, and admin oversight. Customers authenticate with a one-time passcode, instructors register as **Pending** until an admin verifies them, and verified instructors can be browsed with **mode-specific** slots (Home, Studio, Online). A captured payment creates a booking in `PendingAccept`.
 
 Yoga is the first `Category`. The model is generic enough for another category later. The customer web app is `src/YogaMarketplace.Web`: phone OTP, Mumbai area, verified instructors, then book and pay. The browser never calls the Razorpay webhook.
 
@@ -8,8 +8,8 @@ Yoga is the first `Category`. The model is generic enough for another category l
 
 | Project | Role |
 | --- | --- |
-| `src/YogaMarketplace.Api` | Controllers, OTP/JWT, browse, slots, book and pay, instructor handshake |
-| `src/YogaMarketplace.Domain` | Entities and booking rules |
+| `src/YogaMarketplace.Api` | Controllers, OTP/JWT, browse, slots, book and pay, instructor handshake, admin APIs |
+| `src/YogaMarketplace.Domain` | Entities, booking rules, provider approval, catalog edits |
 | `src/YogaMarketplace.Infrastructure` | EF Core, SQL Server, seed |
 | `src/YogaMarketplace.Web` | Razor Pages app (OTP, area, browse, book and pay, instructor requests, reviews) |
 | `tests/YogaMarketplace.Api.Tests` | Domain rules and API tests (SQLite) |
@@ -106,7 +106,7 @@ SMS is a log stub (`LoggingOtpSender`). In Development the code is fixed at `123
 | Who | Phone | Notes |
 | --- | --- | --- |
 | Ananya Desai | `+919876543210` | Verified, Bandra, Home ₹899 / Studio ₹749 / Online ₹599, Google Meet link on her own profile |
-| Marketplace admin | `+919000000001` | Seeded user only. Admin APIs are a later slice |
+| Marketplace admin | `+919000000001` | Seeded when `Seed:DemoData` is on. Sign in as an existing user (`isNewUser: false`). The JWT role is `Admin` |
 
 New customer: `name` + `gender` + `phone`, then OTP. Existing customer: `phone`, then OTP. Slots are Mumbai local time (`Asia/Kolkata`), separate per Home / Studio / Online. Bookings are not seeded.
 
@@ -155,7 +155,7 @@ Rules enforced here:
 
 ## Instructor handshake (local)
 
-Provider JWT, and only for that instructor's booking. Customer JWT for the review. No admin routes in this slice. The same OTP sign-in issues that JWT: a provider lands on `/instructor/bookings`, and the customer leaves the review on `/bookings`.
+Provider JWT, and only for that instructor's booking. Customer JWT for the review. Admin oversight is a separate set of routes. The same OTP sign-in issues that JWT: a provider lands on `/instructor/bookings`, and the customer leaves the review on `/bookings`.
 
 | Method | Path | Auth | Purpose |
 | --- | --- | --- | --- |
@@ -202,7 +202,46 @@ curl -s -X POST http://localhost:5080/api/bookings/orders \
 
 Sign `orderId|paymentId` with `dev-only-not-a-live-key-secret` (the Development placeholder) and `POST /api/bookings/confirm`.
 
-Cancel / reschedule free-window hours and the platform fee are stored on `MarketplacePolicy` (12 hours, 15% fee, 50% late-cancel fee). The note says they are TBD. The window is not enforced until ops confirms it.
+Cancel / reschedule free-window hours and the platform fee are stored on `MarketplacePolicy` (12 hours, 15% fee, 50% late-cancel fee). The note says they are TBD. Admin can patch the stored numbers (see the admin section). The free window is enforced in a later slice.
+
+## Admin API (local)
+
+Admin JWT only. Sign in with the seeded admin phone above (`POST /api/auth/otp/request` with `isNewUser: false`, then verify). Every route below is under `/api/admin`. A missing token is `401` `{ error: "Sign in required." }`. A customer or provider token is `403` `{ error: "Admin access required." }`. Other failures use the same `{ error }` body as the rest of the API.
+
+Provider, booking, payment, and payout lists return at most 100 rows, newest first. User search is ordered by name, then phone, and capped at 100. Area and category lists return every row, ordered by name. There is no cursor. The web app is unchanged; a later admin UI can call these routes.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/admin/providers?status=` | Instructors. Omitted or `Pending` is the approval queue. Also `Verified`, `Rejected`, or `all`. |
+| GET | `/api/admin/providers/{id}` | Review record, including the Google Meet link and rejection reason. |
+| POST | `/api/admin/providers/{id}/verify` | `Pending` or `Rejected` → `Verified`. Clears the reason. A second call is a no-op. |
+| POST | `/api/admin/providers/{id}/reject` | Body `{ "reason": "..." }` is optional, max 300 characters. `Verified` can be rejected and then drops out of public browse. |
+| GET | `/api/admin/users?q=&role=` | Customers and providers. `q` matches name, display name, or phone. `role` is `Customer`, `Provider`, or `Admin` (admins are omitted unless `role=Admin`). |
+| GET | `/api/admin/users/{id}` | That user, plus the instructor record when they have one. No OTP hash, code, or password field exists on the user. |
+| GET | `/api/admin/bookings?status=&providerId=&from=&to=` | Read-only. `from` / `to` are slot dates (`yyyy-MM-dd`), inclusive. |
+| GET | `/api/admin/bookings/{id}` | Customer, slot, payment, review rating, and payout net when present. |
+| GET | `/api/admin/payments?status=` | `Paid`, `Refunded`, and `Failed`. Omit `status` for all three. `Pending` is rejected. |
+| GET | `/api/admin/payouts?status=` | Read-only. Omitted `status` is `Pending`. Also `Exported` or `Paid`. |
+| GET | `/api/admin/reports/summary` | Booking count per status, GMV (sum of `Paid` amounts), and pending payout count / gross / net. |
+| GET | `/api/admin/areas` | Every neighbourhood, including inactive. |
+| POST | `/api/admin/areas` | `{ "name": "Colaba", "city": "Mumbai" }`. City defaults to Mumbai. Another city is `400`. Duplicate name is `409`. |
+| PATCH | `/api/admin/areas/{id}` | `{ "name": "...", "isActive": false }`. At least one field. Inactive areas leave `GET /api/areas`. |
+| GET | `/api/admin/categories` | Includes inactive. |
+| PATCH | `/api/admin/categories/{id}` | `{ "name": "Hatha Yoga" }` changes the label only. Slug stays `yoga`. |
+| GET | `/api/admin/policy` | Same shape as `GET /api/policy`. |
+| PATCH | `/api/admin/policy` | Any of `platformFeePercent`, `cancelFreeWindowHours`, `rescheduleFreeWindowHours`, `lateCancelFeePercent`, `policyNote`. Omitted fields stay. Percents are 0–100 with at most 2 decimal places. Windows are 0–168 hours. |
+
+Tradeoffs for the web frontend:
+
+- Bookings, payments, and payouts are read-only. Cancel, reschedule, no-show, and refund stay on the domain and the instructor decline path. This slice does not add an admin force-cancel or a second refund call.
+- Rejecting a verified instructor removes them from `GET /api/providers`. Bookings they already have stay. Verifying a rejected instructor is allowed and clears the reason.
+- A policy edit applies to the next completion. `PayoutPending` rows keep the fee percent stored when the instructor completed the booking.
+- Deactivating an area hides it from the public area list. Instructors already placed there stay browsable.
+- Category slug is not editable, so `?category=yoga` and `Api:CategorySlug` keep working after a label change.
+- GMV is the sum of payments still `Paid`. Refunded and failed amounts are not included.
+- The demo admin user is seeded only when `Seed:DemoData` is true. Production does not create that user and this slice does not add a production admin bootstrap.
+- Admin provider and booking payloads include the Google Meet link so ops can review online sessions. Public provider JSON still omits it.
+- Provider, booking, payment, and payout lists load the filtered rows, then keep the newest 100. Summary totals stay aggregate queries: booking counts, paid GMV, and pending payout sums.
 
 ## Deploy to PeoplesHost Plesk (`YogaDemo.psoftcs.com`)
 
@@ -254,7 +293,7 @@ Target is IIS on Plesk with SQL Server, subdomain `YogaDemo.psoftcs.com`.
 1. Auth, domain, EF, browse/slots — already in the repo
 2. Customer web (OTP, area, verified browse, book and pay) and book + pay HTTP — already in the repo. Pay-at-book creates `PendingAccept`
 3. Accept / decline / complete, reviews, payout pending, and refund of a captured payment whose slot was lost — API and the instructor/customer pages are in the repo. Payout export UI is later
-4. Admin approve/reject and oversight
+4. Admin approve/reject, users, bookings, payments, masters, and summary report — this API slice. No admin web UI yet
 5. Reschedule, cancel, payout export
 
 ## Out of scope
