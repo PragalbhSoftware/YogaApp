@@ -50,7 +50,7 @@ internal sealed class ApiExchange
         if (!response.IsSuccessStatusCode)
         {
             _logger.LogWarning("Marketplace API {Path} returned {Status}.", path, (int)response.StatusCode);
-            return ApiResult<T>.Fail(await ReadErrorAsync(response, cancellationToken));
+            return ApiResult<T>.Fail(await ReadErrorAsync(response, cancellationToken), (int)response.StatusCode);
         }
 
         try

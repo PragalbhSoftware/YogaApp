@@ -21,40 +21,42 @@
 {
     <p class="alert" role="alert">@Model.Error</p>
 }
-else if (Model.Bookings.Count == 0)
+
+@if (string.IsNullOrEmpty(Model.Error) && Model.Bookings.Count == 0)
 {
     <p>@UiCopy.NoBookings</p>
     <a class="button" asp-page="/Instructors/Index">@UiCopy.BrowseTitle</a>
 }
-else
+else if (Model.Bookings.Count > 0)
 {
     @foreach (var booking in Model.Bookings)
     {
-        <article class="card" data-booking-id="@booking.Id" data-status="@booking.Status">
+        <article class="card" data-booking-id="@booking.Id" data-slot-id="@booking.SlotId" data-status="@booking.Status">
             <h2>@booking.ProviderName</h2>
             <p class="muted">@booking.ServiceTitle</p>
-            <p>@booking.Date.ToString("dddd d MMM") · @booking.Start–@booking.End</p>
-            <p>@booking.Mode · @Money.Inr(booking.Amount)</p>
-            @if (booking.Status == BookingStatuses.PendingAccept)
+            <partial name="_SessionFacts" model="booking" />
+            @if (Model.ShowReviewForm(booking))
             {
-                <p>@UiCopy.StatusPendingAccept</p>
+                <form method="post" class="review" data-action="review" asp-page-handler="Review" asp-route-id="@booking.Id">
+                    <div class="field">
+                        <label for="rating-@booking.Id">@UiCopy.Rating</label>
+                        <select id="rating-@booking.Id" name="Rating">
+                            @for (var rating = CustomerReviews.MaxRating; rating >= CustomerReviews.MinRating; rating--)
+                            {
+                                <option value="@rating">@rating</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="comment-@booking.Id">@UiCopy.ReviewComment</label>
+                        <textarea id="comment-@booking.Id" name="Comment" maxlength="@CustomerReviews.MaxCommentLength"></textarea>
+                    </div>
+                    <button type="submit">@UiCopy.SubmitReview</button>
+                </form>
             }
-            <p class="muted">@booking.Status · @booking.PaymentStatus</p>
-            @if (!string.IsNullOrWhiteSpace(booking.HomeAddress))
+            else if (Model.ShowReviewedNote(booking))
             {
-                <p><strong>@UiCopy.HomeAddress.</strong> @booking.HomeAddress</p>
-            }
-            @if (!string.IsNullOrWhiteSpace(booking.Landmark))
-            {
-                <p><strong>@UiCopy.Landmark.</strong> @booking.Landmark</p>
-            }
-            @if (!string.IsNullOrWhiteSpace(booking.StudioAddress))
-            {
-                <p><strong>@UiCopy.StudioAddress.</strong> @booking.StudioAddress</p>
-            }
-            @if (!string.IsNullOrWhiteSpace(booking.MeetLink))
-            {
-                <p><a href="@booking.MeetLink">@UiCopy.MeetLink</a></p>
+                <p class="hint" role="status">@UiCopy.ReviewedAlready</p>
             }
         </article>
     }

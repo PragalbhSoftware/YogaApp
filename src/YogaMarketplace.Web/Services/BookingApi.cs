@@ -5,11 +5,37 @@ namespace YogaMarketplace.Web.Services;
 public static class BookingStatuses
 {
     public const string PendingAccept = "PendingAccept";
+    public const string Upcoming = "Upcoming";
+    public const string Declined = "Declined";
+    public const string Completed = "Completed";
+    public const string NoShow = "NoShow";
+    public const string Cancelled = "Cancelled";
+
+    public static readonly string[] All =
+    [
+        PendingAccept,
+        Upcoming,
+        Declined,
+        Completed,
+        NoShow,
+        Cancelled
+    ];
+
+    public static bool TryNormalize(string? status, out string? canonical)
+    {
+        canonical = null;
+        if (string.IsNullOrWhiteSpace(status))
+            return true;
+
+        canonical = All.FirstOrDefault(item => item.Equals(status.Trim(), StringComparison.OrdinalIgnoreCase));
+        return canonical is not null;
+    }
 }
 
 public static class PaymentStatuses
 {
     public const string Paid = "Paid";
+    public const string Refunded = "Refunded";
 }
 
 public sealed class CreateBookingOrderDto
@@ -64,14 +90,33 @@ public sealed record BookingDto(
     string? GatewayPaymentId,
     DateTimeOffset CreatedAt);
 
+public sealed class CreateReviewDto
+{
+    public int Rating { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Comment { get; set; }
+}
+
+public sealed record ReviewDto(
+    Guid Id,
+    Guid BookingId,
+    Guid ProviderId,
+    int Rating,
+    string? Comment,
+    DateTimeOffset CreatedAt);
+
 /// <summary>
-/// Customer booking calls. The Razorpay webhook stays on the API; this client does not call it.
+/// Customer booking calls: checkout, the customer's list, and one review after completion.
+/// Instructor accept, decline, and complete are <see cref="IInstructorBookingApi"/>.
+/// The Razorpay webhook stays on the API; this client does not call it.
 /// </summary>
 public interface IBookingApi
 {
     Task<ApiResult<CheckoutOrderDto>> CreateOrderAsync(CreateBookingOrderDto request, CancellationToken cancellationToken);
     Task<ApiResult<BookingDto>> ConfirmAsync(ConfirmPaymentDto request, CancellationToken cancellationToken);
     Task<ApiResult<List<BookingDto>>> ListMineAsync(CancellationToken cancellationToken);
+    Task<ApiResult<ReviewDto>> CreateReviewAsync(Guid bookingId, CreateReviewDto request, CancellationToken cancellationToken);
 }
 
 public sealed class BookingApiClient : IBookingApi
@@ -95,4 +140,7 @@ public sealed class BookingApiClient : IBookingApi
 
     public Task<ApiResult<List<BookingDto>>> ListMineAsync(CancellationToken cancellationToken) =>
         _exchange.GetAsync<List<BookingDto>>(MinePath, cancellationToken);
+
+    public Task<ApiResult<ReviewDto>> CreateReviewAsync(Guid bookingId, CreateReviewDto request, CancellationToken cancellationToken) =>
+        _exchange.PostAsync<ReviewDto>($"api/bookings/{bookingId}/reviews", request, cancellationToken);
 }

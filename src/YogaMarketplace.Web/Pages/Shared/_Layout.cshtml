@@ -19,9 +19,16 @@
                         ? User.FindFirst(ClaimTypes.MobilePhone)?.Value
                         : User.Identity.Name;
                     <span class="who">@who</span>
-                    <a asp-page="/Areas/Select">@UiCopy.AreaNav</a>
-                    <a asp-page="/Instructors/Index">@UiCopy.ProviderPlural</a>
-                    <a asp-page="/Bookings/Index">@UiCopy.BookingsNav</a>
+                    @if (User.IsInRole(AccountRoles.Provider))
+                    {
+                        <a asp-page="/Instructor/Bookings">@UiCopy.InstructorInboxNav</a>
+                    }
+                    else
+                    {
+                        <a asp-page="/Areas/Select">@UiCopy.AreaNav</a>
+                        <a asp-page="/Instructors/Index">@UiCopy.ProviderPlural</a>
+                        <a asp-page="/Bookings/Index">@UiCopy.BookingsNav</a>
+                    }
                     <form method="post" asp-page="/Account/SignOut">
                         <button type="submit" class="link">@UiCopy.SignOut</button>
                     </form>

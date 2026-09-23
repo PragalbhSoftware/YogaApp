@@ -138,7 +138,8 @@ button.selected {
 }
 
 input,
-select {
+select,
+textarea {
   width: 100%;
   min-height: 2.75rem;
   padding: 0.5rem 0.75rem;
@@ -147,6 +148,14 @@ select {
   background: #fff;
   font: inherit;
   color: var(--ink);
+}
+
+textarea { min-height: 6rem; }
+
+.review {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
 }
 
 label { display: block; font-weight: 600; margin-bottom: 0.3rem; }
@@ -239,6 +248,7 @@ body:has(input[name="AccountKind"][value="new"]:checked) #new-fields { display: 
 
 input:focus,
 select:focus,
+textarea:focus,
 button:focus-visible,
 a:focus-visible {
   outline: 2px solid var(--accent);

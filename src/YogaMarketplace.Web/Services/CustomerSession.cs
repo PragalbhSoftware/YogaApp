@@ -6,6 +6,13 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace YogaMarketplace.Web.Services;
 
+public static class AccountRoles
+{
+    public const string Customer = "Customer";
+    public const string Provider = "Provider";
+    public const string Admin = "Admin";
+}
+
 public static class AuthSession
 {
     public const string ApiTokenClaim = "api_token";
@@ -75,14 +82,19 @@ public static class SessionModes
 
 public static class CustomerFlow
 {
-    public static IActionResult AfterSignIn(HttpContext http, string? returnUrl, IUrlHelper url)
+    public static IActionResult AfterSignIn(HttpContext http, string? role, string? returnUrl, IUrlHelper url)
     {
         if (!string.IsNullOrEmpty(returnUrl) && url.IsLocalUrl(returnUrl))
             return new RedirectResult(returnUrl);
+        if (IsProvider(role))
+            return new RedirectToPageResult("/Instructor/Bookings");
         if (string.IsNullOrWhiteSpace(AreaCookie.Read(http.Request)))
             return new RedirectToPageResult("/Areas/Select");
         return new RedirectToPageResult("/Instructors/Index");
     }
+
+    public static bool IsProvider(string? role) =>
+        string.Equals(role, AccountRoles.Provider, StringComparison.Ordinal);
 }
 
 public static class Money
