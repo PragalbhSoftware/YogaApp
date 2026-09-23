@@ -20,6 +20,8 @@ public static class UiCopy
 
     public const string HomeTitle = "Find a yoga instructor";
     public const string HomeLead = "Sign in with your phone, choose a Mumbai area, then browse verified instructors for home, studio, or online sessions.";
+    public const string HomeDescription = "Find a verified yoga instructor in Mumbai for a home, studio, or online session.";
+    public const string OgLocale = "en_IN";
     public const string SignInCta = "Sign in with phone";
     public const string Continue = "Continue";
 
@@ -57,7 +59,12 @@ public static class UiCopy
     public const string NoAreas = "No areas are listed yet.";
 
     public const string BrowseTitle = "Instructors";
-    public const string BrowseLead = "Verified instructors only. Filter by area and session mode.";
+    public const string BrowseHeading = "Instructors in {0}";
+    public const string BrowseDocumentTitle = "Yoga instructors in {0}";
+    public const string BrowseDocumentTitleWithMode = "{0} yoga instructors in {1}";
+    public const string BrowseLead = "Verified yoga instructors in Mumbai. Compare home, studio, and online rates, then book.";
+    public const string BrowseDescription = "Verified yoga instructors in {0}, Mumbai. Compare home, studio, and online rates, then book an open slot.";
+    public const string BrowseDescriptionWithMode = "Verified {0} yoga instructors in {1}, Mumbai. See the rate and book an open slot.";
     public const string VerifiedOnly = "Verified only";
     public const string Area = "Area";
     public const string Mode = "Mode";
@@ -66,13 +73,27 @@ public static class UiCopy
     public const string ModeStudio = "Studio";
     public const string ModeOnline = "Online";
     public const string ApplyFilters = "Show instructors";
+    public const string FilterLegend = "Filter by area and mode";
+    public const string BookCta = "Book";
+    public const string BookInstructor = "Book {0}";
     public const string ViewProfile = "View profile and slots";
     public const string NoInstructors = "No verified instructors in {0} for {1} yet.";
+    public const string EmptyBrowseHint = "Try another area, or any mode.";
+    public const string OneResult = "1 instructor";
+    public const string ResultCount = "{0} instructors";
+    public const string UpdatingList = "Updating the list.";
     public const string AnyModePhrase = "any mode";
     public const string RatingLine = "{0} · {1} reviews";
 
     public const string ProfileTitle = "Instructor";
+    public const string ProfileDocumentTitle = "{0}, yoga in {1}";
+    public const string ProfileDescription = "{0} teaches yoga in {1}, Mumbai. See rates and book an open slot.";
+    public const string ProfileMissingDescription = "That yoga instructor is not listed in Mumbai.";
     public const string BackToList = "Back to instructors";
+    public const string RatesHeading = "Rates";
+    public const string Selected = "Selected";
+    public const string ShowingMode = "{0} is {1} a session. Choose an open time to book.";
+    public const string NoModes = "No session modes are listed.";
     public const string StudioAddress = "Studio";
     public const string Age = "Age";
     public const string AgeLabel = "Age {0}";

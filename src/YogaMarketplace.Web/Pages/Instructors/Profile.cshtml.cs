@@ -16,6 +16,20 @@ public class ProfileModel : PageModel
     public ProviderDetailDto? Instructor { get; private set; }
     public string Mode { get; private set; } = SessionModes.Home;
 
+    public string DocumentTitle => Instructor is null
+        ? UiCopy.ProfileTitle
+        : string.Format(UiCopy.ProfileDocumentTitle, Instructor.DisplayName, Instructor.Area);
+
+    public string MetaDescription => Instructor is null
+        ? UiCopy.ProfileMissingDescription
+        : string.Format(UiCopy.ProfileDescription, Instructor.DisplayName, Instructor.Area);
+
+    public ModeRateDto? SelectedRate =>
+        Instructor?.Modes.FirstOrDefault(mode => string.Equals(mode.Mode, Mode, StringComparison.OrdinalIgnoreCase));
+
+    public bool IsSelected(string mode) =>
+        string.Equals(mode, Mode, StringComparison.OrdinalIgnoreCase);
+
     public bool CanBook(SlotDto slot) => !SessionClock.HasEnded(slot.Date, slot.End);
     public List<SlotDto> Slots { get; private set; } = [];
     public DateOnly? From { get; private set; }

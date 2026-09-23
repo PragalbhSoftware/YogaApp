@@ -3,7 +3,32 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>@(ViewData["Title"] == null ? UiCopy.AppName : ViewData["Title"] + " · " + UiCopy.AppName)</title>
+    @{
+        var pageTitle = ViewData["Title"] == null ? UiCopy.AppName : ViewData["Title"] + " · " + UiCopy.AppName;
+        var description = ViewData["Description"] as string;
+        var indexable = PageSeo.IsIndexable(Context.Request.Path);
+        var canonical = $"{Context.Request.Scheme}://{Context.Request.Host}{Context.Request.PathBase}{Context.Request.Path}{Context.Request.QueryString}";
+    }
+    <title>@pageTitle</title>
+    @if (!string.IsNullOrWhiteSpace(description))
+    {
+        <meta name="description" content="@description" />
+    }
+    @if (indexable)
+    {
+        <meta property="og:title" content="@pageTitle" />
+        @if (!string.IsNullOrWhiteSpace(description))
+        {
+            <meta property="og:description" content="@description" />
+        }
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="@canonical" />
+        <meta property="og:locale" content="@UiCopy.OgLocale" />
+    }
+    else
+    {
+        <meta name="robots" content="@PageSeo.RobotsNoIndex" />
+    }
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
 </head>
 <body>
