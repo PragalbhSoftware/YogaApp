@@ -9,9 +9,9 @@ namespace YogaMarketplace.Api.Controllers;
 [Route("api/bookings")]
 public class BookingsController : ControllerBase
 {
-    private readonly BookingService _bookings;
+    private readonly IBookingService _bookings;
 
-    public BookingsController(BookingService bookings)
+    public BookingsController(IBookingService bookings)
     {
         _bookings = bookings;
     }

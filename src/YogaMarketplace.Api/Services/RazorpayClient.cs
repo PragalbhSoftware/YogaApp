@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
@@ -9,12 +10,19 @@ using YogaMarketplace.Domain;
 
 namespace YogaMarketplace.Api.Services;
 
+public static class RazorpayWire
+{
+    public const string CapturedStatus = "captured";
+    public const string PaymentCapturedEvent = "payment.captured";
+    public const string SignatureHeader = "X-Razorpay-Signature";
+}
+
 public sealed record RazorpayCreatedOrder(string OrderId, long AmountPaise, string Currency);
 
-public sealed record RazorpayPaymentSnapshot(string PaymentId, string OrderId, string Status, long AmountPaise, string Currency);
-
-public interface IRazorpayGateway
+public interface IRazorpayClient
 {
+    string KeyId { get; }
+
     Task<RazorpayCreatedOrder> CreateOrderAsync(
         long amountPaise,
         string currency,
@@ -22,26 +30,27 @@ public interface IRazorpayGateway
         IReadOnlyDictionary<string, string> notes,
         CancellationToken cancellationToken);
 
-    bool VerifyCheckoutSignature(string orderId, string paymentId, string signature);
+    /// <summary>
+    /// Checks the checkout HMAC. The live client also requires Razorpay to report this payment as captured for the order and amount.
+    /// </summary>
+    Task RequireCapturedCheckoutAsync(
+        string orderId,
+        string paymentId,
+        string signature,
+        long expectedAmountPaise,
+        string expectedCurrency,
+        CancellationToken cancellationToken);
 
     bool VerifyWebhookSignature(string rawBody, string? signature);
-
-    Task<RazorpayPaymentSnapshot?> FetchPaymentAsync(string paymentId, CancellationToken cancellationToken);
 }
 
-public static class RazorpaySignatures
+internal static class RazorpaySignatures
 {
     public static bool MatchesPayment(string secret, string orderId, string paymentId, string? signature) =>
         Matches(secret, $"{orderId}|{paymentId}", signature);
 
     public static bool MatchesWebhook(string secret, string rawBody, string? signature) =>
         Matches(secret, rawBody, signature);
-
-    public static string Sign(string secret, string payload)
-    {
-        using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(secret));
-        return Convert.ToHexString(hmac.ComputeHash(Encoding.UTF8.GetBytes(payload))).ToLowerInvariant();
-    }
 
     private static bool Matches(string secret, string payload, string? signature)
     {
@@ -52,9 +61,15 @@ public static class RazorpaySignatures
         var actual = Encoding.UTF8.GetBytes(signature.Trim().ToLowerInvariant());
         return expected.Length == actual.Length && CryptographicOperations.FixedTimeEquals(expected, actual);
     }
+
+    private static string Sign(string secret, string payload)
+    {
+        using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(secret));
+        return Convert.ToHexString(hmac.ComputeHash(Encoding.UTF8.GetBytes(payload))).ToLowerInvariant();
+    }
 }
 
-public static class RazorpayMoney
+internal static class RazorpayMoney
 {
     public static long ToPaise(decimal rupees)
     {
@@ -66,16 +81,18 @@ public static class RazorpayMoney
 }
 
 /// <summary>
-/// Local stand-in used when Razorpay:UseFakeGateway is true. Still verifies HMAC signatures.
+/// Local stand-in used when Razorpay:UseFakeGateway is true. A valid HMAC is treated as a captured payment. No call is made to Razorpay.
 /// </summary>
-public sealed class FakeRazorpayGateway : IRazorpayGateway
+public sealed class FakeRazorpayClient : IRazorpayClient
 {
     private readonly RazorpayOptions _options;
 
-    public FakeRazorpayGateway(IOptions<RazorpayOptions> options)
+    public FakeRazorpayClient(IOptions<RazorpayOptions> options)
     {
         _options = options.Value;
     }
+
+    public string KeyId => _options.KeyId;
 
     public Task<RazorpayCreatedOrder> CreateOrderAsync(
         long amountPaise,
@@ -84,27 +101,44 @@ public sealed class FakeRazorpayGateway : IRazorpayGateway
         IReadOnlyDictionary<string, string> notes,
         CancellationToken cancellationToken)
     {
+        EnsureKeyId();
         var orderId = "order_fake_" + Guid.NewGuid().ToString("N");
         return Task.FromResult(new RazorpayCreatedOrder(orderId, amountPaise, currency));
     }
 
-    public bool VerifyCheckoutSignature(string orderId, string paymentId, string signature) =>
-        RazorpaySignatures.MatchesPayment(_options.KeySecret, orderId, paymentId, signature);
+    public Task RequireCapturedCheckoutAsync(
+        string orderId,
+        string paymentId,
+        string signature,
+        long expectedAmountPaise,
+        string expectedCurrency,
+        CancellationToken cancellationToken)
+    {
+        EnsureKeyId();
+        if (expectedAmountPaise <= 0 || string.IsNullOrWhiteSpace(expectedCurrency))
+            throw new DomainException("Payment amount does not match the slot price.");
+        if (!RazorpaySignatures.MatchesPayment(_options.KeySecret, orderId, paymentId, signature))
+            throw new DomainException("Payment signature is invalid.");
+        return Task.CompletedTask;
+    }
 
     public bool VerifyWebhookSignature(string rawBody, string? signature) =>
         RazorpaySignatures.MatchesWebhook(_options.WebhookSecret, rawBody, signature);
 
-    public Task<RazorpayPaymentSnapshot?> FetchPaymentAsync(string paymentId, CancellationToken cancellationToken) =>
-        Task.FromResult<RazorpayPaymentSnapshot?>(null);
+    private void EnsureKeyId()
+    {
+        if (string.IsNullOrWhiteSpace(_options.KeyId))
+            throw new DomainException("Razorpay is not configured.", 503);
+    }
 }
 
-public sealed class RazorpayHttpGateway : IRazorpayGateway
+public sealed class RazorpayHttpClient : IRazorpayClient
 {
     private readonly HttpClient _http;
     private readonly RazorpayOptions _options;
-    private readonly ILogger<RazorpayHttpGateway> _logger;
+    private readonly ILogger<RazorpayHttpClient> _logger;
 
-    public RazorpayHttpGateway(HttpClient http, IOptions<RazorpayOptions> options, ILogger<RazorpayHttpGateway> logger)
+    public RazorpayHttpClient(HttpClient http, IOptions<RazorpayOptions> options, ILogger<RazorpayHttpClient> logger)
     {
         _http = http;
         _options = options.Value;
@@ -115,6 +149,8 @@ public sealed class RazorpayHttpGateway : IRazorpayGateway
             _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", token);
         }
     }
+
+    public string KeyId => _options.KeyId;
 
     public async Task<RazorpayCreatedOrder> CreateOrderAsync(
         long amountPaise,
@@ -145,17 +181,40 @@ public sealed class RazorpayHttpGateway : IRazorpayGateway
         return new RazorpayCreatedOrder(order.Id, order.Amount, order.Currency);
     }
 
-    public bool VerifyCheckoutSignature(string orderId, string paymentId, string signature) =>
-        RazorpaySignatures.MatchesPayment(_options.KeySecret, orderId, paymentId, signature);
+    public async Task RequireCapturedCheckoutAsync(
+        string orderId,
+        string paymentId,
+        string signature,
+        long expectedAmountPaise,
+        string expectedCurrency,
+        CancellationToken cancellationToken)
+    {
+        EnsureConfigured();
+        if (!RazorpaySignatures.MatchesPayment(_options.KeySecret, orderId, paymentId, signature))
+            throw new DomainException("Payment signature is invalid.");
+
+        var remote = await FetchPaymentAsync(paymentId, cancellationToken)
+            ?? throw new DomainException("Payment was not found at Razorpay.");
+        if (!string.Equals(remote.Status, RazorpayWire.CapturedStatus, StringComparison.OrdinalIgnoreCase))
+            throw new DomainException("Payment is not captured.");
+        if (!string.Equals(remote.OrderId, orderId, StringComparison.Ordinal))
+            throw new DomainException("Payment does not match this order.");
+        var currency = remote.Currency;
+        if (remote.Amount != expectedAmountPaise
+            || string.IsNullOrWhiteSpace(currency)
+            || !currency.Equals(expectedCurrency, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new DomainException("Payment amount does not match the slot price.");
+        }
+    }
 
     public bool VerifyWebhookSignature(string rawBody, string? signature) =>
         RazorpaySignatures.MatchesWebhook(_options.WebhookSecret, rawBody, signature);
 
-    public async Task<RazorpayPaymentSnapshot?> FetchPaymentAsync(string paymentId, CancellationToken cancellationToken)
+    private async Task<PaymentWire?> FetchPaymentAsync(string paymentId, CancellationToken cancellationToken)
     {
-        EnsureConfigured();
         using var response = await _http.GetAsync($"v1/payments/{Uri.EscapeDataString(paymentId)}", cancellationToken);
-        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+        if (response.StatusCode == HttpStatusCode.NotFound)
             return null;
         if (!response.IsSuccessStatusCode)
         {
@@ -166,8 +225,7 @@ public sealed class RazorpayHttpGateway : IRazorpayGateway
         var payment = await response.Content.ReadFromJsonAsync<PaymentWire>(cancellationToken: cancellationToken);
         if (payment is null || string.IsNullOrWhiteSpace(payment.Id) || string.IsNullOrWhiteSpace(payment.OrderId))
             return null;
-
-        return new RazorpayPaymentSnapshot(payment.Id, payment.OrderId, payment.Status ?? "", payment.Amount, payment.Currency ?? "");
+        return payment;
     }
 
     private void EnsureConfigured()

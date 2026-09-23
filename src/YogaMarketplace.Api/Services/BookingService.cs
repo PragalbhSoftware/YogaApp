@@ -1,8 +1,6 @@
 using System.Data;
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
-using YogaMarketplace.Api.Options;
 using YogaMarketplace.Api.Security;
 using YogaMarketplace.Domain;
 using YogaMarketplace.Infrastructure.Persistence;
@@ -16,28 +14,39 @@ public readonly record struct WebhookResult(bool Booked, Guid? BookingId)
     public static WebhookResult ForBooking(Guid bookingId) => new(true, bookingId);
 }
 
-public class BookingService
+public interface IBookingService
+{
+    Task<CheckoutOrderResponse> CreateOrderAsync(CreateBookingOrderRequest request, CancellationToken cancellationToken);
+
+    Task<BookingResponse> ConfirmAsync(ConfirmBookingPaymentRequest request, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<BookingResponse>> ListMineAsync(CancellationToken cancellationToken);
+}
+
+public interface IRazorpayWebhookHandler
+{
+    Task<WebhookResult> HandleWebhookAsync(string rawBody, string? signature, CancellationToken cancellationToken);
+}
+
+public class BookingService : IBookingService, IRazorpayWebhookHandler
 {
     private static readonly BookingStatus[] Occupying =
         Enum.GetValues<BookingStatus>().Where(BookingRules.OccupiesSlot).ToArray();
 
     private readonly YogaDbContext _db;
     private readonly ICurrentUser _current;
-    private readonly IRazorpayGateway _gateway;
-    private readonly RazorpayOptions _razorpay;
+    private readonly IRazorpayClient _razorpay;
     private readonly ILogger<BookingService> _logger;
 
     public BookingService(
         YogaDbContext db,
         ICurrentUser current,
-        IRazorpayGateway gateway,
-        IOptions<RazorpayOptions> razorpay,
+        IRazorpayClient razorpay,
         ILogger<BookingService> logger)
     {
         _db = db;
         _current = current;
-        _gateway = gateway;
-        _razorpay = razorpay.Value;
+        _razorpay = razorpay;
         _logger = logger;
     }
 
@@ -46,8 +55,6 @@ public class BookingService
         var customer = await RequireCustomerAsync(cancellationToken);
         if (request.SlotId == Guid.Empty)
             throw new DomainException("Slot is required.");
-        if (string.IsNullOrWhiteSpace(_razorpay.KeyId) || (!_razorpay.UseFakeGateway && string.IsNullOrWhiteSpace(_razorpay.KeySecret)))
-            throw new DomainException("Razorpay is not configured.", 503);
 
         var slot = await _db.AvailabilitySlots
             .Include(s => s.Provider)
@@ -77,7 +84,7 @@ public class BookingService
         var paise = RazorpayMoney.ToPaise(amount);
         var checkoutId = Guid.NewGuid();
 
-        var created = await _gateway.CreateOrderAsync(
+        var created = await _razorpay.CreateOrderAsync(
             paise,
             policy.Currency,
             checkoutId.ToString("N"),
@@ -101,7 +108,7 @@ public class BookingService
             Currency = policy.Currency,
             HomeAddress = slot.Mode == SessionMode.Home ? homeAddress : null,
             Landmark = slot.Mode == SessionMode.Home ? landmark : null,
-            Gateway = "razorpay",
+            Gateway = PaymentGateways.Razorpay,
             GatewayOrderId = created.OrderId,
             Status = CheckoutStatus.Open,
             CreatedAt = DateTimeOffset.UtcNow
@@ -130,17 +137,19 @@ public class BookingService
         var paymentId = Required(request.PaymentId, "Payment id is required.");
         var signature = Required(request.Signature, "Payment signature is required.");
 
-        if (!_gateway.VerifyCheckoutSignature(orderId, paymentId, signature))
-            throw new DomainException("Payment signature is invalid.");
-
         var preview = await _db.CheckoutIntents.AsNoTracking()
             .SingleOrDefaultAsync(c => c.GatewayOrderId == orderId, cancellationToken)
             ?? throw new DomainException("Unknown payment order.", 404);
         if (preview.CustomerId != customer.Id)
             throw new DomainException("This payment belongs to another account.", 403);
 
-        if (!_razorpay.UseFakeGateway)
-            await EnsureRemoteCaptureAsync(preview, paymentId, cancellationToken);
+        await _razorpay.RequireCapturedCheckoutAsync(
+            orderId,
+            paymentId,
+            signature,
+            RazorpayMoney.ToPaise(preview.Amount),
+            preview.Currency,
+            cancellationToken);
 
         return await CaptureAsync(orderId, paymentId, customer.Id, amountPaise: null, currency: null, cancellationToken);
     }
@@ -165,7 +174,7 @@ public class BookingService
 
     public async Task<WebhookResult> HandleWebhookAsync(string rawBody, string? signature, CancellationToken cancellationToken)
     {
-        if (!_gateway.VerifyWebhookSignature(rawBody, signature))
+        if (!_razorpay.VerifyWebhookSignature(rawBody, signature))
             throw new DomainException("Webhook signature is invalid.");
 
         if (!RazorpayWebhookParser.TryReadCapturedPayment(rawBody, out var captured))
@@ -260,7 +269,7 @@ public class BookingService
                 BookingId = booking.Id,
                 Amount = checkout.Amount,
                 Status = PaymentStatus.Pending,
-                Gateway = "razorpay",
+                Gateway = PaymentGateways.Razorpay,
                 GatewayOrderId = orderId,
                 CreatedAt = now
             };
@@ -284,21 +293,6 @@ public class BookingService
         {
             _logger.LogWarning(ex, "Booking save conflict for Razorpay order {OrderId}.", orderId);
             throw new DomainException("That slot was just booked.", 409);
-        }
-    }
-
-    private async Task EnsureRemoteCaptureAsync(CheckoutIntent checkout, string paymentId, CancellationToken cancellationToken)
-    {
-        var remote = await _gateway.FetchPaymentAsync(paymentId, cancellationToken)
-            ?? throw new DomainException("Payment was not found at Razorpay.");
-        if (!string.Equals(remote.Status, "captured", StringComparison.OrdinalIgnoreCase))
-            throw new DomainException("Payment is not captured.");
-        if (!string.Equals(remote.OrderId, checkout.GatewayOrderId, StringComparison.Ordinal))
-            throw new DomainException("Payment does not match this order.");
-        if (remote.AmountPaise != RazorpayMoney.ToPaise(checkout.Amount)
-            || !remote.Currency.Equals(checkout.Currency, StringComparison.OrdinalIgnoreCase))
-        {
-            throw new DomainException("Payment amount does not match the slot price.");
         }
     }
 

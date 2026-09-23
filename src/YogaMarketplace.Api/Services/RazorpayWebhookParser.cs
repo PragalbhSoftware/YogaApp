@@ -26,7 +26,7 @@ internal static class RazorpayWebhookParser
             if (!root.TryGetProperty("event", out var eventName))
                 throw new DomainException("Webhook payload is invalid.");
 
-            if (!string.Equals(eventName.GetString(), "payment.captured", StringComparison.Ordinal))
+            if (!string.Equals(eventName.GetString(), RazorpayWire.PaymentCapturedEvent, StringComparison.Ordinal))
                 return false;
 
             if (!root.TryGetProperty("payload", out var payload)
@@ -42,10 +42,12 @@ internal static class RazorpayWebhookParser
             var currency = ReadString(entity, "currency");
             if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(orderId))
                 throw new DomainException("Webhook payload is invalid.");
-            if (!string.Equals(status, "captured", StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(status, RazorpayWire.CapturedStatus, StringComparison.OrdinalIgnoreCase))
                 return false;
+            if (string.IsNullOrWhiteSpace(currency))
+                throw new DomainException("Webhook payload is invalid.");
 
-            payment = new CapturedRazorpayPayment(id, orderId, ReadAmount(entity), string.IsNullOrWhiteSpace(currency) ? "INR" : currency);
+            payment = new CapturedRazorpayPayment(id, orderId, ReadAmount(entity), currency);
             return true;
         }
     }

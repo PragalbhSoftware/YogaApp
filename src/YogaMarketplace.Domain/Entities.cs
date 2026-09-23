@@ -134,7 +134,7 @@ public class CheckoutIntent
     public string Currency { get; set; } = "INR";
     public string? HomeAddress { get; set; }
     public string? Landmark { get; set; }
-    public string Gateway { get; set; } = "razorpay";
+    public string Gateway { get; set; } = PaymentGateways.Razorpay;
     public string GatewayOrderId { get; set; } = "";
     public CheckoutStatus Status { get; set; } = CheckoutStatus.Open;
     public Guid? BookingId { get; set; }

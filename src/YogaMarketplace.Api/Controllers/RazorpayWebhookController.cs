@@ -10,11 +10,11 @@ namespace YogaMarketplace.Api.Controllers;
 [Route("api/webhooks/razorpay")]
 public class RazorpayWebhookController : ControllerBase
 {
-    private readonly BookingService _bookings;
+    private readonly IRazorpayWebhookHandler _webhooks;
 
-    public RazorpayWebhookController(BookingService bookings)
+    public RazorpayWebhookController(IRazorpayWebhookHandler webhooks)
     {
-        _bookings = bookings;
+        _webhooks = webhooks;
     }
 
     [HttpPost]
@@ -24,8 +24,8 @@ public class RazorpayWebhookController : ControllerBase
         using (var reader = new StreamReader(Request.Body, Encoding.UTF8))
             body = await reader.ReadToEndAsync(cancellationToken);
 
-        var signature = Request.Headers["X-Razorpay-Signature"].ToString();
-        var result = await _bookings.HandleWebhookAsync(body, signature, cancellationToken);
+        var signature = Request.Headers[RazorpayWire.SignatureHeader].ToString();
+        var result = await _webhooks.HandleWebhookAsync(body, signature, cancellationToken);
         return Ok(new { received = true, booked = result.Booked, bookingId = result.BookingId });
     }
 }

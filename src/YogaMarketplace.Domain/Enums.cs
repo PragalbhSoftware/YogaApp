@@ -61,3 +61,8 @@ public enum PayoutStatus
     Exported,
     Paid
 }
+
+public static class PaymentGateways
+{
+    public const string Razorpay = "razorpay";
+}
