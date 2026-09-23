@@ -15,7 +15,7 @@
 {
     <p><strong>@UiCopy.StudioAddress.</strong> @Model.StudioAddress</p>
 }
-@if (!string.IsNullOrWhiteSpace(Model.MeetLink))
+@if (BookingMeet.JoinHref(Model) is string meet)
 {
-    <p><a href="@Model.MeetLink">@UiCopy.MeetLink</a></p>
+    <p><a href="@meet">@UiCopy.MeetLink</a></p>
 }
