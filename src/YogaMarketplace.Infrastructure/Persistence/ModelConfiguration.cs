@@ -59,6 +59,7 @@ internal static class ModelConfiguration
         entity.Property(p => p.StudioRate).HasPrecision(10, 2);
         entity.Property(p => p.OnlineRate).HasPrecision(10, 2);
         entity.HasIndex(p => p.UserId).IsUnique();
+        entity.HasIndex(p => new { p.Status, p.AreaId });
 
         entity.HasOne(p => p.User)
             .WithOne(u => u.Provider)
@@ -108,6 +109,8 @@ internal static class ModelConfiguration
         entity.Property(b => b.MeetLinkSnapshot).HasMaxLength(300);
         entity.Property(b => b.StudioAddressSnapshot).HasMaxLength(300);
         entity.HasIndex(b => new { b.ProviderId, b.Status });
+        entity.HasIndex(b => b.CustomerId);
+        entity.HasIndex(b => new { b.CustomerId, b.Status });
         // Keep this list aligned with BookingRules.OccupiesSlot so a slot cannot be double-booked.
         entity.HasIndex(b => b.SlotId)
             .IsUnique()
@@ -163,6 +166,7 @@ internal static class ModelConfiguration
     {
         entity.Property(r => r.Comment).HasMaxLength(1000);
         entity.HasIndex(r => r.BookingId).IsUnique();
+        entity.HasIndex(r => r.ProviderId);
 
         entity.HasOne(r => r.Booking)
             .WithOne(b => b.Review)

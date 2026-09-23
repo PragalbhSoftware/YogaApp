@@ -176,6 +176,7 @@ public class ProviderService
     public async Task<ProviderSelf> GetMineAsync(CancellationToken cancellationToken)
     {
         var provider = await _db.Providers
+            .AsNoTracking()
             .Include(p => p.User)
             .Include(p => p.Area)
             .SingleOrDefaultAsync(p => p.UserId == _current.UserId, cancellationToken)
