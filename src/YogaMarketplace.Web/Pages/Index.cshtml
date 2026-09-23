@@ -7,7 +7,11 @@
 <h1>@UiCopy.HomeTitle</h1>
 <p class="lead">@UiCopy.HomeLead</p>
 
-@if (User.Identity?.IsAuthenticated == true)
+@if (User.IsInRole(AccountRoles.Provider))
+{
+    <a class="button" asp-page="/Instructor/Bookings">@UiCopy.InstructorInboxTitle</a>
+}
+else if (User.Identity?.IsAuthenticated == true)
 {
     <a class="button" asp-page="/Areas/Select">@UiCopy.AreaTitle</a>
     <a class="button secondary" asp-page="/Instructors/Index">@UiCopy.BrowseTitle</a>

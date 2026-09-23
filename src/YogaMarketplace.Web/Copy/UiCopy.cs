@@ -24,7 +24,7 @@ public static class UiCopy
     public const string Continue = "Continue";
 
     public const string SignInTitle = "Account";
-    public const string SignInLead = "New customers add a name and gender. If you already have an account, your phone is enough.";
+    public const string SignInLead = "New customers add a name and gender. If you already have an account, your phone is enough. Instructors sign in with the phone on their account.";
     public const string DevOtpHint = "Local demo: the Development API uses code 123456 and returns it as devCode. Existing demo phone +91 98765 43210.";
     public const string AccountType = "Account";
     public const string ExistingAccount = "I already have an account";
@@ -116,10 +116,45 @@ public static class UiCopy
     public const string PaymentReceived = "Payment received. Waiting for the instructor to accept.";
 
     public const string MyBookingsTitle = "My bookings";
-    public const string MyBookingsLead = "Sessions you have paid for. The instructor accepts after payment.";
+    public const string MyBookingsLead = "Sessions you have paid for. After the instructor marks one complete, you can leave one rating.";
     public const string NoBookings = "You have no bookings yet.";
     public const string StatusPendingAccept = "Waiting for the instructor";
+    public const string StatusUpcoming = "Accepted. This session is upcoming.";
+    public const string StatusDeclined = "Declined. The payment was refunded.";
+    public const string StatusCompleted = "This session is complete.";
+    public const string StatusNoShow = "Marked as a no-show.";
+    public const string StatusCancelled = "Cancelled.";
     public const string MeetLink = "Join the session";
+
+    public const string InstructorInboxNav = "Requests";
+    public const string InstructorInboxTitle = "Session requests";
+    public const string InstructorInboxLead = "Accept or decline a new request. Mark an upcoming session complete when it is done.";
+    public const string NoInstructorBookings = "No sessions in this list.";
+    public const string UnknownBookingStatus = "That status is not a booking state.";
+    public const string StatusFilter = "Booking status";
+    public const string FilterAll = "All";
+    public const string FilterPending = "Pending";
+    public const string FilterUpcoming = "Upcoming";
+    public const string FilterDeclined = "Declined";
+    public const string FilterCompleted = "Completed";
+    public const string FilterNoShow = "No-show";
+    public const string FilterCancelled = "Cancelled";
+    public const string AcceptBooking = "Accept";
+    public const string DeclineBooking = "Decline";
+    public const string CompleteBooking = "Mark complete";
+    public const string AcceptedNotice = "Accepted. The session is upcoming.";
+    public const string DeclinedNotice = "Declined. The payment was refunded and the slot is free.";
+    public const string CompletedNotice = "Marked complete. The customer can leave a review.";
+
+    public const string Rating = "Rating";
+    public const string ReviewComment = "Comment (optional)";
+    public const string SubmitReview = "Submit review";
+    public const string RatingRange = "Choose a rating from 1 to 5.";
+    public const string ReviewTooLong = "Keep the review under 1000 characters.";
+    public const string ReviewedAlready = "You reviewed this session.";
+
+    public const string AccessDeniedTitle = "That page is not available for this account.";
+    public const string AccessDeniedLead = "Instructors open session requests. Customers open My bookings.";
 
     public const string ApiUnreachable = "We couldn't reach the marketplace. Start the API and try again.";
     public const string EmptyResponse = "The marketplace returned an empty response.";

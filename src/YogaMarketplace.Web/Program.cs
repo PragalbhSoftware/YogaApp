@@ -8,13 +8,15 @@ builder.Services.AddRazorPages(options =>
 {
     options.Conventions.AuthorizeFolder("/Areas");
     options.Conventions.AuthorizeFolder("/Instructors");
-    options.Conventions.AuthorizeFolder("/Bookings");
+    options.Conventions.AuthorizeFolder("/Bookings", "Customer");
+    options.Conventions.AuthorizeFolder("/Instructor", "Provider");
 });
 
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
         options.LoginPath = "/account/sign-in";
+        options.AccessDeniedPath = "/account/access-denied";
         options.Cookie.Name = "ym.session";
         options.Cookie.HttpOnly = true;
         options.Cookie.SameSite = SameSiteMode.Lax;
@@ -22,7 +24,11 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.ExpireTimeSpan = TimeSpan.FromDays(7);
         options.SlidingExpiration = true;
     });
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("Customer", policy => policy.RequireRole(AccountRoles.Customer));
+    options.AddPolicy("Provider", policy => policy.RequireRole(AccountRoles.Provider));
+});
 builder.Services.AddHttpContextAccessor();
 
 builder.Services.Configure<ApiOptions>(builder.Configuration.GetSection(ApiOptions.Section));
@@ -37,6 +43,8 @@ builder.Services.AddHttpClient(MarketplaceApiClient.HttpClientName, (sp, client)
 }).AddHttpMessageHandler<BearerTokenHandler>();
 builder.Services.AddScoped<IMarketplaceApi, MarketplaceApiClient>();
 builder.Services.AddScoped<IBookingApi, BookingApiClient>();
+builder.Services.AddScoped<IInstructorBookingApi, InstructorBookingApiClient>();
+builder.Services.AddScoped<IReviewedBookingStore, CookieReviewedBookingStore>();
 builder.Services.AddSingleton<ILocalRazorpayCheckout, LocalRazorpayCheckout>();
 builder.Services.AddScoped<ISlotQuoteReader, SlotQuoteReader>();
 builder.Services.AddScoped<IPaymentCheckout, PaymentCheckout>();

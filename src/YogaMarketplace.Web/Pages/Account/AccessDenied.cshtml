@@ -1,0 +1,20 @@
+@page "/account/access-denied"
+@{
+    ViewData["Title"] = UiCopy.AccessDeniedTitle;
+}
+
+<h1>@UiCopy.AccessDeniedTitle</h1>
+<p class="lead">@UiCopy.AccessDeniedLead</p>
+
+@if (User.IsInRole(AccountRoles.Provider))
+{
+    <a class="button" asp-page="/Instructor/Bookings">@UiCopy.InstructorInboxNav</a>
+}
+else if (User.IsInRole(AccountRoles.Customer))
+{
+    <a class="button" asp-page="/Bookings/Index">@UiCopy.BookingsNav</a>
+}
+else
+{
+    <a class="button" asp-page="/Account/SignIn">@UiCopy.SignInCta</a>
+}

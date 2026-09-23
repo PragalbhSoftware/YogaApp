@@ -1,0 +1,21 @@
+@model BookingDto
+<p>@Model.Date.ToString("dddd d MMM") · @Model.Start–@Model.End</p>
+<p>@Model.Mode · @Money.Inr(Model.Amount)</p>
+<p>@BookingStatusText.Detail(Model.Status)</p>
+<p class="muted">@Model.Status · @Model.PaymentStatus</p>
+@if (!string.IsNullOrWhiteSpace(Model.HomeAddress))
+{
+    <p><strong>@UiCopy.HomeAddress.</strong> @Model.HomeAddress</p>
+}
+@if (!string.IsNullOrWhiteSpace(Model.Landmark))
+{
+    <p><strong>@UiCopy.Landmark.</strong> @Model.Landmark</p>
+}
+@if (!string.IsNullOrWhiteSpace(Model.StudioAddress))
+{
+    <p><strong>@UiCopy.StudioAddress.</strong> @Model.StudioAddress</p>
+}
+@if (!string.IsNullOrWhiteSpace(Model.MeetLink))
+{
+    <p><a href="@Model.MeetLink">@UiCopy.MeetLink</a></p>
+}

@@ -17,9 +17,11 @@ public sealed class ApiResult<T>
     public T? Data { get; private init; }
     public string? Error { get; private init; }
     public bool Unreachable { get; private init; }
+    public int? StatusCode { get; private init; }
 
     public static ApiResult<T> Success(T data) => new() { Ok = true, Data = data };
-    public static ApiResult<T> Fail(string error) => new() { Ok = false, Error = error };
+    public static ApiResult<T> Fail(string error, int? statusCode = null) =>
+        new() { Ok = false, Error = error, StatusCode = statusCode };
     public static ApiResult<T> Down(string error) => new() { Ok = false, Error = error, Unreachable = true };
 }
 

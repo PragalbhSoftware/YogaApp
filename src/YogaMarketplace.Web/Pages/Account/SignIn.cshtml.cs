@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.Options;
@@ -63,7 +64,7 @@ public class SignInModel : PageModel
     public IActionResult OnGet(string? returnUrl)
     {
         if (User.Identity?.IsAuthenticated == true)
-            return CustomerFlow.AfterSignIn(HttpContext, returnUrl, Url);
+            return CustomerFlow.AfterSignIn(HttpContext, Role(), returnUrl, Url);
         ReturnUrl = returnUrl;
         return Page();
     }
@@ -71,7 +72,7 @@ public class SignInModel : PageModel
     public async Task<IActionResult> OnPostRequestAsync(CancellationToken cancellationToken)
     {
         if (User.Identity?.IsAuthenticated == true)
-            return CustomerFlow.AfterSignIn(HttpContext, ReturnUrl, Url);
+            return CustomerFlow.AfterSignIn(HttpContext, Role(), ReturnUrl, Url);
 
         if (!TryValidateAccount(out var error))
         {
@@ -119,8 +120,10 @@ public class SignInModel : PageModel
         }
 
         await AuthSession.SignInAsync(HttpContext, result.Data);
-        return CustomerFlow.AfterSignIn(HttpContext, ReturnUrl, Url);
+        return CustomerFlow.AfterSignIn(HttpContext, result.Data.User.Role, ReturnUrl, Url);
     }
+
+    private string? Role() => User.FindFirst(ClaimTypes.Role)?.Value;
 
     private IActionResult ShowCodeStep(ApiResult<OtpResponseDto> result, bool keepStepOnError = false)
     {
