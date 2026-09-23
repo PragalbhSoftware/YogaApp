@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -112,7 +113,11 @@ public class BookingCustomerChangeTests : IClassFixture<YogaApiFactory>
         await PostAsync<BookingBody>(instructor, $"/api/bookings/{booked.Id}/accept", new { });
 
         var open = await customer.GetFromJsonAsync<SlotListBody>($"/api/providers/{SeedIds.AnanyaProviderId}/slots?mode=Home", Json);
-        var target = open!.Slots.First(s => s.Id != original.Id);
+        var target = open!.Slots
+            .Where(s => s.Id != original.Id && HasNotEnded(s))
+            .OrderByDescending(s => s.Date)
+            .ThenByDescending(s => s.Start)
+            .First();
 
         var moved = await RescheduleAsync(customer, booked.Id, target.Id);
         Assert.Equal(booked.Id, moved.Id);
@@ -336,7 +341,11 @@ public class BookingCustomerChangeTests : IClassFixture<YogaApiFactory>
     private async Task<SlotBody> AnotherOpenSlotAsync(HttpClient client, string mode, Guid exceptId)
     {
         var list = await client.GetFromJsonAsync<SlotListBody>($"/api/providers/{SeedIds.AnanyaProviderId}/slots?mode={mode}", Json);
-        var slot = list!.Slots.FirstOrDefault(s => s.Id != exceptId);
+        var slot = list!.Slots
+            .Where(s => s.Id != exceptId && HasNotEnded(s))
+            .OrderByDescending(s => s.Date)
+            .ThenByDescending(s => s.Start)
+            .FirstOrDefault();
         Assert.NotNull(slot);
         return slot!;
     }
@@ -386,7 +395,7 @@ public class BookingCustomerChangeTests : IClassFixture<YogaApiFactory>
     {
         var list = await client.GetFromJsonAsync<SlotListBody>(
             $"/api/providers/{SeedIds.AnanyaProviderId}/slots?mode={mode}", Json);
-        var slot = list!.Slots.OrderByDescending(s => s.Date).ThenByDescending(s => s.Start).FirstOrDefault();
+        var slot = list!.Slots.Where(HasNotEnded).OrderByDescending(s => s.Date).ThenByDescending(s => s.Start).FirstOrDefault();
         Assert.NotNull(slot);
         return slot!;
     }
@@ -470,6 +479,13 @@ public class BookingCustomerChangeTests : IClassFixture<YogaApiFactory>
     {
         using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(secret));
         return Convert.ToHexString(hmac.ComputeHash(Encoding.UTF8.GetBytes(payload))).ToLowerInvariant();
+    }
+
+    private static bool HasNotEnded(SlotBody slot)
+    {
+        if (!TimeOnly.TryParseExact(slot.End, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var end))
+            return false;
+        return MumbaiClock.SessionStart(slot.Date, end) > DateTimeOffset.UtcNow;
     }
 
     private static string NewPhone() => "+9196" + Random.Shared.Next(10000000, 99999999).ToString();
