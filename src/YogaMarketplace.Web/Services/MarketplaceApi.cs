@@ -74,7 +74,47 @@ public interface IMarketplaceApi
     Task<ApiResult<List<ProviderSummaryDto>>> BrowseAsync(string? area, string? mode, string? category, CancellationToken cancellationToken);
     Task<ApiResult<ProviderDetailDto>> GetProviderAsync(Guid id, CancellationToken cancellationToken);
     Task<ApiResult<SlotListDto>> GetSlotsAsync(Guid id, string mode, CancellationToken cancellationToken);
+    Task<ApiResult<ProviderSelfDto>> GetMineAsync(CancellationToken cancellationToken);
+    Task<ApiResult<RegisterProviderResultDto>> RegisterProviderAsync(RegisterProviderRequestDto request, CancellationToken cancellationToken);
 }
+
+public record ProviderSelfDto(
+    Guid Id,
+    Guid UserId,
+    string DisplayName,
+    string? Bio,
+    int? Age,
+    string? Email,
+    Guid AreaId,
+    string Area,
+    string City,
+    string Status,
+    bool OffersHome,
+    bool OffersStudio,
+    bool OffersOnline,
+    decimal? HomeRate,
+    decimal? StudioRate,
+    decimal? OnlineRate,
+    string? StudioAddress,
+    string? GoogleMeetLink,
+    string? RejectionReason);
+
+public record RegisterProviderResultDto(ProviderSelfDto Provider, string Token);
+
+public record RegisterProviderRequestDto(
+    string? DisplayName,
+    int? Age,
+    string? Email,
+    Guid AreaId,
+    string? Bio,
+    bool OffersHome,
+    bool OffersStudio,
+    bool OffersOnline,
+    decimal? HomeRate,
+    decimal? StudioRate,
+    decimal? OnlineRate,
+    string? StudioAddress,
+    string? GoogleMeetLink);
 
 public sealed class MarketplaceApiClient : IMarketplaceApi
 {
@@ -128,6 +168,29 @@ public sealed class MarketplaceApiClient : IMarketplaceApi
 
     public Task<ApiResult<SlotListDto>> GetSlotsAsync(Guid id, string mode, CancellationToken cancellationToken) =>
         _exchange.GetAsync<SlotListDto>($"api/providers/{id}/slots?mode={Uri.EscapeDataString(mode)}", cancellationToken);
+
+    public Task<ApiResult<ProviderSelfDto>> GetMineAsync(CancellationToken cancellationToken) =>
+        _exchange.GetAsync<ProviderSelfDto>("api/providers/me", cancellationToken);
+
+    public Task<ApiResult<RegisterProviderResultDto>> RegisterProviderAsync(
+        RegisterProviderRequestDto request,
+        CancellationToken cancellationToken) =>
+        _exchange.PostAsync<RegisterProviderResultDto>("api/providers/register", new
+        {
+            displayName = request.DisplayName,
+            age = request.Age,
+            email = request.Email,
+            areaId = request.AreaId,
+            bio = request.Bio,
+            offersHome = request.OffersHome,
+            offersStudio = request.OffersStudio,
+            offersOnline = request.OffersOnline,
+            homeRate = request.HomeRate,
+            studioRate = request.StudioRate,
+            onlineRate = request.OnlineRate,
+            studioAddress = request.StudioAddress,
+            googleMeetLink = request.GoogleMeetLink
+        }, cancellationToken);
 }
 
 public sealed class BearerTokenHandler : DelegatingHandler

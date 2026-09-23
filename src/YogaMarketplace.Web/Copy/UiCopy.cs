@@ -140,6 +140,8 @@ public static class UiCopy
 
     public const string InstructorInboxNav = "Requests";
     public const string InstructorAvailabilityNav = "Availability";
+    public const string InstructorStatusNav = "Status";
+    public const string BecomeInstructor = "Teach yoga";
     public const string InstructorAvailabilityTitle = "Availability";
     public const string InstructorAvailabilityLead = "Your slots for this week, including ones you have blocked. Block an open slot to hide it from customers. It stays on this list.";
     public const string ModeFilter = "Session mode";
@@ -184,6 +186,21 @@ public static class UiCopy
     public const string RatingRange = "Choose a rating from 1 to 5.";
     public const string ReviewTooLong = "Keep the review under 1000 characters.";
     public const string ReviewedAlready = "You reviewed this session.";
+
+    public const string RegisterTitle = "Register as an instructor";
+    public const string RegisterLead = "Submit your profile for review. Customers can browse you only after an admin verifies it.";
+    public const string RegisterModesLead = "Turn on Home, Studio, or Online. Each mode needs a rate in INR. Studio needs an address. Online needs an https://meet.google.com link.";
+    public const string RegisterSubmit = "Submit for review";
+    public const string DisplayName = "Display name";
+    public const string Bio = "Bio";
+    public const string HomeRate = "Home rate (INR)";
+    public const string StudioRate = "Studio rate (INR)";
+    public const string OnlineRate = "Online rate (INR)";
+    public const string GoogleMeetLinkLabel = "Google Meet link";
+    public const string AreaSelect = "Select an area";
+    public const string RegisterPendingLead = "Pending. Customers cannot browse this profile until an admin verifies it.";
+    public const string RegisterVerifiedLead = "Verified. Customers can browse this profile.";
+    public const string RegisterRejectedLead = "Rejected. This profile stays off the public list.";
 
     public const string AccessDeniedTitle = "That page is not available for this account.";
     public const string AccessDeniedLead = "Instructors open session requests and availability. Customers open My bookings. Admins open the admin area.";

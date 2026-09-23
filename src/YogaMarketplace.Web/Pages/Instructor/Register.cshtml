@@ -1,0 +1,167 @@
+@page "/instructor/register"
+@model YogaMarketplace.Web.Pages.Instructor.RegisterModel
+@{
+    var title = Model.Profile is null ? UiCopy.RegisterTitle : UiCopy.InstructorStatus;
+    ViewData["Title"] = title;
+}
+
+<h1>@title</h1>
+
+@if (Model.Profile is { } profile)
+{
+    <p class="hint" role="status">@Model.StatusLead</p>
+    <article class="card" data-provider-id="@profile.Id" data-status="@profile.Status" data-provider-name="@profile.DisplayName">
+        <h2>@profile.DisplayName</h2>
+        <dl class="summary">
+            <div>
+                <dt>@UiCopy.InstructorStatus</dt>
+                <dd>@profile.Status</dd>
+            </div>
+            <div>
+                <dt>@UiCopy.Area</dt>
+                <dd>@profile.Area · @profile.City</dd>
+            </div>
+            @if (profile.Age is int age)
+            {
+                <div>
+                    <dt>@UiCopy.Age</dt>
+                    <dd>@age</dd>
+                </div>
+            }
+            @if (!string.IsNullOrWhiteSpace(profile.Email))
+            {
+                <div>
+                    <dt>@UiCopy.Email</dt>
+                    <dd>@profile.Email</dd>
+                </div>
+            }
+            @if (!string.IsNullOrWhiteSpace(profile.StudioAddress))
+            {
+                <div>
+                    <dt>@UiCopy.StudioAddress</dt>
+                    <dd>@profile.StudioAddress</dd>
+                </div>
+            }
+            @if (!string.IsNullOrWhiteSpace(profile.RejectionReason))
+            {
+                <div>
+                    <dt>@UiCopy.RejectionReasonLabel</dt>
+                    <dd>@profile.RejectionReason</dd>
+                </div>
+            }
+        </dl>
+        @if (!string.IsNullOrWhiteSpace(profile.Bio))
+        {
+            <p>@profile.Bio</p>
+        }
+        <ul class="slots">
+            @if (profile.OffersHome)
+            {
+                <li>@UiCopy.ModeHome@(profile.HomeRate is decimal home ? " · " + Money.Inr(home) : "")</li>
+            }
+            @if (profile.OffersStudio)
+            {
+                <li>@UiCopy.ModeStudio@(profile.StudioRate is decimal studio ? " · " + Money.Inr(studio) : "")</li>
+            }
+            @if (profile.OffersOnline)
+            {
+                <li>@UiCopy.ModeOnline@(profile.OnlineRate is decimal online ? " · " + Money.Inr(online) : "")</li>
+            }
+        </ul>
+        @{
+            var meet = AdminLinks.Http(profile.GoogleMeetLink);
+        }
+        @if (meet is not null)
+        {
+            <p><a href="@meet">@UiCopy.MeetLink</a></p>
+        }
+        else if (!string.IsNullOrWhiteSpace(profile.GoogleMeetLink))
+        {
+            <p class="muted">@profile.GoogleMeetLink</p>
+        }
+    </article>
+    @if (User.IsInRole(AccountRoles.Provider))
+    {
+        <p><a class="button" asp-page="/Instructor/Bookings">@UiCopy.InstructorInboxNav</a></p>
+    }
+    else
+    {
+        <p><a class="button" asp-page="/Account/SignIn" asp-route-returnUrl="/instructor/register">@UiCopy.SignInCta</a></p>
+    }
+}
+else
+{
+    <p class="lead">@UiCopy.RegisterLead</p>
+    @if (!string.IsNullOrEmpty(Model.Error))
+    {
+        <p class="alert" role="alert">@Model.Error</p>
+    }
+    @if (Model.ShowForm)
+    {
+        <form method="post">
+            <div class="field">
+                <label asp-for="DisplayName">@UiCopy.DisplayName</label>
+                <input asp-for="DisplayName" autocomplete="name" maxlength="80" />
+            </div>
+            <div class="field">
+                <label asp-for="Age">@UiCopy.Age</label>
+                <input asp-for="Age" inputmode="numeric" min="18" max="80" />
+            </div>
+            <div class="field">
+                <label asp-for="Email">@UiCopy.Email</label>
+                <input asp-for="Email" type="email" autocomplete="email" maxlength="200" />
+            </div>
+            <div class="field">
+                <label asp-for="AreaId">@UiCopy.Area</label>
+                <select asp-for="AreaId">
+                    <option value="">@UiCopy.AreaSelect</option>
+                    @foreach (var area in Model.Areas)
+                    {
+                        <option value="@area.Id">@area.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="field">
+                <label asp-for="Bio">@UiCopy.Bio</label>
+                <textarea asp-for="Bio" maxlength="1000" rows="4"></textarea>
+            </div>
+            <fieldset>
+                <legend>@UiCopy.Mode</legend>
+                <p class="muted">@UiCopy.RegisterModesLead</p>
+                <label class="choice">
+                    <input asp-for="OffersHome" />
+                    @UiCopy.ModeHome
+                </label>
+                <div class="field">
+                    <label asp-for="HomeRate">@UiCopy.HomeRate</label>
+                    <input asp-for="HomeRate" inputmode="decimal" min="1" max="100000" step="0.01" />
+                </div>
+                <label class="choice">
+                    <input asp-for="OffersStudio" />
+                    @UiCopy.ModeStudio
+                </label>
+                <div class="field">
+                    <label asp-for="StudioRate">@UiCopy.StudioRate</label>
+                    <input asp-for="StudioRate" inputmode="decimal" min="1" max="100000" step="0.01" />
+                </div>
+                <div class="field">
+                    <label asp-for="StudioAddress">@UiCopy.StudioAddress</label>
+                    <input asp-for="StudioAddress" maxlength="300" />
+                </div>
+                <label class="choice">
+                    <input asp-for="OffersOnline" />
+                    @UiCopy.ModeOnline
+                </label>
+                <div class="field">
+                    <label asp-for="OnlineRate">@UiCopy.OnlineRate</label>
+                    <input asp-for="OnlineRate" inputmode="decimal" min="1" max="100000" step="0.01" />
+                </div>
+                <div class="field">
+                    <label asp-for="GoogleMeetLink">@UiCopy.GoogleMeetLinkLabel</label>
+                    <input asp-for="GoogleMeetLink" type="url" placeholder="https://meet.google.com/..." />
+                </div>
+            </fieldset>
+            <button type="submit">@UiCopy.RegisterSubmit</button>
+        </form>
+    }
+}
