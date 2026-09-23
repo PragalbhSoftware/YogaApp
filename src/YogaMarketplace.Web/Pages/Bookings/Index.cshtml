@@ -12,9 +12,19 @@
     <p class="hint" role="status">@UiCopy.PaymentReceived</p>
 }
 
+@if (!string.IsNullOrEmpty(Model.Success))
+{
+    <p class="hint" role="status">@Model.Success</p>
+}
+
 @if (!string.IsNullOrEmpty(Model.Notice))
 {
     <p class="alert" role="status">@Model.Notice</p>
+}
+
+@if (!string.IsNullOrEmpty(Model.SlotsError))
+{
+    <p class="alert" role="alert">@Model.SlotsError</p>
 }
 
 @if (!string.IsNullOrEmpty(Model.Error))
@@ -35,6 +45,37 @@ else if (Model.Bookings.Count > 0)
             <h2>@booking.ProviderName</h2>
             <p class="muted">@booking.ServiceTitle</p>
             <partial name="_SessionFacts" model="booking" />
+            @if (CustomerBookingChanges.CanCancel(booking))
+            {
+                <p class="muted">@UiCopy.CancelHint</p>
+                <form method="post" data-action="cancel" asp-page-handler="Cancel" asp-route-id="@booking.Id">
+                    <button type="submit" class="secondary">@UiCopy.CancelBooking</button>
+                </form>
+            }
+            @if (CustomerBookingChanges.CanReschedule(booking) && string.IsNullOrEmpty(Model.SlotsError))
+            {
+                if (Model.OptionsFor(booking.Id).Count == 0)
+                {
+                    <p>@UiCopy.NoRescheduleSlots</p>
+                }
+                else
+                {
+                    <p class="muted">@UiCopy.RescheduleHint</p>
+                    <form method="post" class="reschedule" data-action="reschedule" asp-page-handler="Reschedule" asp-route-id="@booking.Id">
+                        <div class="field">
+                            <label for="slot-@booking.Id">@UiCopy.RescheduleSlot</label>
+                            <select id="slot-@booking.Id" name="slotId" required>
+                                <option value="">@UiCopy.ChooseSlot</option>
+                                @foreach (var slot in Model.OptionsFor(booking.Id))
+                                {
+                                    <option value="@slot.Id">@slot.Date.ToString("ddd d MMM") @slot.Start–@slot.End</option>
+                                }
+                            </select>
+                        </div>
+                        <button type="submit">@UiCopy.RescheduleBooking</button>
+                    </form>
+                }
+            }
             @if (Model.ShowReviewForm(booking))
             {
                 <form method="post" class="review" data-action="review" asp-page-handler="Review" asp-route-id="@booking.Id">

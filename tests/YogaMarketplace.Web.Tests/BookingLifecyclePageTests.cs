@@ -1,15 +1,20 @@
 extern alias WebApp;
 
+using System.Globalization;
 using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http;
 using WebApp::YogaMarketplace.Web.Copy;
 using WebApp::YogaMarketplace.Web.Services;
 using YogaMarketplace.Api.Tests;
+using YogaMarketplace.Domain;
 using YogaMarketplace.Infrastructure.Persistence;
 
 namespace YogaMarketplace.Web.Tests;
@@ -18,6 +23,8 @@ public class BookingLifecyclePageTests : IClassFixture<YogaApiFactory>
 {
     private const string DevKeySecret = "dev-only-not-a-live-key-secret";
     private const string InstructorPhone = "9876543210";
+
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     private readonly YogaApiFactory _api;
 
@@ -212,6 +219,249 @@ public class BookingLifecyclePageTests : IClassFixture<YogaApiFactory>
         Assert.Contains(slotId.ToString(), profile);
     }
 
+    [Fact]
+    public async Task Cancel_pending_accept_refunds_and_frees_the_slot()
+    {
+        await using var web = CreateWeb(_api);
+        var customer = await SignInNewAsync(web);
+        var (slotId, bookingId) = await PayForFutureSlotAsync(customer, SessionModes.Online);
+
+        var pending = WebUtility.HtmlDecode(await customer.GetStringAsync("/bookings"));
+        var card = Article(pending, bookingId);
+        Assert.Contains("data-action=\"cancel\"", card);
+        Assert.Contains(UiCopy.CancelHint, card);
+        Assert.DoesNotContain("data-action=\"reschedule\"", card);
+        Assert.DoesNotContain(slotId.ToString(), await customer.GetStringAsync(Profile(SessionModes.Online)));
+
+        var cancelled = await PostChangeAsync(customer, pending, "Cancel", bookingId);
+        var body = await cancelled.Content.ReadAsStringAsync();
+        Assert.True(cancelled.StatusCode == HttpStatusCode.Redirect, body);
+        Assert.Contains($"notice={CustomerNotices.Cancelled}", cancelled.Headers.Location?.OriginalString);
+
+        var page = WebUtility.HtmlDecode(await customer.GetStringAsync(cancelled.Headers.Location));
+        Assert.Contains(UiCopy.CancelledNotice, page);
+        var done = Article(page, bookingId);
+        Assert.Contains(BookingArticle(bookingId, slotId, BookingStatuses.Cancelled), done);
+        Assert.Contains(PaymentStatuses.Refunded, done);
+        Assert.Contains(UiCopy.StatusCancelled, done);
+        Assert.DoesNotContain("data-action=\"cancel\"", done);
+        Assert.DoesNotContain("data-action=\"reschedule\"", done);
+        Assert.Contains(slotId.ToString(), await customer.GetStringAsync(Profile(SessionModes.Online)));
+    }
+
+    [Fact]
+    public async Task Cancel_upcoming_refunds_and_frees_the_slot()
+    {
+        await using var web = CreateWeb(_api);
+        var customer = await SignInNewAsync(web);
+        var (slotId, bookingId) = await PayForFutureSlotAsync(customer, SessionModes.Online);
+        var (instructor, _) = await SignInExistingAsync(web, InstructorPhone);
+        await AcceptAsync(instructor, bookingId);
+
+        var upcoming = WebUtility.HtmlDecode(await customer.GetStringAsync("/bookings"));
+        var card = Article(upcoming, bookingId);
+        Assert.Contains(BookingArticle(bookingId, slotId, BookingStatuses.Upcoming), card);
+        Assert.Contains("data-action=\"cancel\"", card);
+        Assert.Contains("data-action=\"reschedule\"", card);
+
+        var cancelled = await PostChangeAsync(customer, upcoming, "Cancel", bookingId);
+        var body = await cancelled.Content.ReadAsStringAsync();
+        Assert.True(cancelled.StatusCode == HttpStatusCode.Redirect, body);
+        Assert.Contains($"notice={CustomerNotices.Cancelled}", cancelled.Headers.Location?.OriginalString);
+
+        var page = WebUtility.HtmlDecode(await customer.GetStringAsync(cancelled.Headers.Location));
+        Assert.Contains(UiCopy.CancelledNotice, page);
+        var done = Article(page, bookingId);
+        Assert.Contains(BookingArticle(bookingId, slotId, BookingStatuses.Cancelled), done);
+        Assert.Contains(PaymentStatuses.Refunded, done);
+        Assert.DoesNotContain("data-action=\"cancel\"", done);
+        Assert.DoesNotContain("data-action=\"reschedule\"", done);
+        Assert.Contains(slotId.ToString(), await customer.GetStringAsync(Profile(SessionModes.Online)));
+    }
+
+    [Fact]
+    public async Task Reschedule_upcoming_moves_to_an_open_slot_and_keeps_payment_paid()
+    {
+        await using var web = CreateWeb(_api);
+        var customer = await SignInNewAsync(web);
+        var (slotId, bookingId) = await PayForFutureSlotAsync(customer, SessionModes.Online);
+        var (instructor, _) = await SignInExistingAsync(web, InstructorPhone);
+        await AcceptAsync(instructor, bookingId);
+
+        var online = await SlotIdsAsync(SessionModes.Online);
+        var otherModes = await SlotIdsAsync(SessionModes.Home);
+        otherModes.UnionWith(await SlotIdsAsync(SessionModes.Studio));
+
+        var upcoming = WebUtility.HtmlDecode(await customer.GetStringAsync("/bookings"));
+        var card = Article(upcoming, bookingId);
+        var choices = OptionIds(card);
+        Assert.NotEmpty(choices);
+        Assert.DoesNotContain(slotId, choices);
+        Assert.All(choices, id => Assert.Contains(id, online));
+        Assert.All(choices, id => Assert.DoesNotContain(id, otherModes));
+        Assert.Contains(UiCopy.RescheduleHint, card);
+
+        var target = choices[0];
+        var moved = await PostChangeAsync(customer, upcoming, "Reschedule", bookingId, target);
+        var body = await moved.Content.ReadAsStringAsync();
+        Assert.True(moved.StatusCode == HttpStatusCode.Redirect, body);
+        Assert.Contains($"notice={CustomerNotices.Rescheduled}", moved.Headers.Location?.OriginalString);
+
+        var page = WebUtility.HtmlDecode(await customer.GetStringAsync(moved.Headers.Location));
+        Assert.Contains(UiCopy.RescheduledNotice, page);
+        var done = Article(page, bookingId);
+        Assert.Contains(BookingArticle(bookingId, target, BookingStatuses.Upcoming), done);
+        Assert.Contains(PaymentStatuses.Paid, done);
+        Assert.DoesNotContain(PaymentStatuses.Refunded, done);
+        Assert.Contains(slotId, OptionIds(done));
+        Assert.DoesNotContain(target, OptionIds(done));
+
+        var profile = await customer.GetStringAsync(Profile(SessionModes.Online));
+        Assert.Contains(slotId.ToString(), profile);
+        Assert.DoesNotContain(target.ToString(), profile);
+    }
+
+    [Fact]
+    public async Task Illegal_cancel_and_reschedule_stay_on_the_page_with_the_api_error()
+    {
+        await using var web = CreateWeb(_api);
+        var customer = await SignInNewAsync(web);
+        var (slotId, bookingId) = await PayForFutureSlotAsync(customer, SessionModes.Online);
+        var studio = (await SlotIdsAsync(SessionModes.Studio)).First();
+
+        var pending = WebUtility.HtmlDecode(await customer.GetStringAsync("/bookings"));
+        Assert.Contains("data-action=\"cancel\"", Article(pending, bookingId));
+        Assert.DoesNotContain("data-action=\"reschedule\"", Article(pending, bookingId));
+
+        var tooSoon = await PostChangeAsync(customer, pending, "Reschedule", bookingId, studio);
+        var tooSoonBody = WebUtility.HtmlDecode(await tooSoon.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.OK, tooSoon.StatusCode);
+        Assert.Contains("Only an upcoming booking can be rescheduled.", tooSoonBody);
+        Assert.Contains(BookingArticle(bookingId, slotId, BookingStatuses.PendingAccept), tooSoonBody);
+
+        var missingSlot = await PostChangeAsync(customer, pending, "Reschedule", bookingId);
+        var missingBody = WebUtility.HtmlDecode(await missingSlot.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.OK, missingSlot.StatusCode);
+        Assert.Contains(UiCopy.RescheduleSlotRequired, missingBody);
+        Assert.Contains(BookingArticle(bookingId, slotId, BookingStatuses.PendingAccept), missingBody);
+
+        var (instructor, _) = await SignInExistingAsync(web, InstructorPhone);
+        await AcceptAsync(instructor, bookingId);
+
+        var upcoming = WebUtility.HtmlDecode(await customer.GetStringAsync("/bookings"));
+        var sameSlot = await PostChangeAsync(customer, upcoming, "Reschedule", bookingId, slotId);
+        var sameBody = WebUtility.HtmlDecode(await sameSlot.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.OK, sameSlot.StatusCode);
+        Assert.Contains("Pick a different slot.", sameBody);
+        Assert.Contains(BookingArticle(bookingId, slotId, BookingStatuses.Upcoming), sameBody);
+        Assert.Contains(PaymentStatuses.Paid, Article(sameBody, bookingId));
+
+        var otherMode = await PostChangeAsync(customer, upcoming, "Reschedule", bookingId, studio);
+        var modeBody = WebUtility.HtmlDecode(await otherMode.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.OK, otherMode.StatusCode);
+        Assert.Contains("same session mode", modeBody, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(BookingArticle(bookingId, slotId, BookingStatuses.Upcoming), modeBody);
+
+        await ShiftSlotToYesterdayAsync(slotId);
+        var started = WebUtility.HtmlDecode(await customer.GetStringAsync("/bookings"));
+        var startedCard = Article(started, bookingId);
+        Assert.DoesNotContain("data-action=\"cancel\"", startedCard);
+        Assert.Contains("data-action=\"reschedule\"", startedCard);
+
+        var late = await PostChangeAsync(customer, started, "Cancel", bookingId);
+        var lateBody = WebUtility.HtmlDecode(await late.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.OK, late.StatusCode);
+        Assert.Contains("already started", lateBody, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(BookingArticle(bookingId, slotId, BookingStatuses.Upcoming), lateBody);
+        Assert.Contains(PaymentStatuses.Paid, Article(lateBody, bookingId));
+
+        var listed = WebUtility.HtmlDecode(await instructor.GetStringAsync($"/instructor/bookings?status={BookingStatuses.Upcoming}"));
+        var completed = await instructor.PostAsync(
+            $"/instructor/bookings?handler=Complete&id={bookingId}&status={BookingStatuses.Upcoming}",
+            Form(listed, new Dictionary<string, string>()));
+        var completedBody = await completed.Content.ReadAsStringAsync();
+        Assert.True(completed.StatusCode == HttpStatusCode.Redirect, completedBody);
+
+        var done = WebUtility.HtmlDecode(await customer.GetStringAsync("/bookings"));
+        var doneCard = Article(done, bookingId);
+        Assert.Contains(BookingArticle(bookingId, slotId, BookingStatuses.Completed), doneCard);
+        Assert.Contains("data-action=\"review\"", doneCard);
+        Assert.DoesNotContain("data-action=\"cancel\"", doneCard);
+        Assert.DoesNotContain("data-action=\"reschedule\"", doneCard);
+
+        var cancelDone = await PostChangeAsync(customer, done, "Cancel", bookingId);
+        var cancelDoneBody = WebUtility.HtmlDecode(await cancelDone.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.OK, cancelDone.StatusCode);
+        Assert.Contains("Only a pending or upcoming booking can be cancelled.", cancelDoneBody);
+        Assert.Contains("data-action=\"review\"", cancelDoneBody);
+
+        var moveDone = await PostChangeAsync(customer, done, "Reschedule", bookingId, studio);
+        var moveDoneBody = WebUtility.HtmlDecode(await moveDone.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.OK, moveDone.StatusCode);
+        Assert.Contains("Only an upcoming booking can be rescheduled.", moveDoneBody);
+        Assert.Contains(BookingArticle(bookingId, slotId, BookingStatuses.Completed), moveDoneBody);
+    }
+
+    [Fact]
+    public async Task Another_customer_cannot_cancel_or_reschedule()
+    {
+        await using var web = CreateWeb(_api);
+        var owner = await SignInNewAsync(web);
+        var (slotId, bookingId) = await PayForFutureSlotAsync(owner, SessionModes.Online);
+        var (instructor, _) = await SignInExistingAsync(web, InstructorPhone);
+        await AcceptAsync(instructor, bookingId);
+        var target = (await SlotIdsAsync(SessionModes.Online)).First(id => id != slotId);
+
+        var other = await SignInNewAsync(web);
+        var empty = await other.GetStringAsync("/bookings");
+        Assert.DoesNotContain(bookingId.ToString(), empty);
+
+        var cancel = await PostChangeAsync(other, empty, "Cancel", bookingId);
+        var cancelBody = WebUtility.HtmlDecode(await cancel.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.OK, cancel.StatusCode);
+        Assert.Contains("another account", cancelBody, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(bookingId.ToString(), cancelBody);
+
+        var move = await PostChangeAsync(other, empty, "Reschedule", bookingId, target);
+        var moveBody = WebUtility.HtmlDecode(await move.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.OK, move.StatusCode);
+        Assert.Contains("another account", moveBody, StringComparison.OrdinalIgnoreCase);
+
+        var mine = WebUtility.HtmlDecode(await owner.GetStringAsync("/bookings"));
+        var card = Article(mine, bookingId);
+        Assert.Contains(BookingArticle(bookingId, slotId, BookingStatuses.Upcoming), card);
+        Assert.Contains(PaymentStatuses.Paid, card);
+        Assert.Contains("data-action=\"cancel\"", card);
+    }
+
+    [Fact]
+    public async Task Reschedule_to_a_taken_slot_shows_the_conflict()
+    {
+        await using var web = CreateWeb(_api);
+        var first = await SignInNewAsync(web);
+        var (slotId, bookingId) = await PayForFutureSlotAsync(first, SessionModes.Online);
+        var (instructor, _) = await SignInExistingAsync(web, InstructorPhone);
+        await AcceptAsync(instructor, bookingId);
+
+        var second = await SignInNewAsync(web);
+        var (takenId, _) = await PayForFutureSlotAsync(second, SessionModes.Online);
+        Assert.NotEqual(slotId, takenId);
+
+        var upcoming = WebUtility.HtmlDecode(await first.GetStringAsync("/bookings"));
+        Assert.DoesNotContain(takenId.ToString(), OptionIds(Article(upcoming, bookingId)).Select(id => id.ToString()));
+
+        var conflict = await PostChangeAsync(first, upcoming, "Reschedule", bookingId, takenId);
+        var body = WebUtility.HtmlDecode(await conflict.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.OK, conflict.StatusCode);
+        Assert.Contains("no longer available", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(UiCopy.RescheduledNotice, body);
+        var card = Article(body, bookingId);
+        Assert.Contains(BookingArticle(bookingId, slotId, BookingStatuses.Upcoming), card);
+        Assert.Contains(PaymentStatuses.Paid, card);
+        Assert.DoesNotContain(takenId.ToString(), OptionIds(card).Select(id => id.ToString()));
+        Assert.Contains("data-action=\"reschedule\"", card);
+    }
+
     private WebApplicationFactory<WebApp::Program> CreateWeb(YogaApiFactory api, Action<IServiceCollection>? configure = null)
     {
         _ = api.Server;
@@ -312,6 +562,114 @@ public class BookingLifecyclePageTests : IClassFixture<YogaApiFactory>
         return (link.SlotId, Guid.Parse(booked.Groups[1].Value));
     }
 
+    private async Task<(Guid SlotId, Guid BookingId)> PayForFutureSlotAsync(HttpClient client, string mode)
+    {
+        var slotId = (await FutureSlotIdsAsync(mode)).First();
+        var path = $"/bookings/new?providerId={SeedIds.AnanyaProviderId}&slotId={slotId}&mode={mode}";
+        var bookPage = await client.GetStringAsync(path);
+        Assert.Contains(slotId.ToString(), bookPage);
+        var started = await client.PostAsync(path, Form(bookPage, new Dictionary<string, string>()));
+        Assert.Equal(HttpStatusCode.Redirect, started.StatusCode);
+        var pay = await client.GetAsync(started.Headers.Location);
+        var payHtml = await pay.Content.ReadAsStringAsync();
+        Assert.True(pay.IsSuccessStatusCode, payHtml);
+
+        var paid = await client.PostAsync("/bookings/pay?handler=Pay", Form(payHtml, new Dictionary<string, string>()));
+        var paidBody = await paid.Content.ReadAsStringAsync();
+        Assert.True(paid.StatusCode == HttpStatusCode.Redirect, paidBody);
+        var booked = Regex.Match(paid.Headers.Location?.OriginalString ?? "", "booked=([0-9a-fA-F-]{36})");
+        Assert.True(booked.Success, paid.Headers.Location?.OriginalString);
+        return (slotId, Guid.Parse(booked.Groups[1].Value));
+    }
+
+    private async Task<List<Guid>> FutureSlotIdsAsync(string mode)
+    {
+        var slots = await SlotsAsync(mode);
+        var ids = slots
+            .Where(slot => !HasStarted(slot))
+            .OrderByDescending(slot => slot.Date)
+            .ThenByDescending(slot => slot.Start, StringComparer.Ordinal)
+            .Select(slot => slot.Id)
+            .ToList();
+        Assert.NotEmpty(ids);
+        return ids;
+    }
+
+    private async Task<HashSet<Guid>> SlotIdsAsync(string mode) =>
+        (await SlotsAsync(mode)).Select(slot => slot.Id).ToHashSet();
+
+    private async Task<List<SlotBody>> SlotsAsync(string mode)
+    {
+        var list = await _api.CreateClient().GetFromJsonAsync<SlotListBody>(
+            $"/api/providers/{SeedIds.AnanyaProviderId}/slots?mode={Uri.EscapeDataString(mode)}",
+            Json);
+        Assert.NotNull(list);
+        return list!.Slots;
+    }
+
+    private async Task ShiftSlotToYesterdayAsync(Guid slotId)
+    {
+        using var scope = _api.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<YogaDbContext>();
+        var slot = await db.AvailabilitySlots.SingleAsync(s => s.Id == slotId);
+        slot.Date = MumbaiClock.Today().AddDays(-1);
+        await db.SaveChangesAsync();
+    }
+
+    private static async Task AcceptAsync(HttpClient instructor, Guid bookingId)
+    {
+        var pending = await instructor.GetStringAsync($"/instructor/bookings?status={BookingStatuses.PendingAccept}");
+        var accepted = await instructor.PostAsync(
+            $"/instructor/bookings?handler=Accept&id={bookingId}&status={BookingStatuses.PendingAccept}",
+            Form(pending, new Dictionary<string, string>()));
+        var body = await accepted.Content.ReadAsStringAsync();
+        Assert.True(accepted.StatusCode == HttpStatusCode.Redirect, body);
+    }
+
+    private static async Task<HttpResponseMessage> PostChangeAsync(
+        HttpClient client,
+        string html,
+        string handler,
+        Guid bookingId,
+        Guid? slotId = null)
+    {
+        var fields = new Dictionary<string, string>();
+        if (slotId is Guid id)
+            fields["slotId"] = id.ToString();
+        return await client.PostAsync($"/bookings?handler={handler}&id={bookingId}", Form(html, fields));
+    }
+
+    private static string Profile(string mode) =>
+        $"/instructors/{SeedIds.AnanyaProviderId}?mode={mode}";
+
+    private static string Article(string html, Guid bookingId)
+    {
+        var marker = $"data-booking-id=\"{bookingId}\"";
+        var start = html.IndexOf(marker, StringComparison.Ordinal);
+        Assert.True(start >= 0, html);
+        var open = html.LastIndexOf("<article", start, StringComparison.OrdinalIgnoreCase);
+        var close = html.IndexOf("</article>", start, StringComparison.OrdinalIgnoreCase);
+        Assert.True(open >= 0 && close > open, html);
+        return html[open..(close + "</article>".Length)];
+    }
+
+    private static List<Guid> OptionIds(string article)
+    {
+        var form = Regex.Match(article, "data-action=\"reschedule\"[\\s\\S]*?</form>", RegexOptions.IgnoreCase);
+        if (!form.Success)
+            return [];
+        return Regex.Matches(form.Value, "<option\\b[^>]*value=\"([0-9a-fA-F-]{36})\"", RegexOptions.IgnoreCase)
+            .Select(match => Guid.Parse(match.Groups[1].Value))
+            .ToList();
+    }
+
+    private static bool HasStarted(SlotBody slot)
+    {
+        if (!TimeOnly.TryParseExact(slot.Start, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var start))
+            return true;
+        return MumbaiClock.SessionStart(slot.Date, start) <= DateTimeOffset.UtcNow;
+    }
+
     private static HttpClient Client(WebApplicationFactory<WebApp::Program> web) =>
         web.CreateClient(new WebApplicationFactoryClientOptions
         {
@@ -396,4 +754,6 @@ public class BookingLifecyclePageTests : IClassFixture<YogaApiFactory>
     }
 
     private sealed record BookLink(string Path, Guid SlotId);
+    private sealed record SlotBody(Guid Id, string Mode, DateOnly Date, string Start, string End);
+    private sealed record SlotListBody(string Mode, DateOnly From, DateOnly To, List<SlotBody> Slots);
 }

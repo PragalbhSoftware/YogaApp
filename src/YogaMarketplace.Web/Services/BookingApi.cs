@@ -107,8 +107,13 @@ public sealed record ReviewDto(
     string? Comment,
     DateTimeOffset CreatedAt);
 
+public sealed class RescheduleBookingDto
+{
+    public Guid SlotId { get; set; }
+}
+
 /// <summary>
-/// Customer booking calls: checkout, the customer's list, and one review after completion.
+/// Customer booking calls: checkout, the customer's list, cancel, reschedule, and one review after completion.
 /// Instructor accept, decline, and complete are <see cref="IInstructorBookingApi"/>.
 /// The Razorpay webhook stays on the API; this client does not call it.
 /// </summary>
@@ -117,6 +122,8 @@ public interface IBookingApi
     Task<ApiResult<CheckoutOrderDto>> CreateOrderAsync(CreateBookingOrderDto request, CancellationToken cancellationToken);
     Task<ApiResult<BookingDto>> ConfirmAsync(ConfirmPaymentDto request, CancellationToken cancellationToken);
     Task<ApiResult<List<BookingDto>>> ListMineAsync(CancellationToken cancellationToken);
+    Task<ApiResult<BookingDto>> CancelAsync(Guid bookingId, CancellationToken cancellationToken);
+    Task<ApiResult<BookingDto>> RescheduleAsync(Guid bookingId, Guid slotId, CancellationToken cancellationToken);
     Task<ApiResult<ReviewDto>> CreateReviewAsync(Guid bookingId, CreateReviewDto request, CancellationToken cancellationToken);
 }
 
@@ -141,6 +148,15 @@ public sealed class BookingApiClient : IBookingApi
 
     public Task<ApiResult<List<BookingDto>>> ListMineAsync(CancellationToken cancellationToken) =>
         _exchange.GetAsync<List<BookingDto>>(MinePath, cancellationToken);
+
+    public Task<ApiResult<BookingDto>> CancelAsync(Guid bookingId, CancellationToken cancellationToken) =>
+        _exchange.PostAsync<BookingDto>($"api/bookings/{bookingId}/cancel", new { }, cancellationToken);
+
+    public Task<ApiResult<BookingDto>> RescheduleAsync(Guid bookingId, Guid slotId, CancellationToken cancellationToken) =>
+        _exchange.PostAsync<BookingDto>(
+            $"api/bookings/{bookingId}/reschedule",
+            new RescheduleBookingDto { SlotId = slotId },
+            cancellationToken);
 
     public Task<ApiResult<ReviewDto>> CreateReviewAsync(Guid bookingId, CreateReviewDto request, CancellationToken cancellationToken) =>
         _exchange.PostAsync<ReviewDto>($"api/bookings/{bookingId}/reviews", request, cancellationToken);

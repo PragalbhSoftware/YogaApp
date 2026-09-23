@@ -88,7 +88,7 @@ Web: `http://localhost:5081`
 2. **Area.** Pick a Mumbai neighbourhood from `GET /api/areas`.
 3. **Instructors.** Filter by area and Home / Studio / Online. The list is verified instructors for the `yoga` category (`Api:CategorySlug`). Open a profile to see this week's slots.
 4. **Book and pay.** Choose a slot. Home asks for an address and a landmark before the order is created. Studio and Online go straight to checkout. Development uses a local stand-in for Razorpay Checkout (`Payments:UseFakeCheckout`). Pay calls `POST /api/bookings/confirm` and the booking is `PendingAccept`. Payment failed and Cancel payment do not confirm, so no booking is created.
-5. **My bookings.** `GET /api/bookings/me` for the signed-in customer. The page is `/bookings`. After a session is `Completed`, the customer can leave one rating (1–5) and an optional comment. The form stays hidden until then, and after the review is saved.
+5. **My bookings.** `GET /api/bookings/me` for the signed-in customer. The page is `/bookings`. Cancel is on `PendingAccept` and `Upcoming` until the session's Mumbai start (`POST /api/bookings/{id}/cancel`). Reschedule is on `Upcoming` only: the page loads open slots for that instructor and mode from `GET /api/providers/{id}/slots?mode=`, then posts `{ "slotId" }` to `POST /api/bookings/{id}/reschedule`. A taken slot stays on the page with the API error (409). The 12-hour window and 50% late fee are not applied. After a session is `Completed`, the customer can leave one rating (1–5) and an optional comment. The form stays hidden until then, and after the review is saved.
 6. **Instructor requests.** Ananya (and any provider account) signs in with the same phone OTP. The role on the JWT is `Provider`, and the app opens `/instructor/bookings`. Filter by status, accept or decline `PendingAccept`, and mark `Upcoming` complete. Customers cannot open that page. A provider cannot open My bookings.
 
 The API JWT from `POST /api/auth/otp/verify` is stored in the encrypted `ym.session` cookie and sent as `Authorization: Bearer` on later API calls. The chosen area is the `ym.area` cookie.
@@ -227,6 +227,8 @@ The checkout signature is hex HMAC-SHA256 of `{orderId}|{paymentId}` with `Razor
 
 In Development the web pay page does not load `checkout.razorpay.com`. `Payments:UseFakeCheckout` is true only in `appsettings.Development.json` (not published). The server signs with `Payments:KeySecret`, the same Development placeholder as `Razorpay:KeySecret` (`dev-only-not-a-live-key-secret`). That value is not a live credential and is not sent to the browser. Pay now, Payment failed, and Cancel payment are the local checkout. When `Payments:UseFakeCheckout` is false, the pay page opens Razorpay Checkout.js and posts the returned order id, payment id, and signature to confirm. Production refuses to start if the fake checkout is on.
 
+To try Razorpay's test checkout later, set `Payments__UseFakeCheckout=false` in the environment (it overrides `appsettings.Development.json`) and put test keys in API user secrets as above. Do not commit them. `Payments__KeySecret` overrides the local signing secret the same way; leave it unset unless fake checkout is on. The published `appsettings.json` keeps `UseFakeCheckout` false and `KeySecret` empty.
+
 Local fake example, after OTP verify and `GET /api/providers/{id}/slots?mode=Home`:
 
 ```bash
@@ -330,7 +332,7 @@ Target is IIS on Plesk with SQL Server, subdomain `YogaDemo.psoftcs.com`.
 2. Customer web (OTP, area, verified browse, book and pay) and book + pay HTTP — already in the repo. Pay-at-book creates `PendingAccept`
 3. Accept / decline / complete, reviews, payout pending, and refund of a captured payment whose slot was lost — API and the instructor/customer pages are in the repo. Payout export UI is later
 4. Admin approve/reject, users, bookings, payments, masters, summary report, and the local admin Razor pages — already in the repo
-5. Payout export. Customer cancel and reschedule HTTP are in the repo.
+5. Payout export. Customer cancel and reschedule HTTP, and the My bookings buttons, are in the repo.
 
 ## Out of scope
 
