@@ -997,6 +997,106 @@ button.refresh-slots {
 
 button[aria-busy="true"] { opacity: 0.72; }
 
+.flow .pills {
+  gap: 0.45rem;
+  margin: 0.15rem 0 1rem;
+}
+
+.flow .pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0.35rem 0.9rem;
+  font-weight: 600;
+}
+
+.section-link { margin: 0.65rem 0 0; }
+
+.section-link a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.section-link a:hover,
+.section-link a:focus-visible { text-decoration: underline; }
+
+.window-label {
+  margin: 0.75rem 0 0;
+  color: var(--muted);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.notice-host:empty,
+[data-notice-host]:empty { display: none; }
+
+.inbox-list > .card,
+.owned-days .card { margin: 0; }
+
+.decision-row {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.decision-row form { margin: 0; }
+
+.owned-day .day-label { margin-top: 0.85rem; }
+
+.owned-day:first-child .day-label { margin-top: 0.15rem; }
+
+.slot-card {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.95rem 1rem;
+  border-radius: 1rem;
+  box-shadow: 0 8px 20px rgba(28, 27, 25, 0.04);
+}
+
+.slot-time {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.slot-state {
+  margin: 0.2rem 0 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.slot-card[data-state="open"] .slot-state { color: #145c3e; }
+
+.slot-card .muted { margin: 0.35rem 0 0; }
+
+.slot-card form { margin: 0; }
+
+.slot-card button[type="submit"] { margin-top: 0; }
+
+@media (min-width: 40rem) {
+  .decision-row { grid-template-columns: 1fr 1fr; }
+
+  .slot-card {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  .slot-card form { justify-self: end; }
+
+  .slot-card button[type="submit"] {
+    width: auto;
+    min-width: 8.5rem;
+  }
+}
+
 @media (max-width: 28rem) {
   .summary div {
     flex-direction: column;

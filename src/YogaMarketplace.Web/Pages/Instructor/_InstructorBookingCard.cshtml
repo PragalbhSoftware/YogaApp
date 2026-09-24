@@ -1,0 +1,61 @@
+@model YogaMarketplace.Web.Pages.Instructor.InstructorBookingCard
+@{
+    var booking = Model.Booking;
+}
+<article class="card booking-card" data-booking-id="@booking.Id" data-slot-id="@booking.SlotId" data-status="@booking.Status">
+    <div class="summary-who">
+        <span class="avatar" aria-hidden="true">@PersonMark.Initials(booking.ServiceTitle)</span>
+        <div class="person-copy">
+            <h2>@booking.ServiceTitle</h2>
+            <p class="muted">@BookingStatusText.FilterLabel(booking.Status)</p>
+        </div>
+    </div>
+    <partial name="_SessionFacts" model="booking" />
+    @if (InstructorBookingCommands.CanAccept(booking.Status))
+    {
+        <div class="booking-actions">
+            <p class="muted">@UiCopy.AcceptHint</p>
+            <div class="decision-row">
+                <form method="post"
+                      data-ajax
+                      data-action="accept"
+                      data-pending="@UiCopy.UpdatingRequest"
+                      data-failed="@UiCopy.RequestUpdateFailed"
+                      asp-page="/Instructor/Bookings"
+                      asp-page-handler="Accept"
+                      asp-route-id="@booking.Id"
+                      asp-route-status="@Model.FilterStatus">
+                    <button type="submit">@UiCopy.AcceptBooking</button>
+                </form>
+                <form method="post"
+                      data-ajax
+                      data-action="decline"
+                      data-pending="@UiCopy.UpdatingRequest"
+                      data-failed="@UiCopy.RequestUpdateFailed"
+                      asp-page="/Instructor/Bookings"
+                      asp-page-handler="Decline"
+                      asp-route-id="@booking.Id"
+                      asp-route-status="@Model.FilterStatus">
+                    <button type="submit" class="secondary">@UiCopy.DeclineBooking</button>
+                </form>
+            </div>
+        </div>
+    }
+    else if (InstructorBookingCommands.CanComplete(booking.Status))
+    {
+        <div class="booking-actions">
+            <p class="muted">@UiCopy.CompleteHint</p>
+            <form method="post"
+                  data-ajax
+                  data-action="complete"
+                  data-pending="@UiCopy.UpdatingRequest"
+                  data-failed="@UiCopy.RequestUpdateFailed"
+                  asp-page="/Instructor/Bookings"
+                  asp-page-handler="Complete"
+                  asp-route-id="@booking.Id"
+                  asp-route-status="@Model.FilterStatus">
+                <button type="submit">@UiCopy.CompleteBooking</button>
+            </form>
+        </div>
+    }
+</article>

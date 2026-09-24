@@ -1,0 +1,31 @@
+@model YogaMarketplace.Web.Pages.Instructor.SlotCardView
+<article class="card slot-card"
+         data-slot-id="@Model.Slot.Id"
+         data-blocked="@(Model.Slot.IsBlocked ? "true" : "false")"
+         data-state="@Model.State"
+         data-mode="@Model.Slot.Mode">
+    <div class="slot-copy">
+        <p class="slot-time">@Model.Slot.Start–@Model.Slot.End</p>
+        <p class="slot-state">@InstructorAvailability.Label(Model.State)</p>
+        @if (InstructorAvailability.Detail(Model.State) is string detail)
+        {
+            <p class="muted">@detail</p>
+        }
+    </div>
+    @if (Model.CanBlock)
+    {
+        <form method="post"
+              data-ajax
+              data-action="block"
+              data-pending="@UiCopy.BlockingSlot"
+              data-failed="@UiCopy.BlockUpdateFailed"
+              asp-page="/Instructor/Availability"
+              asp-page-handler="Block"
+              asp-route-id="@Model.Slot.Id"
+              asp-route-mode="@Model.Mode"
+              asp-route-from="@Model.FromQuery"
+              asp-route-to="@Model.ToQuery">
+            <button type="submit" class="secondary">@UiCopy.BlockSlot</button>
+        </form>
+    }
+</article>

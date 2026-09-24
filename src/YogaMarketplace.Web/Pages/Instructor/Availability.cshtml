@@ -5,79 +5,85 @@
 }
 
 @Html.AntiForgeryToken()
-<h1>@UiCopy.InstructorAvailabilityTitle</h1>
-<p class="lead">@UiCopy.InstructorAvailabilityLead</p>
-<p><a asp-page="/Instructor/Bookings">@UiCopy.InstructorInboxNav</a></p>
-
-<nav aria-label="@UiCopy.ModeFilter">
-    <ul class="pills">
-        @foreach (var mode in SessionModes.All)
+<div class="flow">
+    <header class="flow-intro">
+        <p class="kicker">@UiCopy.InstructorWeekKicker</p>
+        <h1>@UiCopy.InstructorAvailabilityTitle</h1>
+        <p class="lead">@UiCopy.InstructorAvailabilityLead</p>
+        @if (!string.IsNullOrEmpty(Model.WindowLabel) && Model.WindowFrom is DateOnly from && Model.WindowTo is DateOnly to)
         {
-            var label = mode switch
-            {
-                SessionModes.Home => UiCopy.ModeHome,
-                SessionModes.Studio => UiCopy.ModeStudio,
-                _ => UiCopy.ModeOnline
-            };
-            <li>
-                <a class="pill @(Model.ModeKnown && Model.Mode == mode ? "active" : null)"
-                   asp-page="/Instructor/Availability"
-                   asp-route-mode="@mode"
-                   asp-route-from="@Model.FromQuery"
-                   asp-route-to="@Model.ToQuery">@label</a>
-            </li>
+            <p class="window-label" data-window-from="@from.ToString("yyyy-MM-dd")" data-window-to="@to.ToString("yyyy-MM-dd")">@Model.WindowLabel</p>
         }
-    </ul>
-</nav>
+        <p class="section-link"><a asp-page="/Instructor/Bookings">@UiCopy.InstructorInboxNav</a></p>
+    </header>
 
-@if (!string.IsNullOrEmpty(Model.WindowLabel) && Model.WindowFrom is DateOnly from && Model.WindowTo is DateOnly to)
-{
-    <p class="muted" data-window-from="@from.ToString("yyyy-MM-dd")" data-window-to="@to.ToString("yyyy-MM-dd")">@Model.WindowLabel</p>
-}
+    <nav aria-label="@UiCopy.ModeFilter">
+        <ul class="pills">
+            @foreach (var mode in SessionModes.All)
+            {
+                var label = mode switch
+                {
+                    SessionModes.Home => UiCopy.ModeHome,
+                    SessionModes.Studio => UiCopy.ModeStudio,
+                    _ => UiCopy.ModeOnline
+                };
+                var active = Model.ModeKnown && Model.Mode == mode;
+                <li>
+                    <a class="pill @(active ? "active" : null)"
+                       aria-current="@(active ? "page" : null)"
+                       asp-page="/Instructor/Availability"
+                       asp-route-mode="@mode"
+                       asp-route-from="@Model.FromQuery"
+                       asp-route-to="@Model.ToQuery">@label</a>
+                </li>
+            }
+        </ul>
+    </nav>
 
-@if (!string.IsNullOrEmpty(Model.Notice))
-{
-    <p class="hint" role="status">@Model.Notice</p>
-}
-
-@if (!string.IsNullOrEmpty(Model.Error))
-{
-    <p class="alert" role="alert">@Model.Error</p>
-}
-
-@if (Model.ModeKnown && string.IsNullOrEmpty(Model.Error) && Model.Slots.Count == 0)
-{
-    <p role="status">@UiCopy.NoOwnedSlots</p>
-}
-else if (Model.Slots.Count > 0)
-{
-    @foreach (var slot in Model.Slots)
+    @if (Model.ModeKnown)
     {
-        var state = Model.StateOf(slot);
-        <article class="card"
-                 data-slot-id="@slot.Id"
-                 data-blocked="@(slot.IsBlocked ? "true" : "false")"
-                 data-state="@state"
-                 data-mode="@slot.Mode">
-            <h2>@InstructorAvailability.FormatDay(slot.Date)</h2>
-            <p>@slot.Start–@slot.End</p>
-            <p>@InstructorAvailability.Label(state)</p>
-            @if (InstructorAvailability.Detail(state) is string detail)
-            {
-                <p class="muted">@detail</p>
-            }
-            @if (Model.CanBlock(slot))
-            {
-                <form method="post"
-                      data-action="block"
-                      asp-page-handler="Block"
-                      asp-route-id="@slot.Id"
-                      asp-route-mode="@Model.Mode"
-                      asp-route-from="@Model.FromQuery"
-                      asp-route-to="@Model.ToQuery">
-                    <button type="submit">@UiCopy.BlockSlot</button>
-                </form>
-            }
-        </article>
+        <p class="muted">@SessionModeText.Hint(Model.Mode)</p>
     }
-}
+
+    <div data-notice-host aria-live="polite">
+        @if (!string.IsNullOrEmpty(Model.Notice))
+        {
+            <div class="notice notice-ok" role="status" data-notice>
+                <p>@Model.Notice</p>
+            </div>
+        }
+        @if (!string.IsNullOrEmpty(Model.Error))
+        {
+            <div class="notice notice-alert" role="alert" data-notice>
+                <p>@Model.Error</p>
+            </div>
+        }
+    </div>
+    <p class="visually-hidden" data-action-status aria-live="polite"></p>
+
+    @if (Model.ModeKnown && string.IsNullOrEmpty(Model.Error) && Model.Slots.Count == 0)
+    {
+        <div class="notice" role="status">
+            <p class="notice-title">@UiCopy.NoOwnedSlots</p>
+            <p>@UiCopy.NoOwnedSlotsHint</p>
+        </div>
+    }
+    else if (Model.Slots.Count > 0)
+    {
+        <div class="owned-days">
+            @foreach (var day in Model.Days)
+            {
+                <section class="owned-day">
+                    <h2 class="day-label">@InstructorAvailability.FormatDay(day.Key)</h2>
+                    <div class="booking-list">
+                        @foreach (var slot in day)
+                        {
+                            <partial name="_SlotCard" model="Model.CardFor(slot)" />
+                        }
+                    </div>
+                </section>
+            }
+        </div>
+    }
+</div>
+<script src="~/js/instructor.js" asp-append-version="true"></script>
