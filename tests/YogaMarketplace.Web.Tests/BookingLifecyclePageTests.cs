@@ -297,6 +297,11 @@ public class BookingLifecyclePageTests : IClassFixture<YogaApiFactory>
         var choices = OptionIds(card);
         Assert.NotEmpty(choices);
         Assert.DoesNotContain(slotId, choices);
+        var refresh = await customer.GetStringAsync($"/bookings?handler=Slots&id={bookingId}");
+        Assert.Contains("data-slot-options", refresh);
+        Assert.DoesNotContain("<html", refresh, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(choices[0].ToString(), refresh);
+        Assert.DoesNotContain(slotId.ToString(), refresh);
         Assert.All(choices, id => Assert.Contains(id, online));
         Assert.All(choices, id => Assert.DoesNotContain(id, otherModes));
         Assert.Contains(UiCopy.RescheduleHint, card);

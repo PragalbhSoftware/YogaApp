@@ -117,6 +117,7 @@ public static class UiCopy
 
     public const string BookingsNav = "Bookings";
     public const string BookTitle = "Book this session";
+    public const string BookLead = "Confirm the session, then continue to payment.";
     public const string BackToInstructor = "Back to instructor";
     public const string When = "When";
     public const string AmountDue = "Amount";
@@ -132,6 +133,7 @@ public static class UiCopy
     public const string SlotUnavailable = "That slot is no longer available.";
     public const string SlotEndedError = "That slot has already ended.";
 
+    public const string PayKicker = "Checkout";
     public const string PayTitle = "Pay";
     public const string PayLead = "Local checkout stands in for Razorpay. A booking is created only after you pay.";
     public const string PayLiveLead = "Pay with Razorpay. A booking is created only after the payment is captured.";
@@ -150,6 +152,13 @@ public static class UiCopy
     public const string MyBookingsTitle = "My bookings";
     public const string MyBookingsLead = "Sessions you have paid for. Cancel before the session starts, or move an accepted session to another open slot. After the instructor marks one complete, you can leave one rating.";
     public const string NoBookings = "You have no bookings yet.";
+    public const string NoBookingsHint = "Browse instructors and book an open time.";
+    public const string RefreshSlots = "Refresh times";
+    public const string RefreshingSlots = "Refreshing open times.";
+    public const string SlotsRefreshed = "Open times updated.";
+    public const string SlotsRefreshFailed = "Could not refresh open times. Try again.";
+    public const string ContinuingToPayment = "Continuing to payment.";
+    public const string PayingNow = "Paying.";
     public const string CancelBooking = "Cancel booking";
     public const string CancelHint = "This refunds the payment and frees the slot.";
     public const string CancelledNotice = "Cancelled. The payment was refunded and the slot is free.";

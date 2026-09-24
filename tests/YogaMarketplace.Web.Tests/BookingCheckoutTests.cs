@@ -37,6 +37,10 @@ public class BookingCheckoutTests : IClassFixture<YogaApiFactory>
 
         var pay = await client.GetAsync("/bookings/new");
         Assert.Equal(HttpStatusCode.Redirect, pay.StatusCode);
+
+        var slots = await client.GetAsync("/bookings?handler=Slots&id=" + Guid.NewGuid());
+        Assert.Equal(HttpStatusCode.Redirect, slots.StatusCode);
+        Assert.Contains("/account/sign-in", slots.Headers.Location?.OriginalString, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -53,6 +57,8 @@ public class BookingCheckoutTests : IClassFixture<YogaApiFactory>
         Assert.Contains(UiCopy.HomeAddressLead, bookPage);
         Assert.Contains("name=\"HomeAddress\"", bookPage);
         Assert.Contains("name=\"Landmark\"", bookPage);
+        Assert.Contains("Bandra, Mumbai", bookPage);
+        Assert.DoesNotContain("Lotus Studio", bookPage);
 
         var missing = await client.PostAsync(link.Path, Form(bookPage, new Dictionary<string, string>
         {
@@ -97,6 +103,8 @@ public class BookingCheckoutTests : IClassFixture<YogaApiFactory>
         Assert.Contains(UiCopy.PayNow, payHtml);
         Assert.Contains("899", payHtml);
         Assert.Contains("14th Road, Bandra West", payHtml);
+        Assert.Contains("Bandra, Mumbai", payHtml);
+        Assert.DoesNotContain("Lotus Studio", payHtml);
         Assert.DoesNotContain(DevKeySecret, payHtml);
         Assert.DoesNotContain("checkout.razorpay.com", payHtml);
         Assert.DoesNotContain("/api/webhooks/razorpay", payHtml);
@@ -236,12 +244,17 @@ public class BookingCheckoutTests : IClassFixture<YogaApiFactory>
         var bookPage = await client.GetStringAsync(link.Path);
         Assert.DoesNotContain("name=\"HomeAddress\"", bookPage);
         Assert.Contains("749", bookPage);
+        Assert.Contains("Bandra, Mumbai", bookPage);
+        Assert.Contains("Lotus Studio", bookPage);
 
         var started = await client.PostAsync(link.Path, Form(bookPage, new Dictionary<string, string>()));
         Assert.Equal(HttpStatusCode.Redirect, started.StatusCode);
         var pay = await client.GetAsync(started.Headers.Location);
         var payHtml = await pay.Content.ReadAsStringAsync();
         Assert.True(pay.IsSuccessStatusCode, payHtml);
+        Assert.Contains("Bandra, Mumbai", payHtml);
+        Assert.Contains("Lotus Studio", payHtml);
+        Assert.Contains("749", payHtml);
         return (link.Path, link.SlotId, payHtml);
     }
 

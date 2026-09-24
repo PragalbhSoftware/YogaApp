@@ -4,63 +4,64 @@
     ViewData["Title"] = UiCopy.BookTitle;
 }
 
-@if (Model.Quote is { } quote)
-{
-    <p><a asp-page="/Instructors/Profile" asp-route-id="@quote.ProviderId" asp-route-mode="@quote.Mode">@UiCopy.BackToInstructor</a></p>
-}
-else
-{
-    <p><a asp-page="/Instructors/Index">@UiCopy.BackToList</a></p>
-}
-
-<h1>@UiCopy.BookTitle</h1>
-
-@if (!string.IsNullOrEmpty(Model.Error))
-{
-    <p class="alert" role="alert">@Model.Error</p>
-}
-
-@if (Model.Quote is { } session)
-{
-    <dl class="summary">
-        <div>
-            <dt>@UiCopy.ProviderSingular</dt>
-            <dd>@session.ProviderName</dd>
-        </div>
-        <div>
-            <dt>@UiCopy.Mode</dt>
-            <dd>@session.Mode</dd>
-        </div>
-        <div>
-            <dt>@UiCopy.When</dt>
-            <dd>@session.Date.ToString("dddd d MMM") · @session.Start–@session.End</dd>
-        </div>
-        <div>
-            <dt>@UiCopy.AmountDue</dt>
-            <dd>@Money.Inr(session.Rate)</dd>
-        </div>
-    </dl>
-    @if (session.Mode == SessionModes.Studio && !string.IsNullOrWhiteSpace(session.StudioAddress))
+<div class="flow">
+    @if (Model.ProviderId != Guid.Empty)
     {
-        <p><strong>@UiCopy.StudioAddress.</strong> @session.StudioAddress</p>
+        <p class="back-link"><a asp-page="/Instructors/Profile" asp-route-id="@Model.ProviderId" asp-route-mode="@Model.Mode">@UiCopy.BackToInstructor</a></p>
+    }
+    else
+    {
+        <p class="back-link"><a asp-page="/Instructors/Index">@UiCopy.BackToList</a></p>
     }
 
-    <form method="post" asp-route-providerId="@Model.ProviderId" asp-route-slotId="@Model.SlotId" asp-route-mode="@Model.Mode">
-        <input type="hidden" asp-for="ProviderId" />
-        <input type="hidden" asp-for="SlotId" />
-        <input type="hidden" asp-for="Mode" />
-        @if (Model.NeedsHomeAddress)
-        {
-            <p class="lead">@UiCopy.HomeAddressLead</p>
-            <div class="field">
-                <label asp-for="HomeAddress">@UiCopy.HomeAddress</label>
-                <input asp-for="HomeAddress" autocomplete="street-address" maxlength="@HomeVisitLimits.AddressMaxLength" />
+    <header class="flow-intro">
+        <p class="kicker">@UiCopy.BookCta</p>
+        <h1>@UiCopy.BookTitle</h1>
+        <p class="lead">@UiCopy.BookLead</p>
+    </header>
+
+    @if (!string.IsNullOrEmpty(Model.Error))
+    {
+        <div class="notice notice-alert" role="alert">
+            <p>@Model.Error</p>
+        </div>
+    }
+
+    @if (Model.Summary is { } summary)
+    {
+        <article class="book-card checkout-card">
+            <div class="summary-who">
+                <span class="avatar" aria-hidden="true">@PersonMark.Initials(summary.ProviderName)</span>
+                <div class="person-copy">
+                    <div class="name-row">
+                        <p class="checkout-name">@summary.ProviderName</p>
+                        <p class="trust">@UiCopy.TrustVerified</p>
+                    </div>
+                </div>
             </div>
-            <div class="field">
-                <label asp-for="Landmark">@UiCopy.Landmark</label>
-                <input asp-for="Landmark" maxlength="@HomeVisitLimits.LandmarkMaxLength" />
-            </div>
-        }
-        <button type="submit">@UiCopy.ContinueToPayment</button>
-    </form>
-}
+            <partial name="_CheckoutSummary" model="summary" />
+            <form method="post" data-once data-busy="@UiCopy.ContinuingToPayment" asp-route-providerId="@Model.ProviderId" asp-route-slotId="@Model.SlotId" asp-route-mode="@Model.Mode">
+                <input type="hidden" asp-for="ProviderId" />
+                <input type="hidden" asp-for="SlotId" />
+                <input type="hidden" asp-for="Mode" />
+                @if (Model.NeedsHomeAddress)
+                {
+                    <div class="home-fields">
+                        <p class="lead">@UiCopy.HomeAddressLead</p>
+                        <div class="field">
+                            <label asp-for="HomeAddress">@UiCopy.HomeAddress</label>
+                            <input asp-for="HomeAddress" autocomplete="street-address" maxlength="@HomeVisitLimits.AddressMaxLength" />
+                        </div>
+                        <div class="field">
+                            <label asp-for="Landmark">@UiCopy.Landmark</label>
+                            <input asp-for="Landmark" maxlength="@HomeVisitLimits.LandmarkMaxLength" />
+                        </div>
+                    </div>
+                }
+                <button type="submit">@UiCopy.ContinueToPayment</button>
+                <p class="visually-hidden" data-form-status aria-live="polite"></p>
+            </form>
+        </article>
+    }
+</div>
+<script src="~/js/booking.js" asp-append-version="true"></script>

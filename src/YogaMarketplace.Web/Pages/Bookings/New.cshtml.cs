@@ -32,6 +32,7 @@ public class NewModel : PageModel
     public string? Landmark { get; set; }
 
     public SlotQuote? Quote { get; private set; }
+    public CheckoutSummary? Summary => Quote is null ? null : CheckoutSummary.From(Quote);
     public string? Error { get; private set; }
     public bool Unreachable { get; private set; }
     public bool NeedsHomeAddress => Quote is not null && SessionModes.IsHome(Quote.Mode);
@@ -53,7 +54,10 @@ public class NewModel : PageModel
             Quote.Start,
             Quote.End,
             HomeAddress,
-            Landmark), cancellationToken);
+            Landmark,
+            Quote.Area,
+            Quote.City,
+            Quote.StudioAddress), cancellationToken);
 
         if (!started.Ok || started.Data is null)
         {

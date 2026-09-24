@@ -80,7 +80,10 @@ public sealed class PaymentCheckout : IPaymentCheckout
             begin.Start,
             begin.End,
             address,
-            landmark));
+            landmark,
+            begin.Area,
+            begin.City,
+            begin.StudioAddress));
     }
 
     public async Task<ApiResult<BookingDto>> CaptureLocalAsync(CheckoutDraft draft, CancellationToken cancellationToken)

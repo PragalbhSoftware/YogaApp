@@ -11,6 +11,30 @@ public static class InstructorBookingCommands
     public static bool CanComplete(string status) => status == BookingStatuses.Upcoming;
 }
 
+public static class SessionModeText
+{
+    public static string Hint(string? mode) => SessionModes.Normalize(mode) switch
+    {
+        SessionModes.Home => UiCopy.ModeHomeHint,
+        SessionModes.Studio => UiCopy.ModeStudioHint,
+        SessionModes.Online => UiCopy.ModeOnlineHint,
+        _ => ""
+    };
+
+    public static string Place(string? area, string? city)
+    {
+        var left = string.IsNullOrWhiteSpace(area) ? null : area.Trim();
+        var right = string.IsNullOrWhiteSpace(city) ? null : city.Trim();
+        if (left is null)
+            return right ?? "";
+        if (right is null)
+            return left;
+        return left + ", " + right;
+    }
+}
+
+public sealed record RescheduleSlotRefresh(IReadOnlyList<SlotDto> Slots, string? Error);
+
 public static class CustomerBookingChanges
 {
     public static bool CanCancel(BookingDto booking) =>
