@@ -160,6 +160,20 @@ public class InstructorAvailabilityPageTests : IClassFixture<YogaApiFactory>
         Assert.Contains("data-blocked=\"false\"", after);
         Assert.DoesNotContain("data-action=\"block\"", after);
         Assert.Contains(bookingId.ToString(), await instructor.GetStringAsync("/instructor/bookings?status=PendingAccept"));
+
+        var fragment = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"/instructor/availability?handler=Block&id={slotId}&mode=Studio")
+        {
+            Content = Form(body, new Dictionary<string, string>())
+        };
+        fragment.Headers.TryAddWithoutValidation("X-Requested-With", "fetch");
+        var ajax = await instructor.SendAsync(fragment);
+        var ajaxBody = WebUtility.HtmlDecode(await ajax.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.OK, ajax.StatusCode);
+        Assert.Contains("data-ok=\"false\"", ajaxBody);
+        Assert.Contains("That slot has a booking.", ajaxBody);
+        Assert.DoesNotContain("data-slot-id=", ajaxBody);
     }
 
     [Fact]
@@ -197,6 +211,37 @@ public class InstructorAvailabilityPageTests : IClassFixture<YogaApiFactory>
         var missingBody = WebUtility.HtmlDecode(await missing.Content.ReadAsStringAsync());
         Assert.Equal(HttpStatusCode.OK, missing.StatusCode);
         Assert.Contains("Slot not found.", missingBody);
+    }
+
+    [Fact]
+    public async Task Block_fragment_updates_the_slot_without_a_reload()
+    {
+        await using var web = CreateWeb(_api);
+        var (instructor, _) = await SignInExistingAsync(web, InstructorPhone);
+        var page = await instructor.GetStringAsync("/instructor/availability?mode=Home");
+        var open = ParseSlots(page).First(slot => slot.State == "open");
+        var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"/instructor/availability?handler=Block&id={open.Id}&mode=Home")
+        {
+            Content = Form(page, new Dictionary<string, string>())
+        };
+        request.Headers.TryAddWithoutValidation("X-Requested-With", "fetch");
+        var blocked = await instructor.SendAsync(request);
+        var body = await blocked.Content.ReadAsStringAsync();
+        Assert.Equal(HttpStatusCode.OK, blocked.StatusCode);
+        Assert.Contains("data-ok=\"true\"", body);
+        Assert.Contains(UiCopy.BlockedNotice, body);
+        var card = Article(body, open.Id);
+        Assert.Contains("data-blocked=\"true\"", card);
+        Assert.Contains("data-state=\"blocked\"", card);
+        Assert.Contains(UiCopy.SlotBlocked, card);
+        Assert.Contains(UiCopy.SlotBlockedDetail, card);
+        Assert.DoesNotContain("data-action=\"block\"", card);
+        Assert.DoesNotContain("<html", body, StringComparison.OrdinalIgnoreCase);
+
+        var listed = await instructor.GetStringAsync("/instructor/availability?mode=Home");
+        Assert.Contains("data-state=\"blocked\"", Article(listed, open.Id));
     }
 
     private WebApplicationFactory<WebApp::Program> CreateWeb(YogaApiFactory api)

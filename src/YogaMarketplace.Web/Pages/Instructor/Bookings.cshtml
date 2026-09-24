@@ -4,63 +4,71 @@
     ViewData["Title"] = UiCopy.InstructorInboxTitle;
 }
 
-<h1>@UiCopy.InstructorInboxTitle</h1>
-<p class="lead">@UiCopy.InstructorInboxLead</p>
-<p><a asp-page="/Instructor/Availability">@UiCopy.InstructorAvailabilityNav</a></p>
+<div class="flow">
+    <header class="flow-intro">
+        <p class="kicker">@UiCopy.InstructorInboxNav</p>
+        <h1>@UiCopy.InstructorInboxTitle</h1>
+        <p class="lead">@UiCopy.InstructorInboxLead</p>
+        <p class="section-link"><a asp-page="/Instructor/Availability">@UiCopy.InstructorAvailabilityNav</a></p>
+    </header>
 
-<nav aria-label="@UiCopy.StatusFilter">
-    <ul class="pills">
-        <li>
-            <a class="pill @(Model.Status is null ? "active" : null)" asp-page="/Instructor/Bookings">@UiCopy.FilterAll</a>
-        </li>
-        @foreach (var status in BookingStatuses.All)
-        {
+    <nav aria-label="@UiCopy.StatusFilter">
+        <ul class="pills">
             <li>
-                <a class="pill @(Model.Status == status ? "active" : null)" asp-page="/Instructor/Bookings" asp-route-status="@status">@BookingStatusText.FilterLabel(status)</a>
+                <a class="pill @(Model.Status is null ? "active" : null)"
+                   aria-current="@(Model.Status is null ? "page" : null)"
+                   asp-page="/Instructor/Bookings">@UiCopy.FilterAll</a>
             </li>
+            @foreach (var status in BookingStatuses.All)
+            {
+                var active = Model.Status == status;
+                <li>
+                    <a class="pill @(active ? "active" : null)"
+                       aria-current="@(active ? "page" : null)"
+                       asp-page="/Instructor/Bookings"
+                       asp-route-status="@status">@BookingStatusText.FilterLabel(status)</a>
+                </li>
+            }
+        </ul>
+    </nav>
+
+    <div data-notice-host aria-live="polite">
+        @if (!string.IsNullOrEmpty(Model.Notice))
+        {
+            <div class="notice notice-ok" role="status" data-notice>
+                <p>@Model.Notice</p>
+            </div>
         }
-    </ul>
-</nav>
+        @if (!string.IsNullOrEmpty(Model.Error))
+        {
+            <div class="notice notice-alert" role="alert" data-notice>
+                <p>@Model.Error</p>
+            </div>
+        }
+    </div>
+    <p class="visually-hidden" data-action-status aria-live="polite"></p>
 
-@if (!string.IsNullOrEmpty(Model.Notice))
-{
-    <p class="hint" role="status">@Model.Notice</p>
-}
-
-@if (!string.IsNullOrEmpty(Model.Error))
-{
-    <p class="alert" role="alert">@Model.Error</p>
-}
-
-@if (string.IsNullOrEmpty(Model.Error) && Model.Bookings.Count == 0)
-{
-    <p role="status">@UiCopy.NoInstructorBookings</p>
-}
-else if (Model.Bookings.Count > 0)
-{
-    @foreach (var booking in Model.Bookings)
+    @if (string.IsNullOrEmpty(Model.Error) && Model.Bookings.Count == 0)
     {
-        <article class="card" data-booking-id="@booking.Id" data-slot-id="@booking.SlotId" data-status="@booking.Status">
-            <h2>@booking.ServiceTitle</h2>
-            <partial name="_SessionFacts" model="booking" />
-            @if (InstructorBookingCommands.CanAccept(booking.Status))
-            {
-                <form method="post" data-action="accept" asp-page-handler="Accept" asp-route-id="@booking.Id" asp-route-status="@Model.Status">
-                    <button type="submit">@UiCopy.AcceptBooking</button>
-                </form>
-            }
-            @if (InstructorBookingCommands.CanDecline(booking.Status))
-            {
-                <form method="post" data-action="decline" asp-page-handler="Decline" asp-route-id="@booking.Id" asp-route-status="@Model.Status">
-                    <button type="submit" class="secondary">@UiCopy.DeclineBooking</button>
-                </form>
-            }
-            @if (InstructorBookingCommands.CanComplete(booking.Status))
-            {
-                <form method="post" data-action="complete" asp-page-handler="Complete" asp-route-id="@booking.Id" asp-route-status="@Model.Status">
-                    <button type="submit">@UiCopy.CompleteBooking</button>
-                </form>
-            }
-        </article>
+        <div class="notice" data-empty role="status">
+            <p class="notice-title">@UiCopy.NoInstructorBookings</p>
+            <p>@UiCopy.NoInstructorBookingsHint</p>
+        </div>
     }
-}
+    else if (Model.Bookings.Count > 0)
+    {
+        <div class="booking-list inbox-list" data-booking-list>
+            @foreach (var card in Model.Cards)
+            {
+                <partial name="_InstructorBookingCard" model="card" />
+            }
+        </div>
+        <template id="inbox-empty">
+            <div class="notice" data-empty role="status">
+                <p class="notice-title">@UiCopy.NoInstructorBookings</p>
+                <p>@UiCopy.NoInstructorBookingsHint</p>
+            </div>
+        </template>
+    }
+</div>
+<script src="~/js/instructor.js" asp-append-version="true"></script>

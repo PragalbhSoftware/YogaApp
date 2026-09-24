@@ -220,6 +220,42 @@ public class BookingLifecyclePageTests : IClassFixture<YogaApiFactory>
     }
 
     [Fact]
+    public async Task Accept_and_decline_fragments_update_without_leaving_the_inbox()
+    {
+        await using var web = CreateWeb(_api);
+        var customer = await SignInNewAsync(web);
+        var (slotId, bookingId) = await PayForStudioAsync(customer);
+        var (otherSlot, otherBooking) = await PayForStudioAsync(customer);
+        var (instructor, _) = await SignInExistingAsync(web, InstructorPhone);
+
+        var all = await instructor.GetStringAsync("/instructor/bookings");
+        var updated = await PostFragmentAsync(instructor, $"/instructor/bookings?handler=Accept&id={bookingId}", all);
+        var body = await updated.Content.ReadAsStringAsync();
+        Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
+        Assert.Contains("data-ok=\"true\"", body);
+        Assert.Contains("data-stays=\"true\"", body);
+        Assert.Contains(UiCopy.AcceptedNotice, body);
+        Assert.Contains(BookingArticle(bookingId, slotId, BookingStatuses.Upcoming), body);
+        Assert.Contains("data-action=\"complete\"", Article(body, bookingId));
+        Assert.DoesNotContain("data-action=\"accept\"", Article(body, bookingId));
+        Assert.DoesNotContain("<html", body, StringComparison.OrdinalIgnoreCase);
+
+        var pending = await instructor.GetStringAsync($"/instructor/bookings?status={BookingStatuses.PendingAccept}");
+        var dropped = await PostFragmentAsync(
+            instructor,
+            $"/instructor/bookings?handler=Decline&id={otherBooking}&status={BookingStatuses.PendingAccept}",
+            pending);
+        var droppedBody = await dropped.Content.ReadAsStringAsync();
+        Assert.Equal(HttpStatusCode.OK, dropped.StatusCode);
+        Assert.Contains("data-stays=\"false\"", droppedBody);
+        Assert.Contains(UiCopy.DeclinedNotice, droppedBody);
+        Assert.DoesNotContain(otherBooking.ToString(), droppedBody);
+        Assert.Contains(
+            BookingArticle(otherBooking, otherSlot, BookingStatuses.Declined),
+            await instructor.GetStringAsync($"/instructor/bookings?status={BookingStatuses.Declined}"));
+    }
+
+    [Fact]
     public async Task Cancel_pending_accept_refunds_and_frees_the_slot()
     {
         await using var web = CreateWeb(_api);
@@ -720,6 +756,17 @@ public class BookingLifecyclePageTests : IClassFixture<YogaApiFactory>
         var slot = await db.AvailabilitySlots.SingleAsync(s => s.Id == slotId);
         slot.Date = MumbaiClock.Today().AddDays(-1);
         await db.SaveChangesAsync();
+    }
+
+    private static async Task<HttpResponseMessage> PostFragmentAsync(HttpClient client, string url, string html)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, url)
+        {
+            Content = Form(html, new Dictionary<string, string>())
+        };
+        request.Headers.TryAddWithoutValidation("X-Requested-With", "fetch");
+        request.Headers.Accept.ParseAdd("text/html");
+        return await client.SendAsync(request);
     }
 
     private static async Task AcceptAsync(HttpClient instructor, Guid bookingId)

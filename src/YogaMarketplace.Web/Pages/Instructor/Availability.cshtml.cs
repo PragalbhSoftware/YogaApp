@@ -43,27 +43,67 @@ public class AvailabilityModel : PageModel
     {
         var result = await _slots.BlockAsync(id, cancellationToken);
         var canonical = SessionModes.Normalize(mode) ?? SessionModes.Home;
+        var fromQuery = BlankToNull(from);
+        var toQuery = BlankToNull(to);
         if (!result.Ok || result.Data is null)
         {
-            Error = result.Error ?? UiCopy.GenericError;
+            var error = result.Error ?? UiCopy.GenericError;
+            if (WantsFragment)
+                return Fragment(new SlotMutationBody(false, null, error, null));
+
+            Error = error;
             await LoadAsync(canonical, from, to, cancellationToken);
             return Page();
+        }
+
+        if (WantsFragment)
+        {
+            Mode = canonical;
+            FromQuery = fromQuery;
+            ToQuery = toQuery;
+            var slot = result.Data;
+            return Fragment(new SlotMutationBody(
+                true,
+                InstructorAvailabilityNotices.Text(InstructorAvailabilityNotices.Blocked),
+                null,
+                new SlotCardView(
+                    slot,
+                    InstructorAvailability.State(slot, occupied: false),
+                    InstructorAvailability.CanBlock(slot, occupied: false),
+                    canonical,
+                    fromQuery,
+                    toQuery)));
         }
 
         return RedirectToPage(new
         {
             mode = canonical,
-            from = BlankToNull(from),
-            to = BlankToNull(to),
+            from = fromQuery,
+            to = toQuery,
             notice = InstructorAvailabilityNotices.Blocked
         });
     }
+
+    public SlotCardView CardFor(OwnedSlotDto slot) =>
+        new(slot, StateOf(slot), CanBlock(slot), Mode, FromQuery, ToQuery);
+
+    private PartialViewResult Fragment(SlotMutationBody body)
+    {
+        Response.Headers.CacheControl = "no-store";
+        return Partial("_SlotMutation", body);
+    }
+
+    private bool WantsFragment =>
+        string.Equals(Request.Headers["X-Requested-With"], "fetch", StringComparison.OrdinalIgnoreCase);
 
     public bool IsOccupied(OwnedSlotDto slot) => OccupiedSlotIds.Contains(slot.Id);
 
     public string StateOf(OwnedSlotDto slot) => InstructorAvailability.State(slot, IsOccupied(slot));
 
     public bool CanBlock(OwnedSlotDto slot) => InstructorAvailability.CanBlock(slot, IsOccupied(slot));
+
+    public IEnumerable<IGrouping<DateOnly, OwnedSlotDto>> Days =>
+        Slots.GroupBy(slot => slot.Date);
 
     private async Task LoadAsync(string? mode, string? from, string? to, CancellationToken cancellationToken)
     {
@@ -128,3 +168,17 @@ public class AvailabilityModel : PageModel
     private static string? BlankToNull(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
+
+public sealed record SlotCardView(
+    OwnedSlotDto Slot,
+    string State,
+    bool CanBlock,
+    string Mode,
+    string? FromQuery,
+    string? ToQuery);
+
+public sealed record SlotMutationBody(
+    bool Ok,
+    string? Notice,
+    string? Error,
+    SlotCardView? Card);
