@@ -24,6 +24,7 @@ public class PayModel : PageModel
     public string? Signature { get; set; }
 
     public CheckoutDraft? Draft { get; private set; }
+    public CheckoutSummary? Summary => Draft is null ? null : CheckoutSummary.From(Draft);
     public string? Error { get; private set; }
     public bool UseFakeCheckout => _checkout.UseFakeCheckout;
 

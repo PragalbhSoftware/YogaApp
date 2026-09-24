@@ -47,6 +47,29 @@ public class IndexModel : PageModel
         await LoadAsync(cancellationToken);
     }
 
+    public async Task<IActionResult> OnGetSlotsAsync(Guid id, CancellationToken cancellationToken)
+    {
+        if (id == Guid.Empty)
+            return NotFound();
+
+        var mine = await _bookings.ListMineAsync(cancellationToken);
+        if (!mine.Ok || mine.Data is null)
+            return StatusCode(mine.Unreachable ? StatusCodes.Status503ServiceUnavailable : StatusCodes.Status400BadRequest);
+
+        var booking = mine.Data.FirstOrDefault(item => item.Id == id);
+        if (booking is null || !CustomerBookingChanges.CanReschedule(booking))
+            return NotFound();
+
+        Response.Headers["Cache-Control"] = "no-store";
+        var listed = await _catalog.GetSlotsAsync(booking.ProviderId, booking.Mode, cancellationToken);
+        if (!listed.Ok || listed.Data?.Slots is null)
+            return Partial("_RescheduleOptions", new RescheduleSlotRefresh([], listed.Error ?? UiCopy.GenericError));
+
+        return Partial(
+            "_RescheduleOptions",
+            new RescheduleSlotRefresh(RescheduleChoices.OpenFor(booking, listed.Data.Slots), null));
+    }
+
     public Task<IActionResult> OnPostCancelAsync(Guid id, CancellationToken cancellationToken) =>
         ChangeAsync(_bookings.CancelAsync(id, cancellationToken), CustomerNotices.Cancelled, cancellationToken);
 

@@ -4,101 +4,138 @@
     ViewData["Title"] = UiCopy.MyBookingsTitle;
 }
 
-<h1>@UiCopy.MyBookingsTitle</h1>
-<p class="lead">@UiCopy.MyBookingsLead</p>
+<div class="flow">
+    <header class="flow-intro">
+        <p class="kicker">@UiCopy.BookingsNav</p>
+        <h1>@UiCopy.MyBookingsTitle</h1>
+        <p class="lead">@UiCopy.MyBookingsLead</p>
+    </header>
 
-@if (Model.JustBookedId is Guid booked && Model.Bookings.Any(item => item.Id == booked))
-{
-    <p class="hint" role="status">@UiCopy.PaymentReceived</p>
-}
-
-@if (!string.IsNullOrEmpty(Model.Success))
-{
-    <p class="hint" role="status">@Model.Success</p>
-}
-
-@if (!string.IsNullOrEmpty(Model.Notice))
-{
-    <p class="alert" role="status">@Model.Notice</p>
-}
-
-@if (!string.IsNullOrEmpty(Model.SlotsError))
-{
-    <p class="alert" role="alert">@Model.SlotsError</p>
-}
-
-@if (!string.IsNullOrEmpty(Model.Error))
-{
-    <p class="alert" role="alert">@Model.Error</p>
-}
-
-@if (string.IsNullOrEmpty(Model.Error) && Model.Bookings.Count == 0)
-{
-    <p>@UiCopy.NoBookings</p>
-    <a class="button" asp-page="/Instructors/Index">@UiCopy.BrowseTitle</a>
-}
-else if (Model.Bookings.Count > 0)
-{
-    @foreach (var booking in Model.Bookings)
+    @if (Model.JustBookedId is Guid booked && Model.Bookings.Any(item => item.Id == booked))
     {
-        <article class="card" data-booking-id="@booking.Id" data-slot-id="@booking.SlotId" data-status="@booking.Status">
-            <h2>@booking.ProviderName</h2>
-            <p class="muted">@booking.ServiceTitle</p>
-            <partial name="_SessionFacts" model="booking" />
-            @if (CustomerBookingChanges.CanCancel(booking))
-            {
-                <p class="muted">@UiCopy.CancelHint</p>
-                <form method="post" data-action="cancel" asp-page-handler="Cancel" asp-route-id="@booking.Id">
-                    <button type="submit" class="secondary">@UiCopy.CancelBooking</button>
-                </form>
-            }
-            @if (CustomerBookingChanges.CanReschedule(booking) && string.IsNullOrEmpty(Model.SlotsError))
-            {
-                if (Model.OptionsFor(booking.Id).Count == 0)
+        <div class="notice notice-ok" role="status">
+            <p>@UiCopy.PaymentReceived</p>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(Model.Success))
+    {
+        <div class="notice notice-ok" role="status">
+            <p>@Model.Success</p>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(Model.Notice))
+    {
+        <div class="notice notice-alert" role="status">
+            <p>@Model.Notice</p>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(Model.SlotsError))
+    {
+        <div class="notice notice-alert" role="alert">
+            <p>@Model.SlotsError</p>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(Model.Error))
+    {
+        <div class="notice notice-alert" role="alert">
+            <p>@Model.Error</p>
+        </div>
+    }
+
+    @if (string.IsNullOrEmpty(Model.Error) && Model.Bookings.Count == 0)
+    {
+        <div class="notice">
+            <p class="notice-title">@UiCopy.NoBookings</p>
+            <p>@UiCopy.NoBookingsHint</p>
+            <a class="button" asp-page="/Instructors/Index">@UiCopy.BrowseTitle</a>
+        </div>
+    }
+    else if (Model.Bookings.Count > 0)
+    {
+        <div class="booking-list">
+        @foreach (var booking in Model.Bookings)
+        {
+            <article class="card booking-card" data-booking-id="@booking.Id" data-slot-id="@booking.SlotId" data-status="@booking.Status">
+                <div class="summary-who">
+                    <span class="avatar" aria-hidden="true">@PersonMark.Initials(booking.ProviderName)</span>
+                    <div class="person-copy">
+                        <h2>@booking.ProviderName</h2>
+                        <p class="muted">@booking.ServiceTitle</p>
+                    </div>
+                </div>
+                <partial name="_SessionFacts" model="booking" />
+                <div class="booking-actions">
+                @if (CustomerBookingChanges.CanCancel(booking))
                 {
-                    <p>@UiCopy.NoRescheduleSlots</p>
+                    <p class="muted">@UiCopy.CancelHint</p>
+                    <form method="post" data-once data-action="cancel" asp-page-handler="Cancel" asp-route-id="@booking.Id">
+                        <button type="submit" class="secondary">@UiCopy.CancelBooking</button>
+                    </form>
                 }
-                else
+                @if (CustomerBookingChanges.CanReschedule(booking))
                 {
-                    <p class="muted">@UiCopy.RescheduleHint</p>
-                    <form method="post" class="reschedule" data-action="reschedule" asp-page-handler="Reschedule" asp-route-id="@booking.Id">
+                    <div class="slot-panel" data-slot-panel>
+                        <p class="muted">@UiCopy.RescheduleHint</p>
+                        <div data-slot-message>
+                            @if (string.IsNullOrEmpty(Model.SlotsError) && Model.OptionsFor(booking.Id).Count == 0)
+                            {
+                                <p data-slot-empty>@UiCopy.NoRescheduleSlots</p>
+                            }
+                        </div>
+                        <form method="post" class="reschedule" data-once data-action="reschedule" asp-page-handler="Reschedule" asp-route-id="@booking.Id" hidden="@(Model.OptionsFor(booking.Id).Count == 0 ? "hidden" : null)">
+                            <div class="field">
+                                <label for="slot-@booking.Id">@UiCopy.RescheduleSlot</label>
+                                <select id="slot-@booking.Id" name="slotId" required>
+                                    <option value="">@UiCopy.ChooseSlot</option>
+                                    @foreach (var slot in Model.OptionsFor(booking.Id))
+                                    {
+                                        <option value="@slot.Id">@slot.Date.ToString("ddd d MMM") @slot.Start–@slot.End</option>
+                                    }
+                                </select>
+                            </div>
+                            <button type="submit">@UiCopy.RescheduleBooking</button>
+                        </form>
+                        <button type="button"
+                                class="link refresh-slots"
+                                data-refresh-slots
+                                data-url="@Url.Page("/Bookings/Index", "Slots", new { id = booking.Id })"
+                                data-pending="@UiCopy.RefreshingSlots"
+                                data-done="@UiCopy.SlotsRefreshed"
+                                data-failed="@UiCopy.SlotsRefreshFailed">@UiCopy.RefreshSlots</button>
+                        <p class="visually-hidden" data-slot-status aria-live="polite"></p>
+                    </div>
+                }
+                @if (Model.ShowReviewForm(booking))
+                {
+                    <form method="post" class="review" data-once data-action="review" asp-page-handler="Review" asp-route-id="@booking.Id">
                         <div class="field">
-                            <label for="slot-@booking.Id">@UiCopy.RescheduleSlot</label>
-                            <select id="slot-@booking.Id" name="slotId" required>
-                                <option value="">@UiCopy.ChooseSlot</option>
-                                @foreach (var slot in Model.OptionsFor(booking.Id))
+                            <label for="rating-@booking.Id">@UiCopy.Rating</label>
+                            <select id="rating-@booking.Id" name="Rating">
+                                @for (var rating = CustomerReviews.MaxRating; rating >= CustomerReviews.MinRating; rating--)
                                 {
-                                    <option value="@slot.Id">@slot.Date.ToString("ddd d MMM") @slot.Start–@slot.End</option>
+                                    <option value="@rating">@rating</option>
                                 }
                             </select>
                         </div>
-                        <button type="submit">@UiCopy.RescheduleBooking</button>
+                        <div class="field">
+                            <label for="comment-@booking.Id">@UiCopy.ReviewComment</label>
+                            <textarea id="comment-@booking.Id" name="Comment" maxlength="@CustomerReviews.MaxCommentLength"></textarea>
+                        </div>
+                        <button type="submit">@UiCopy.SubmitReview</button>
                     </form>
                 }
-            }
-            @if (Model.ShowReviewForm(booking))
-            {
-                <form method="post" class="review" data-action="review" asp-page-handler="Review" asp-route-id="@booking.Id">
-                    <div class="field">
-                        <label for="rating-@booking.Id">@UiCopy.Rating</label>
-                        <select id="rating-@booking.Id" name="Rating">
-                            @for (var rating = CustomerReviews.MaxRating; rating >= CustomerReviews.MinRating; rating--)
-                            {
-                                <option value="@rating">@rating</option>
-                            }
-                        </select>
-                    </div>
-                    <div class="field">
-                        <label for="comment-@booking.Id">@UiCopy.ReviewComment</label>
-                        <textarea id="comment-@booking.Id" name="Comment" maxlength="@CustomerReviews.MaxCommentLength"></textarea>
-                    </div>
-                    <button type="submit">@UiCopy.SubmitReview</button>
-                </form>
-            }
-            else if (Model.ShowReviewedNote(booking))
-            {
-                <p class="hint" role="status">@UiCopy.ReviewedAlready</p>
-            }
-        </article>
+                else if (Model.ShowReviewedNote(booking))
+                {
+                    <p class="hint" role="status">@UiCopy.ReviewedAlready</p>
+                }
+                </div>
+            </article>
+        }
+        </div>
     }
-}
+</div>
+<script src="~/js/booking.js" asp-append-version="true"></script>

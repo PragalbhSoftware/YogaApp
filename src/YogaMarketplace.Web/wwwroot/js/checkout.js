@@ -7,6 +7,7 @@
 
     var paid = false;
     open.addEventListener("click", function () {
+        open.setAttribute("aria-busy", "true");
         var checkout = new Razorpay({
             key: node.dataset.key,
             amount: node.dataset.amount,
@@ -35,6 +36,7 @@
             },
             modal: {
                 ondismiss: function () {
+                    open.removeAttribute("aria-busy");
                     var abandonForm = document.getElementById("abandon-form");
                     if (!paid && abandonForm) {
                         abandonForm.submit();
@@ -44,6 +46,7 @@
             theme: { color: "#1f6b4a" }
         });
         checkout.on("payment.failed", function () {
+            open.removeAttribute("aria-busy");
             var failForm = document.getElementById("fail-form");
             if (!paid && failForm) {
                 failForm.submit();

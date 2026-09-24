@@ -1,0 +1,19 @@
+@model RescheduleSlotRefresh
+@if (!string.IsNullOrEmpty(Model.Error))
+{
+    <p class="alert" role="alert" data-slot-error>@Model.Error</p>
+}
+else
+{
+    @if (Model.Slots.Count == 0)
+    {
+        <p data-slot-empty>@UiCopy.NoRescheduleSlots</p>
+    }
+    <select data-slot-options>
+        <option value="">@UiCopy.ChooseSlot</option>
+        @foreach (var slot in Model.Slots)
+        {
+            <option value="@slot.Id">@slot.Date.ToString("ddd d MMM") @slot.Start–@slot.End</option>
+        }
+    </select>
+}

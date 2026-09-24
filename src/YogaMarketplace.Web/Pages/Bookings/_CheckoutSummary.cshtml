@@ -1,0 +1,56 @@
+@model CheckoutSummary
+<p class="mode-chip">
+    <span class="mode-choice-name">@Model.Mode</span>
+    @{
+        var hint = SessionModeText.Hint(Model.Mode);
+    }
+    @if (hint.Length > 0)
+    {
+        <span class="mode-choice-hint">@hint</span>
+    }
+</p>
+<dl class="summary">
+    <div>
+        <dt>@UiCopy.When</dt>
+        <dd>@Model.Date.ToString("dddd d MMM") · @Model.Start–@Model.End</dd>
+    </div>
+    @{
+        var place = SessionModeText.Place(Model.Area, Model.City);
+    }
+    @if (place.Length > 0)
+    {
+        <div>
+            <dt>@UiCopy.Area</dt>
+            <dd>@place</dd>
+        </div>
+    }
+    @if (SessionModes.Normalize(Model.Mode) == SessionModes.Studio && !string.IsNullOrWhiteSpace(Model.StudioAddress))
+    {
+        <div>
+            <dt>@UiCopy.StudioAddress</dt>
+            <dd>@Model.StudioAddress</dd>
+        </div>
+    }
+    @if (SessionModes.IsHome(Model.Mode) && !string.IsNullOrWhiteSpace(Model.HomeAddress))
+    {
+        <div>
+            <dt>@UiCopy.HomeAddress</dt>
+            <dd>@Model.HomeAddress</dd>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(Model.Landmark))
+        {
+            <div>
+                <dt>@UiCopy.Landmark</dt>
+                <dd>@Model.Landmark</dd>
+            </div>
+        }
+    }
+</dl>
+<div class="price-callout">
+    <p class="kicker">@UiCopy.AmountDue</p>
+    <p class="price-figure">@Money.Inr(Model.Amount)</p>
+    @if (!string.IsNullOrWhiteSpace(Model.Currency))
+    {
+        <p class="muted">@Model.Currency</p>
+    }
+</div>

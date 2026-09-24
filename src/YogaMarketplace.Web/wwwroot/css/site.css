@@ -872,6 +872,144 @@ a:focus-visible {
   color: var(--muted);
 }
 
+.flow-intro { margin: 0.15rem 0 1.15rem; }
+
+.flow-intro h1 {
+  margin: 0 0 0.35rem;
+  font-size: clamp(1.85rem, 4vw, 2.35rem);
+  letter-spacing: -0.03em;
+  line-height: 1.08;
+}
+
+.flow-intro .lead {
+  margin: 0;
+  max-width: 36rem;
+}
+
+.summary-who {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.summary-who h2,
+.checkout-name {
+  margin: 0;
+  font-size: 1.28rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.summary-who .muted { margin: 0.15rem 0 0; }
+
+.checkout-card { margin-top: 0.25rem; }
+
+.mode-chip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.15rem 0.55rem;
+  margin: 0.95rem 0 0.15rem;
+}
+
+.checkout-card .summary { margin-bottom: 0.85rem; }
+
+.checkout-card .price-callout { margin-bottom: 0; }
+
+.checkout-card .price-callout .kicker { margin-bottom: 0.35rem; }
+
+.home-fields {
+  margin-top: 1.05rem;
+  padding-top: 0.15rem;
+}
+
+.pay-note { margin: 0.85rem 0 0; overflow-wrap: anywhere; }
+
+.pay-actions {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.pay-actions form,
+.booking-actions form { margin: 0; }
+
+.pay-actions button,
+.booking-actions button[type="submit"] { margin-top: 0; }
+
+#razorpay-open,
+.checkout-card button[type="submit"] {
+  min-height: 3rem;
+  border-radius: 0.9rem;
+}
+
+.secondary-row {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.notice-ok {
+  background: var(--hint-bg);
+  border-color: transparent;
+}
+
+.notice .button { margin-top: 0.9rem; }
+
+.booking-list { display: grid; gap: 0.9rem; }
+
+.booking-card {
+  padding: 1.15rem 1.1rem 1.05rem;
+  border-radius: 1.15rem;
+  box-shadow: 0 10px 28px rgba(28, 27, 25, 0.05);
+}
+
+.booking-actions {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 0.85rem;
+}
+
+.booking-actions .muted { margin: 0; }
+
+.status-line {
+  margin: 0.8rem 0 0.15rem;
+  font-weight: 600;
+}
+
+.facts { margin-bottom: 0; }
+
+.slot-panel {
+  display: grid;
+  gap: 0.55rem;
+  padding-top: 0.15rem;
+}
+
+.slot-panel .field { margin-bottom: 0; }
+
+button.refresh-slots {
+  width: auto;
+  min-height: 2.75rem;
+  margin: 0;
+  padding: 0;
+  justify-content: flex-start;
+}
+
+button[aria-busy="true"] { opacity: 0.72; }
+
+@media (max-width: 28rem) {
+  .summary div {
+    flex-direction: column;
+    gap: 0.12rem;
+  }
+
+  .summary dd { text-align: left; }
+}
+
+@media (min-width: 40rem) {
+  .secondary-row { grid-template-columns: 1fr 1fr; }
+}
+
 @media (min-width: 52rem) {
   .catalog-layout {
     grid-template-columns: 16rem minmax(0, 1fr);

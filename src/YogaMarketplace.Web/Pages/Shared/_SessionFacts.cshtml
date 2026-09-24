@@ -1,20 +1,41 @@
 @model BookingDto
-<p>@Model.Date.ToString("dddd d MMM") · @Model.Start–@Model.End</p>
-<p>@Model.Mode · @Money.Inr(Model.Amount)</p>
-<p>@BookingStatusText.Detail(Model.Status)</p>
+<dl class="summary facts">
+    <div>
+        <dt>@UiCopy.When</dt>
+        <dd>@Model.Date.ToString("dddd d MMM") · @Model.Start–@Model.End</dd>
+    </div>
+    <div>
+        <dt>@UiCopy.Mode</dt>
+        <dd>@Model.Mode</dd>
+    </div>
+    <div>
+        <dt>@UiCopy.AmountDue</dt>
+        <dd class="rate-amount">@Money.Inr(Model.Amount)</dd>
+    </div>
+    @if (!string.IsNullOrWhiteSpace(Model.HomeAddress))
+    {
+        <div>
+            <dt>@UiCopy.HomeAddress</dt>
+            <dd>@Model.HomeAddress</dd>
+        </div>
+    }
+    @if (!string.IsNullOrWhiteSpace(Model.Landmark))
+    {
+        <div>
+            <dt>@UiCopy.Landmark</dt>
+            <dd>@Model.Landmark</dd>
+        </div>
+    }
+    @if (!string.IsNullOrWhiteSpace(Model.StudioAddress))
+    {
+        <div>
+            <dt>@UiCopy.StudioAddress</dt>
+            <dd>@Model.StudioAddress</dd>
+        </div>
+    }
+</dl>
+<p class="status-line">@BookingStatusText.Detail(Model.Status)</p>
 <p class="muted">@Model.Status · @Model.PaymentStatus</p>
-@if (!string.IsNullOrWhiteSpace(Model.HomeAddress))
-{
-    <p><strong>@UiCopy.HomeAddress.</strong> @Model.HomeAddress</p>
-}
-@if (!string.IsNullOrWhiteSpace(Model.Landmark))
-{
-    <p><strong>@UiCopy.Landmark.</strong> @Model.Landmark</p>
-}
-@if (!string.IsNullOrWhiteSpace(Model.StudioAddress))
-{
-    <p><strong>@UiCopy.StudioAddress.</strong> @Model.StudioAddress</p>
-}
 @if (BookingMeet.JoinHref(Model) is string meet)
 {
     <p><a href="@meet">@UiCopy.MeetLink</a></p>
