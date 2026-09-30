@@ -23,6 +23,7 @@ public class ProviderService
     }
 
     public async Task<IReadOnlyList<ProviderSummary>> BrowseAsync(
+        string? city,
         string? area,
         string? mode,
         string? category,
@@ -31,10 +32,16 @@ public class ProviderService
         var parsedMode = ParseOptionalMode(mode);
         var query = VerifiedQuery();
 
+        if (!string.IsNullOrWhiteSpace(city))
+        {
+            var cityName = city.Trim().ToLower();
+            query = query.Where(p => p.Area!.City.ToLower() == cityName);
+        }
+
         if (!string.IsNullOrWhiteSpace(area))
         {
             var name = area.Trim().ToLower();
-            query = query.Where(p => p.Area!.City == "Mumbai" && p.Area.Name.ToLower() == name);
+            query = query.Where(p => p.Area!.Name.ToLower() == name);
         }
 
         if (parsedMode == SessionMode.Home)
@@ -185,10 +192,174 @@ public class ProviderService
         return ToSelf(provider, provider.User!, provider.Area!.Name);
     }
 
+    public async Task<ProviderSelf> UpdateRatesAsync(UpdateProviderRatesRequest request, CancellationToken cancellationToken)
+    {
+        var provider = await _db.Providers
+            .Include(p => p.User)
+            .Include(p => p.Area)
+            .SingleOrDefaultAsync(p => p.UserId == _current.UserId, cancellationToken)
+            ?? throw new DomainException("Register as an instructor first.", 404);
+
+        if (request.HomeRate is null && request.StudioRate is null && request.OnlineRate is null)
+            throw new DomainException("Send at least one rate to update.");
+
+        if (request.HomeRate is decimal home)
+        {
+            if (!provider.OffersHome)
+                throw new DomainException("Turn on Home sessions before setting a Home rate.");
+            provider.HomeRate = RequireRate(home, "Home");
+        }
+
+        if (request.StudioRate is decimal studio)
+        {
+            if (!provider.OffersStudio)
+                throw new DomainException("Turn on Studio sessions before setting a Studio rate.");
+            provider.StudioRate = RequireRate(studio, "Studio");
+        }
+
+        if (request.OnlineRate is decimal online)
+        {
+            if (!provider.OffersOnline)
+                throw new DomainException("Turn on Online sessions before setting an Online rate.");
+            provider.OnlineRate = RequireRate(online, "Online");
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
+        return ToSelf(provider, provider.User!, provider.Area!.Name);
+    }
+
+    public async Task<ProviderSelf> UpdateProfileAsync(UpdateProviderProfileRequest request, CancellationToken cancellationToken)
+    {
+        var provider = await _db.Providers
+            .Include(p => p.User)
+            .Include(p => p.Area)
+            .SingleOrDefaultAsync(p => p.UserId == _current.UserId, cancellationToken)
+            ?? throw new DomainException("Register as an instructor first.", 404);
+
+        var user = provider.User ?? throw new InvalidOperationException("User was not loaded.");
+        var displayName = (request.DisplayName ?? "").Trim();
+        if (displayName.Length is < 2 or > 80)
+            throw new DomainException("Display name must be 2 to 80 characters.");
+        if (request.Age is < 18 or > 80)
+            throw new DomainException("Age must be between 18 and 80.");
+        if (!request.OffersHome && !request.OffersStudio && !request.OffersOnline)
+            throw new DomainException("Choose at least one session mode: Home, Studio, or Online.");
+
+        var area = await _db.Areas.SingleOrDefaultAsync(a => a.Id == request.AreaId && a.IsActive, cancellationToken)
+            ?? throw new DomainException("Choose a Mumbai area.");
+
+        if (provider.OffersHome && !request.OffersHome
+            && await HasLiveBookingsAsync(provider.Id, SessionMode.Home, cancellationToken))
+            throw new DomainException("Home sessions still have upcoming or pending bookings.", 409);
+        if (provider.OffersStudio && !request.OffersStudio
+            && await HasLiveBookingsAsync(provider.Id, SessionMode.Studio, cancellationToken))
+            throw new DomainException("Studio sessions still have upcoming or pending bookings.", 409);
+        if (provider.OffersOnline && !request.OffersOnline
+            && await HasLiveBookingsAsync(provider.Id, SessionMode.Online, cancellationToken))
+            throw new DomainException("Online sessions still have upcoming or pending bookings.", 409);
+
+        var email = NormalizeEmail(request.Email);
+        var bio = string.IsNullOrWhiteSpace(request.Bio) ? null : request.Bio.Trim();
+        if (bio is { Length: > 1000 })
+            throw new DomainException("Bio must be 1000 characters or less.");
+
+        var studioAddress = string.IsNullOrWhiteSpace(request.StudioAddress) ? null : request.StudioAddress.Trim();
+        if (request.OffersStudio && string.IsNullOrWhiteSpace(studioAddress))
+            throw new DomainException("Studio sessions need the studio address.");
+        if (studioAddress is { Length: > 300 })
+            throw new DomainException("Studio address must be 300 characters or less.");
+
+        var meetLink = request.OffersOnline ? RequireMeetLink(request.GoogleMeetLink) : provider.GoogleMeetLink;
+
+        provider.DisplayName = displayName;
+        provider.Age = request.Age;
+        provider.Bio = bio;
+        provider.AreaId = area.Id;
+        provider.Area = area;
+        provider.OffersHome = request.OffersHome;
+        provider.OffersStudio = request.OffersStudio;
+        provider.OffersOnline = request.OffersOnline;
+        provider.HomeRate = request.OffersHome ? RequireRate(request.HomeRate, "Home") : provider.HomeRate;
+        provider.StudioRate = request.OffersStudio ? RequireRate(request.StudioRate, "Studio") : provider.StudioRate;
+        provider.OnlineRate = request.OffersOnline ? RequireRate(request.OnlineRate, "Online") : provider.OnlineRate;
+        if (request.OffersStudio)
+            provider.StudioAddress = studioAddress;
+        if (request.OffersOnline)
+            provider.GoogleMeetLink = meetLink;
+
+        user.Email = email;
+        user.Name = displayName;
+
+        await _db.SaveChangesAsync(cancellationToken);
+        return ToSelf(provider, user, area.Name);
+    }
+
+    public async Task<IReadOnlyList<InstructorPayoutResponse>> ListMyPayoutsAsync(
+        string? status,
+        CancellationToken cancellationToken)
+    {
+        var provider = await _db.Providers.AsNoTracking()
+            .SingleOrDefaultAsync(p => p.UserId == _current.UserId, cancellationToken)
+            ?? throw new DomainException("Register as an instructor first.", 404);
+
+        var query = _db.PayoutsPending.AsNoTracking().Include(p => p.Booking).Where(p => p.ProviderId == provider.Id);
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            if (!Enum.TryParse<PayoutStatus>(status, true, out var parsed))
+                throw new DomainException("Unknown payout status.");
+            query = query.Where(p => p.Status == parsed);
+        }
+
+        var rows = await query.ToListAsync(cancellationToken);
+        return rows
+            .OrderByDescending(p => p.CreatedAt)
+            .Take(100)
+            .Select(p => new InstructorPayoutResponse(
+                p.Id,
+                p.BookingId,
+                p.GrossAmount,
+                p.FeePercent,
+                p.FeeAmount,
+                p.NetAmount,
+                p.Status.ToString(),
+                p.CreatedAt,
+                p.Booking?.Status.ToString() ?? ""))
+            .ToList();
+    }
+
+    public async Task<IReadOnlyList<PublicReviewResponse>> ListPublicReviewsAsync(
+        Guid providerId,
+        CancellationToken cancellationToken)
+    {
+        var exists = await _db.Providers.AnyAsync(
+            p => p.Id == providerId && p.Status == ProviderStatus.Verified,
+            cancellationToken);
+        if (!exists)
+            throw new DomainException("Instructor not found.", 404);
+
+        var rows = await (
+                from review in _db.Reviews.AsNoTracking()
+                join user in _db.Users.AsNoTracking() on review.CustomerId equals user.Id
+                where review.ProviderId == providerId
+                select new { review, user.Name })
+            .ToListAsync(cancellationToken);
+
+        return rows
+            .OrderByDescending(row => row.review.CreatedAt)
+            .Take(50)
+            .Select(row => new PublicReviewResponse(
+                row.review.Rating,
+                row.review.Comment,
+                PublicReviewerName(row.Name),
+                row.review.CreatedAt))
+            .ToList();
+    }
+
     public async Task<IReadOnlyList<SlotResponse>> AddSlotsAsync(AddSlotsRequest request, CancellationToken cancellationToken)
     {
         var provider = await _db.Providers.SingleOrDefaultAsync(p => p.UserId == _current.UserId, cancellationToken)
             ?? throw new DomainException("Register as an instructor before adding availability.", 404);
+        RequireVerifiedForSlotChanges(provider);
 
         var mode = ParseRequiredMode(request.Mode);
         if (!provider.Offers(mode))
@@ -253,25 +424,105 @@ public class ProviderService
         return new OwnedSlotListResponse(parsed.ToString(), start, end, slots.Select(ToOwnedSlot).ToList());
     }
 
+    public async Task<OwnedSlotResponse> UpdateSlotAsync(
+        Guid slotId,
+        UpdateSlotRequest request,
+        CancellationToken cancellationToken)
+    {
+        var slot = await RequireOwnedSlotAsync(slotId, cancellationToken);
+        var taken = await SlotIsOccupiedAsync(slot.Id, cancellationToken);
+        if (!TimeOnly.TryParseExact(request.Start, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var start))
+            throw new DomainException("Start time must be HH:mm.");
+        if (!TimeOnly.TryParseExact(request.End, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var end))
+            throw new DomainException("End time must be HH:mm.");
+
+        AvailabilityRules.Update(slot, taken, MumbaiClock.Today(), request.Date, start, end);
+
+        var clash = await _db.AvailabilitySlots.AnyAsync(
+            s => s.Id != slot.Id
+                && s.ProviderId == slot.ProviderId
+                && s.Mode == slot.Mode
+                && s.Date == request.Date
+                && s.StartTime == start,
+            cancellationToken);
+        if (clash)
+            throw new DomainException($"A {slot.Mode} slot at {request.Date:yyyy-MM-dd} {request.Start} already exists.");
+
+        await _db.SaveChangesAsync(cancellationToken);
+        return ToOwnedSlot(slot);
+    }
+
     public async Task<OwnedSlotResponse> BlockSlotAsync(Guid slotId, CancellationToken cancellationToken)
     {
-        var provider = await RequireCurrentProviderAsync(cancellationToken);
-        var slot = await _db.AvailabilitySlots.SingleOrDefaultAsync(s => s.Id == slotId, cancellationToken)
-            ?? throw new DomainException("Slot not found.", 404);
-        if (slot.ProviderId != provider.Id)
-            throw new DomainException("This slot belongs to another instructor.", 403);
-
-        var taken = await _db.Bookings.AnyAsync(
-            b => b.SlotId == slot.Id && Occupying.Contains(b.Status),
-            cancellationToken);
+        var slot = await RequireOwnedSlotAsync(slotId, cancellationToken);
+        var taken = await SlotIsOccupiedAsync(slot.Id, cancellationToken);
         AvailabilityRules.Block(slot, taken, MumbaiClock.Today());
         await _db.SaveChangesAsync(cancellationToken);
         return ToOwnedSlot(slot);
     }
 
+    public async Task<OwnedSlotResponse> UnblockSlotAsync(Guid slotId, CancellationToken cancellationToken)
+    {
+        var slot = await RequireOwnedSlotAsync(slotId, cancellationToken);
+        var taken = await SlotIsOccupiedAsync(slot.Id, cancellationToken);
+        AvailabilityRules.Unblock(slot, taken, MumbaiClock.Today());
+        await _db.SaveChangesAsync(cancellationToken);
+        return ToOwnedSlot(slot);
+    }
+
+    public async Task DeleteSlotAsync(Guid slotId, CancellationToken cancellationToken)
+    {
+        var slot = await RequireOwnedSlotAsync(slotId, cancellationToken);
+        var referenced = await _db.Bookings.AnyAsync(b => b.SlotId == slot.Id, cancellationToken)
+            || await _db.CheckoutIntents.AnyAsync(c => c.SlotId == slot.Id, cancellationToken);
+        AvailabilityRules.Delete(referenced);
+        _db.AvailabilitySlots.Remove(slot);
+        await _db.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task<AvailabilitySlot> RequireOwnedSlotAsync(Guid slotId, CancellationToken cancellationToken)
+    {
+        var provider = await RequireCurrentProviderAsync(cancellationToken);
+        RequireVerifiedForSlotChanges(provider);
+        var slot = await _db.AvailabilitySlots.SingleOrDefaultAsync(s => s.Id == slotId, cancellationToken)
+            ?? throw new DomainException("Slot not found.", 404);
+        if (slot.ProviderId != provider.Id)
+            throw new DomainException("This slot belongs to another instructor.", 403);
+        return slot;
+    }
+
+    private Task<bool> SlotIsOccupiedAsync(Guid slotId, CancellationToken cancellationToken) =>
+        _db.Bookings.AnyAsync(b => b.SlotId == slotId && Occupying.Contains(b.Status), cancellationToken);
+
+    private static readonly BookingStatus[] LiveOccupying =
+    {
+        BookingStatus.PendingAccept,
+        BookingStatus.Upcoming
+    };
+
+    private Task<bool> HasLiveBookingsAsync(Guid providerId, SessionMode mode, CancellationToken cancellationToken) =>
+        _db.Bookings.AnyAsync(
+            b => b.ProviderId == providerId && b.Mode == mode && LiveOccupying.Contains(b.Status),
+            cancellationToken);
+
+    private static string PublicReviewerName(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return "Student";
+        var trimmed = name.Trim();
+        var space = trimmed.IndexOf(' ');
+        return space < 0 ? trimmed : trimmed[..space];
+    }
+
     private async Task<Provider> RequireCurrentProviderAsync(CancellationToken cancellationToken) =>
         await _db.Providers.SingleOrDefaultAsync(p => p.UserId == _current.UserId, cancellationToken)
             ?? throw new DomainException("Register as an instructor first.", 404);
+
+    private static void RequireVerifiedForSlotChanges(Provider provider)
+    {
+        if (provider.Status != ProviderStatus.Verified)
+            throw new DomainException("Your profile must be verified before you can change slots.", 403);
+    }
 
     private static (DateOnly Start, DateOnly End) ResolveWindow(DateOnly? from, DateOnly? to)
     {

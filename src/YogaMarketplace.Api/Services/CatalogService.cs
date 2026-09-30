@@ -15,7 +15,8 @@ public class CatalogService
     public async Task<IReadOnlyList<AreaResponse>> AreasAsync(CancellationToken cancellationToken) =>
         await _db.Areas.AsNoTracking()
             .Where(a => a.IsActive)
-            .OrderBy(a => a.Name)
+            .OrderBy(a => a.City)
+            .ThenBy(a => a.Name)
             .Select(a => new AreaResponse(a.Id, a.City, a.Name))
             .ToListAsync(cancellationToken);
 

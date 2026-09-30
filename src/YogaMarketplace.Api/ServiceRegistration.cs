@@ -20,6 +20,7 @@ public static class ServiceRegistration
         services.AddScoped<ProviderService>();
         services.AddScoped<CatalogService>();
         services.AddScoped<BookingService>();
+        services.AddScoped<ProfileService>();
         services.AddScoped<IAdminProviderService, AdminProviderService>();
         services.AddScoped<IAdminUserService, AdminUserService>();
         services.AddScoped<IAdminBookingService, AdminBookingService>();

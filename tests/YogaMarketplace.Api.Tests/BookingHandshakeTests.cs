@@ -93,6 +93,19 @@ public class BookingHandshakeTests : IClassFixture<YogaApiFactory>
         Assert.Equal(5, review.Rating);
         Assert.Equal("Calm and clear", review.Comment);
 
+        var publicReviews = await customer.GetFromJsonAsync<List<PublicReviewBody>>(
+            $"/api/providers/{SeedIds.AnanyaProviderId}/reviews", Json);
+        Assert.Contains(publicReviews!, r => r.Rating == 5 && r.Comment == "Calm and clear" && r.ReviewerName == "Meera");
+
+        var payouts = await instructor.GetFromJsonAsync<List<InstructorPayoutBody>>("/api/providers/me/payouts", Json);
+        Assert.Contains(payouts!, p => p.BookingId == booked.Id && p.NetAmount == 764.15m && p.Status == "Pending");
+
+        var customerPayouts = await customer.GetAsync("/api/providers/me/payouts");
+        Assert.Equal(HttpStatusCode.NotFound, customerPayouts.StatusCode);
+
+        var unknownReviews = await customer.GetAsync($"/api/providers/{Guid.NewGuid()}/reviews");
+        Assert.Equal(HttpStatusCode.NotFound, unknownReviews.StatusCode);
+
         var again = await customer.PostAsJsonAsync($"/api/bookings/{booked.Id}/reviews", new { rating = 4, comment = "Second thought" });
         Assert.Equal(HttpStatusCode.Conflict, again.StatusCode);
         Assert.Contains("already", (await again.Content.ReadFromJsonAsync<ErrorBody>(Json))!.Error, StringComparison.OrdinalIgnoreCase);
@@ -150,6 +163,41 @@ public class BookingHandshakeTests : IClassFixture<YogaApiFactory>
     }
 
     [Fact]
+    public async Task No_show_creates_a_payout_and_does_not_unlock_a_review()
+    {
+        var customer = _factory.CreateClient();
+        var (customerToken, _) = await SignUpAsync(customer, "Rhea Kapoor", "Female");
+        customer.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", customerToken);
+
+        var slot = await FirstOpenSlotAsync(customer, "Home");
+        var booked = await BookHomeAsync(customer, slot.Id, "pay_noshow_1");
+        var instructor = await InstructorClientAsync();
+        await PostAsync<BookingBody>(instructor, $"/api/bookings/{booked.Id}/accept", new { });
+
+        var marked = await PostAsync<BookingBody>(instructor, $"/api/bookings/{booked.Id}/noshow", new { });
+        Assert.Equal("NoShow", marked.Status);
+        Assert.Equal("Paid", marked.PaymentStatus);
+        Assert.Empty(RefundsFor(booked.GatewayPaymentId!));
+
+        var payout = await LoadPayoutAsync(booked.Id);
+        Assert.Equal(PayoutStatus.Pending, payout.Status);
+        Assert.Equal(899m, payout.GrossAmount);
+        Assert.Equal(764.15m, payout.NetAmount);
+
+        var hidden = await customer.GetFromJsonAsync<SlotListBody>($"/api/providers/{SeedIds.AnanyaProviderId}/slots?mode=Home", Json);
+        Assert.DoesNotContain(hidden!.Slots, s => s.Id == slot.Id);
+
+        var missedReview = await customer.PostAsJsonAsync($"/api/bookings/{booked.Id}/reviews", new { rating = 1, comment = "Did not attend" });
+        Assert.Equal(HttpStatusCode.BadRequest, missedReview.StatusCode);
+        Assert.Contains("completed", (await missedReview.Content.ReadFromJsonAsync<ErrorBody>(Json))!.Error, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0, await ReviewCountAsync(booked.Id));
+
+        var again = await instructor.PostAsync($"/api/bookings/{booked.Id}/noshow", null);
+        Assert.Equal(HttpStatusCode.BadRequest, again.StatusCode);
+        Assert.Equal(1, await PayoutCountAsync(booked.Id));
+    }
+
+    [Fact]
     public async Task Illegal_transitions_and_other_accounts_are_rejected()
     {
         var customer = _factory.CreateClient();
@@ -175,6 +223,8 @@ public class BookingHandshakeTests : IClassFixture<YogaApiFactory>
         await AssertForbiddenAsync(other, $"/api/bookings/{booked.Id}/accept");
         await AssertForbiddenAsync(other, $"/api/bookings/{booked.Id}/decline");
         await AssertForbiddenAsync(other, $"/api/bookings/{booked.Id}/complete");
+        await AssertForbiddenAsync(customer, $"/api/bookings/{booked.Id}/noshow");
+        await AssertForbiddenAsync(other, $"/api/bookings/{booked.Id}/noshow");
         Assert.Equal(HttpStatusCode.Unauthorized, (await _factory.CreateClient().PostAsync($"/api/bookings/{booked.Id}/complete", null)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await instructor.PostAsync($"/api/bookings/{Guid.NewGuid()}/accept", null)).StatusCode);
         Assert.Equal(BookingStatus.PendingAccept, await BookingStatusAsync(booked.Id));
@@ -186,6 +236,10 @@ public class BookingHandshakeTests : IClassFixture<YogaApiFactory>
         Assert.Contains("upcoming", (await tooEarly.Content.ReadFromJsonAsync<ErrorBody>(Json))!.Error, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(BookingStatus.PendingAccept, await BookingStatusAsync(booked.Id));
         Assert.Equal(0, await PayoutCountAsync(booked.Id));
+
+        var tooEarlyNoShow = await instructor.PostAsync($"/api/bookings/{booked.Id}/noshow", null);
+        Assert.Equal(HttpStatusCode.BadRequest, tooEarlyNoShow.StatusCode);
+        Assert.Contains("upcoming", (await tooEarlyNoShow.Content.ReadFromJsonAsync<ErrorBody>(Json))!.Error, StringComparison.OrdinalIgnoreCase);
 
         var accepted = await PostAsync<BookingBody>(instructor, $"/api/bookings/{booked.Id}/accept", new { });
         Assert.Equal("Upcoming", accepted.Status);
@@ -210,6 +264,10 @@ public class BookingHandshakeTests : IClassFixture<YogaApiFactory>
 
         var completeAgain = await instructor.PostAsync($"/api/bookings/{booked.Id}/complete", null);
         Assert.Equal(HttpStatusCode.BadRequest, completeAgain.StatusCode);
+        Assert.Equal(1, await PayoutCountAsync(booked.Id));
+
+        var noShowLate = await instructor.PostAsync($"/api/bookings/{booked.Id}/noshow", null);
+        Assert.Equal(HttpStatusCode.BadRequest, noShowLate.StatusCode);
         Assert.Equal(1, await PayoutCountAsync(booked.Id));
 
         var nullBody = new HttpRequestMessage(HttpMethod.Post, $"/api/bookings/{booked.Id}/reviews")
@@ -477,4 +535,14 @@ public class BookingHandshakeTests : IClassFixture<YogaApiFactory>
         string? GatewayPaymentId,
         bool HasReviewed);
     private sealed record ReviewBody(Guid Id, Guid BookingId, Guid ProviderId, int Rating, string? Comment);
+    private sealed record PublicReviewBody(int Rating, string? Comment, string ReviewerName, DateTimeOffset CreatedAt);
+    private sealed record InstructorPayoutBody(
+        Guid Id,
+        Guid BookingId,
+        decimal GrossAmount,
+        decimal FeePercent,
+        decimal FeeAmount,
+        decimal NetAmount,
+        string Status,
+        DateTimeOffset CreatedAt);
 }

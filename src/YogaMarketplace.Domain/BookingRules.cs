@@ -3,10 +3,12 @@ namespace YogaMarketplace.Domain;
 /// <summary>
 /// Booking handshake. Pay-at-book creates PendingAccept.
 /// Decline refunds (the caller) and frees the slot. Complete unlocks a review and a pending payout.
+/// No-show keeps the slot occupied, creates the same pending payout, and does not unlock a review.
 /// Cancel allows PendingAccept or Upcoming before the session starts and frees the slot.
-/// Reschedule keeps one Upcoming booking on another slot with the same instructor and mode.
-/// Free-window hours and the late-cancel fee live on <see cref="MarketplacePolicy"/> as TBD defaults.
-/// <see cref="IsFreeWindow"/> evaluates that window. Cancel and reschedule do not charge it.
+/// Cancelling an Upcoming booking inside the policy's free window keeps <see cref="LateCancelFeeFor"/>;
+/// the rest is refunded and the kept fee becomes an instructor payout. PendingAccept cancels are always free.
+/// Admin force-cancel allows PendingAccept or Upcoming at any time, needs a reason, and always refunds in full.
+/// Reschedule keeps one Upcoming booking on another slot with the same instructor and mode. It is never charged.
 /// </summary>
 public static class BookingRules
 {
@@ -94,7 +96,43 @@ public static class BookingRules
             throw new DomainException("This session has already started.");
 
         booking.Status = BookingStatus.Cancelled;
+        booking.CancelledBy = CancelledBy.Customer;
         booking.UpdatedAt = now;
+    }
+
+    public const int CancelReasonMin = 5;
+    public const int CancelReasonMax = 300;
+
+    public static void AdminCancel(Booking booking, string? reason, DateTimeOffset now)
+    {
+        if (booking.Status is not (BookingStatus.PendingAccept or BookingStatus.Upcoming))
+            throw new DomainException("Only a pending or upcoming booking can be cancelled.");
+        var trimmed = (reason ?? "").Trim();
+        if (trimmed.Length is < CancelReasonMin or > CancelReasonMax)
+            throw new DomainException($"Give a reason of {CancelReasonMin} to {CancelReasonMax} characters.");
+
+        booking.Status = BookingStatus.Cancelled;
+        booking.CancelledBy = CancelledBy.Admin;
+        booking.CancelReason = trimmed;
+        booking.UpdatedAt = now;
+    }
+
+    public static DateTimeOffset FreeCancelUntil(DateTimeOffset sessionStart, int freeWindowHours) =>
+        sessionStart - TimeSpan.FromHours(freeWindowHours);
+
+    /// <summary>Amount kept if the customer cancels now. Zero outside the late window or before the instructor accepts.</summary>
+    public static decimal LateCancelFeeFor(
+        Booking booking,
+        DateTimeOffset sessionStart,
+        DateTimeOffset now,
+        int freeWindowHours,
+        decimal lateCancelFeePercent)
+    {
+        if (booking.Status != BookingStatus.Upcoming)
+            return 0m;
+        if (IsFreeWindow(sessionStart, now, freeWindowHours))
+            return 0m;
+        return Math.Round(booking.Amount * lateCancelFeePercent / 100m, 2, MidpointRounding.AwayFromZero);
     }
 
     public static void MarkNoShow(Booking booking)
@@ -145,11 +183,20 @@ public static class PaymentRules
         payment.UpdatedAt = DateTimeOffset.UtcNow;
     }
 
-    public static void MarkRefunded(Payment payment)
+    public static void MarkRefunded(Payment payment) => Refund(payment, payment.Amount);
+
+    /// <summary>Records a refund of <paramref name="amount"/>. Zero leaves the payment Paid.</summary>
+    public static void Refund(Payment payment, decimal amount)
     {
         if (payment.Status != PaymentStatus.Paid)
             throw new DomainException("Only a captured payment can be refunded.");
-        payment.Status = PaymentStatus.Refunded;
+        if (amount < 0 || amount > payment.Amount)
+            throw new DomainException("Refund must be between zero and the amount paid.");
+        if (amount == 0)
+            return;
+
+        payment.RefundedAmount = amount;
+        payment.Status = amount == payment.Amount ? PaymentStatus.Refunded : PaymentStatus.PartiallyRefunded;
         payment.UpdatedAt = DateTimeOffset.UtcNow;
     }
 }
@@ -184,21 +231,35 @@ public static class PayoutCalculator
 {
     public static PayoutPending ForCompletedBooking(Booking booking, decimal feePercent)
     {
-        if (booking.Status != BookingStatus.Completed)
-            throw new DomainException("A payout is created when a booking is completed.");
+        if (booking.Status is not (BookingStatus.Completed or BookingStatus.NoShow))
+            throw new DomainException("A payout is created when a session is completed or marked no-show.");
+        return Build(booking, booking.Amount, feePercent);
+    }
+
+    public static PayoutPending ForLateCancel(Booking booking, decimal keptAmount, decimal feePercent)
+    {
+        if (booking.Status != BookingStatus.Cancelled || booking.CancelledBy != CancelledBy.Customer)
+            throw new DomainException("A late-cancel payout needs a customer-cancelled booking.");
+        if (keptAmount <= 0 || keptAmount > booking.Amount)
+            throw new DomainException("Kept amount must be above zero and at most the booking amount.");
+        return Build(booking, keptAmount, feePercent);
+    }
+
+    private static PayoutPending Build(Booking booking, decimal gross, decimal feePercent)
+    {
         if (feePercent is < 0 or > 100)
             throw new DomainException("Platform fee percent must be between 0 and 100.");
 
-        var fee = Math.Round(booking.Amount * feePercent / 100m, 2, MidpointRounding.AwayFromZero);
+        var fee = Math.Round(gross * feePercent / 100m, 2, MidpointRounding.AwayFromZero);
         return new PayoutPending
         {
             Id = Guid.NewGuid(),
             BookingId = booking.Id,
             ProviderId = booking.ProviderId,
-            GrossAmount = booking.Amount,
+            GrossAmount = gross,
             FeePercent = feePercent,
             FeeAmount = fee,
-            NetAmount = booking.Amount - fee,
+            NetAmount = gross - fee,
             Status = PayoutStatus.Pending,
             CreatedAt = DateTimeOffset.UtcNow
         };

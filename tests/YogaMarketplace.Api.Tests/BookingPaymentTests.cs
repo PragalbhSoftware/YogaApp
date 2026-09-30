@@ -93,6 +93,29 @@ public class BookingPaymentTests : IClassFixture<YogaApiFactory>
     }
 
     [Fact]
+    public async Task Local_confirm_captures_without_the_browser_signing()
+    {
+        var anon = await _factory.CreateClient().PostAsJsonAsync("/api/bookings/local-confirm", new { orderId = "order_fake_missing" });
+        Assert.Equal(HttpStatusCode.Unauthorized, anon.StatusCode);
+
+        var client = _factory.CreateClient();
+        var (token, _) = await SignUpAsync(client, "Diya Kapoor", "Female");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var slot = await FirstOpenSlotAsync(client, "Online");
+        var order = await CreateOrderAsync(client, slot.Id, null, null);
+        Assert.True(order.LocalCapture);
+        var booked = await PostAsync<BookingBody>(client, "/api/bookings/local-confirm", new { orderId = order.OrderId });
+
+        Assert.Equal("PendingAccept", booked.Status);
+        Assert.Equal("Paid", booked.PaymentStatus);
+        Assert.Equal("Online", booked.Mode);
+        Assert.Equal(order.OrderId, booked.GatewayOrderId);
+        Assert.StartsWith("pay_fake_", booked.GatewayPaymentId, StringComparison.Ordinal);
+        Assert.Equal(1, await CountBookingsAsync(slot.Id));
+    }
+
+    [Fact]
     public async Task Second_payment_for_the_same_slot_is_rejected()
     {
         var firstClient = _factory.CreateClient();
@@ -379,7 +402,7 @@ public class BookingPaymentTests : IClassFixture<YogaApiFactory>
     private sealed record AuthBody(string Token, UserBody User);
     private sealed record SlotBody(Guid Id, string Mode, DateOnly Date, string Start, string End);
     private sealed record SlotListBody(string Mode, DateOnly From, DateOnly To, List<SlotBody> Slots);
-    private sealed record CheckoutBody(Guid CheckoutId, string KeyId, string OrderId, long AmountPaise, decimal Amount, string Currency);
+    private sealed record CheckoutBody(Guid CheckoutId, string KeyId, string OrderId, long AmountPaise, decimal Amount, string Currency, bool LocalCapture);
     private sealed record BookingBody(
         Guid Id,
         Guid ProviderId,

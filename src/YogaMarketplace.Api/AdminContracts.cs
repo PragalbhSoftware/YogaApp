@@ -79,7 +79,16 @@ public record AdminBookingResponse(
     int? ReviewRating,
     decimal? PayoutNet,
     string? PayoutStatus,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    decimal? RefundedAmount,
+    decimal? LateCancelFee,
+    string? CancelledBy,
+    string? CancelReason);
+
+public class AdminCancelBookingRequest
+{
+    public string? Reason { get; set; }
+}
 
 public record AdminPaymentResponse(
     Guid Id,
@@ -96,7 +105,8 @@ public record AdminPaymentResponse(
     string ProviderName,
     Guid CustomerId,
     string? CustomerName,
-    string CustomerPhone);
+    string CustomerPhone,
+    decimal RefundedAmount);
 
 public record AdminPayoutResponse(
     Guid Id,
@@ -108,7 +118,8 @@ public record AdminPayoutResponse(
     decimal FeeAmount,
     decimal NetAmount,
     string Status,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    string BookingStatus);
 
 public record AdminAreaResponse(Guid Id, string City, string Name, bool IsActive);
 

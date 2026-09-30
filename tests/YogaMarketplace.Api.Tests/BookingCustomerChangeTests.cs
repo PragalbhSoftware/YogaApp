@@ -364,6 +364,10 @@ public class BookingCustomerChangeTests : IClassFixture<YogaApiFactory>
             homeRate = 700m
         });
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", registered.Token);
+        var me = await client.GetFromJsonAsync<ProviderMeBody>("/api/providers/me", Json);
+        var admin = await AdminClientAsync();
+        var verified = await admin.PostAsJsonAsync($"/api/admin/providers/{me!.Id}/verify", new { });
+        Assert.True(verified.IsSuccessStatusCode, await verified.Content.ReadAsStringAsync());
         var day = MumbaiClock.Today().AddDays(2);
         var created = await PostAsync<List<SlotBody>>(client, "/api/providers/me/slots", new
         {
@@ -495,6 +499,7 @@ public class BookingCustomerChangeTests : IClassFixture<YogaApiFactory>
     private sealed record UserBody(Guid Id, string? Name, string Phone, string? Gender, string Role);
     private sealed record AuthBody(string Token, UserBody User);
     private sealed record RegisterBody(string Token);
+    private sealed record ProviderMeBody(Guid Id);
     private sealed record SlotBody(Guid Id, string Mode, DateOnly Date, string Start, string End);
     private sealed record SlotListBody(string Mode, DateOnly From, DateOnly To, List<SlotBody> Slots);
     private sealed record CheckoutBody(Guid CheckoutId, string KeyId, string OrderId, long AmountPaise, decimal Amount, string Currency);

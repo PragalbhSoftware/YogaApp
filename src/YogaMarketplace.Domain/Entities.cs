@@ -24,6 +24,11 @@ public class User
     public Gender? Gender { get; set; }
     public string? Email { get; set; }
     public UserRole Role { get; set; } = UserRole.Customer;
+    public string? HomeLine1 { get; set; }
+    public string? HomeArea { get; set; }
+    public string? HomeCity { get; set; }
+    public string? HomePin { get; set; }
+    public string? HomeLandmark { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public Provider? Provider { get; set; }
 }
@@ -111,6 +116,9 @@ public class Booking
     public string? Landmark { get; set; }
     public string? MeetLinkSnapshot { get; set; }
     public string? StudioAddressSnapshot { get; set; }
+    public CancelledBy? CancelledBy { get; set; }
+    public string? CancelReason { get; set; }
+    public decimal? LateCancelFee { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     public Payment? Payment { get; set; }
@@ -148,6 +156,7 @@ public class Payment
     public Guid BookingId { get; set; }
     public Booking? Booking { get; set; }
     public decimal Amount { get; set; }
+    public decimal RefundedAmount { get; set; }
     public PaymentStatus Status { get; set; }
     public string? Gateway { get; set; }
     public string? GatewayOrderId { get; set; }

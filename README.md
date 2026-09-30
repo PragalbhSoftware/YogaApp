@@ -1,8 +1,10 @@
 # Yoga Marketplace
 
-Mumbai-first yoga instructor marketplace. The API covers OTP auth, the domain model, EF Core, SQL Server, verified browse, **pay-at-book** (Razorpay), the instructor handshake, and admin oversight. Customers authenticate with a one-time passcode, instructors register as **Pending** until an admin verifies them, and verified instructors can be browsed with **mode-specific** slots (Home, Studio, Online). A captured payment creates a booking in `PendingAccept`. The web app includes a local admin area for that oversight.
+India yoga instructor marketplace. First live city is Mumbai; more Indian cities follow in phases. Customer-facing copy should not lock the brand to Mumbai.
 
-Yoga is the first `Category`. The model is generic enough for another category later. The customer web app is `src/YogaMarketplace.Web`: phone OTP, Mumbai area, verified instructors, then book and pay. The browser never calls the Razorpay webhook.
+The API covers OTP auth, the domain model, EF Core, SQL Server, verified browse, **pay-at-book** (Razorpay), the instructor handshake, and admin oversight. Customers authenticate with a one-time passcode, instructors register as **Pending** until an admin verifies them, and verified instructors can be browsed with **mode-specific** slots (Home, Studio, Online). A captured payment creates a booking in `PendingAccept`. The web app includes a local admin area for that oversight.
+
+Yoga is the first `Category`. The model is generic enough for another category later. The customer web app is `src/YogaMarketplace.Web`: phone OTP, area, verified instructors, then book and pay. The browser never calls the Razorpay webhook. The API still seeds Mumbai areas until city expansion ships.
 
 ## Solution
 
@@ -156,16 +158,19 @@ New customer: `name` + `gender` + `phone`, then OTP. Existing customer: `phone`,
 | GET | `/api/providers/me/slots?mode=&from=&to=` | Provider Bearer | Own slots for that mode, including blocked |
 | POST | `/api/providers/me/slots` | Bearer | Add slots for a mode the instructor offers |
 | POST | `/api/providers/me/slots/{id}/block` | Provider Bearer | Block an unbooked future slot the instructor owns |
+| POST | `/api/providers/me/slots/{id}/unblock` | Provider Bearer | Open a blocked future slot that has no paid booking |
 
 Booking states: `PendingAccept` → `Upcoming`, `Declined`, or `Cancelled`. `Upcoming` → `Completed`, `NoShow`, `Cancelled`, or another slot while staying `Upcoming`. A captured Razorpay payment creates `PendingAccept`. The instructor accepts, declines, or completes on the handshake endpoints. Decline refunds the captured payment and frees the slot. Complete records a pending payout (`gross − fee%`) and unlocks one customer review. The fee is **not** copied onto the payment at book time. The customer who booked can cancel or reschedule on the endpoints below.
 
 ## Instructor availability (local)
 
-Provider JWT, and only for that instructor. A customer JWT is 404 until they register. Pending instructors can list and block; public `GET /api/providers/{id}/slots` still returns 404 until they are verified.
+Provider JWT, and only for that instructor. A customer JWT is 404 until they register. Pending instructors can list, block, and unblock; public `GET /api/providers/{id}/slots` still returns 404 until they are verified.
 
 `GET /api/providers/me/slots` uses the same `mode`, `from`, and `to` query as the public slot list. `mode` is required (`Home`, `Studio`, or `Online`). `from` and `to` are inclusive Mumbai dates. Omitted `from` is today; omitted `to` is six days after `from`. `to` before `from` is 400. The list includes blocked slots and slots that already have a booking. Each item is `{ id, mode, date, start, end, isBlocked }`. `start` and `end` are `HH:mm`.
 
 `POST /api/providers/me/slots/{id}/block` has no body. It sets `isBlocked` and returns that same slot shape. The slot leaves the public list and stays on the instructor list. Blocking again is a no-op and returns 200. A past date (`date` before today in Mumbai) is 400 `{ error: "Past slots cannot be blocked." }`. An occupying booking (`PendingAccept`, `Upcoming`, `Completed`, `NoShow`, per `BookingRules.OccupiesSlot`) is 409 `{ error: "That slot has a booking." }` and the slot stays open. `Declined` and `Cancelled` do not occupy the slot. Another instructor's slot is 403. A missing id is 404.
+
+`POST /api/providers/me/slots/{id}/unblock` has no body. It clears `isBlocked` and returns that same slot shape. The slot returns to the public list. Unblocking again is a no-op and returns 200. A past date is 400 `{ error: "Past slots cannot be unblocked." }`. An occupying booking is 409 `{ error: "That slot has a booking." }` and the slot stays blocked. Ownership and missing-id errors match block.
 
 ## Book and pay (local)
 
@@ -175,6 +180,7 @@ Customer JWT only. Create a Razorpay order for a free slot, then confirm from th
 | --- | --- | --- | --- |
 | POST | `/api/bookings/orders` | Customer Bearer | Razorpay order for one slot. Home requires `homeAddress` and `landmark`. |
 | POST | `/api/bookings/confirm` | Customer Bearer | Verify `orderId`, `paymentId`, and HMAC signature. Idempotent for the same payment id. |
+| POST | `/api/bookings/local-confirm` | Customer Bearer | Development fake gateway only. Signs and captures on the server. |
 | GET | `/api/bookings/me` | Customer Bearer | That customer's bookings, including the Meet link snapshot after an online booking. |
 | POST | `/api/webhooks/razorpay` | `X-Razorpay-Signature` | `payment.captured` creates the same booking. Other events are acknowledged and do not book. |
 

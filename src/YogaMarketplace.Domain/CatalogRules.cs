@@ -1,7 +1,10 @@
+using System.Globalization;
+
 namespace YogaMarketplace.Domain;
 
 /// <summary>
-/// Masters edits for the Mumbai launch. Category slug stays put so public browse and the web shell keep using <c>yoga</c>.
+/// Masters edits. Mumbai is the launch city and the default when no city is sent; the owner adds other Indian cities by adding their first area.
+/// Category slug stays put so public browse and the web shell keep using <c>yoga</c>.
 /// Policy changes apply to future payouts. Rows already in <see cref="PayoutPending"/> keep the fee captured at completion.
 /// </summary>
 public static class CatalogRules
@@ -62,13 +65,19 @@ public static class CatalogRules
         }
     }
 
-    private static string NormalizeCity(string? city)
+    public const int CityMin = 2;
+    public const int CityMax = 60;
+
+    public static string NormalizeCity(string? city)
     {
         if (string.IsNullOrWhiteSpace(city))
             return LaunchCity;
-        if (!city.Trim().Equals(LaunchCity, StringComparison.OrdinalIgnoreCase))
-            throw new DomainException($"{LaunchCity} is the only city in this release.");
-        return LaunchCity;
+        var collapsed = string.Join(' ', city.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+        if (collapsed.Length is < CityMin or > CityMax)
+            throw new DomainException($"City must be {CityMin} to {CityMax} characters.");
+        if (!collapsed.All(c => char.IsLetter(c) || c is ' ' or '-' or '.'))
+            throw new DomainException("City can use letters, spaces, hyphens, and dots only.");
+        return CultureInfo.InvariantCulture.TextInfo.ToTitleCase(collapsed.ToLowerInvariant());
     }
 
     private static string NormalizeAreaName(string? name)

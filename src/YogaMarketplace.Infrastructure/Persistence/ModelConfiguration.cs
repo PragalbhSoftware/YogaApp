@@ -44,6 +44,11 @@ internal static class ModelConfiguration
         entity.Property(u => u.Email).HasMaxLength(200);
         entity.Property(u => u.Role).HasConversion<string>().HasMaxLength(16);
         entity.Property(u => u.Gender).HasConversion<string>().HasMaxLength(16);
+        entity.Property(u => u.HomeLine1).HasMaxLength(160);
+        entity.Property(u => u.HomeArea).HasMaxLength(80);
+        entity.Property(u => u.HomeCity).HasMaxLength(60);
+        entity.Property(u => u.HomePin).HasMaxLength(6);
+        entity.Property(u => u.HomeLandmark).HasMaxLength(160);
         entity.HasIndex(u => u.Phone).IsUnique();
     }
 
@@ -108,6 +113,9 @@ internal static class ModelConfiguration
         entity.Property(b => b.Landmark).HasMaxLength(160);
         entity.Property(b => b.MeetLinkSnapshot).HasMaxLength(300);
         entity.Property(b => b.StudioAddressSnapshot).HasMaxLength(300);
+        entity.Property(b => b.CancelledBy).HasConversion<string>().HasMaxLength(16);
+        entity.Property(b => b.CancelReason).HasMaxLength(BookingRules.CancelReasonMax);
+        entity.Property(b => b.LateCancelFee).HasPrecision(10, 2);
         entity.HasIndex(b => new { b.ProviderId, b.Status });
         entity.HasIndex(b => b.CustomerId);
         entity.HasIndex(b => new { b.CustomerId, b.Status });
@@ -125,7 +133,8 @@ internal static class ModelConfiguration
     private static void ConfigurePayment(EntityTypeBuilder<Payment> entity, bool sqlite)
     {
         entity.Property(p => p.Amount).HasPrecision(10, 2);
-        entity.Property(p => p.Status).HasConversion<string>().HasMaxLength(16);
+        entity.Property(p => p.RefundedAmount).HasPrecision(10, 2);
+        entity.Property(p => p.Status).HasConversion<string>().HasMaxLength(24);
         entity.Property(p => p.Gateway).HasMaxLength(40);
         entity.Property(p => p.GatewayOrderId).HasMaxLength(80);
         entity.Property(p => p.GatewayPaymentId).HasMaxLength(80);

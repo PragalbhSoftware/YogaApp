@@ -38,6 +38,16 @@ public class BookingsController : ControllerBase
         return Ok(await _bookings.ConfirmAsync(request, cancellationToken));
     }
 
+    [HttpPost("local-confirm")]
+    public async Task<ActionResult<BookingResponse>> ConfirmLocal(
+        [FromBody] LocalConfirmRequest? request,
+        CancellationToken cancellationToken)
+    {
+        if (request is null)
+            return BadRequest(new { error = "Invalid request." });
+        return Ok(await _bookings.ConfirmLocalAsync(request, cancellationToken));
+    }
+
     [HttpGet("me")]
     public async Task<ActionResult<IReadOnlyList<BookingResponse>>> Mine(CancellationToken cancellationToken) =>
         Ok(await _bookings.ListMineAsync(cancellationToken));
@@ -59,6 +69,14 @@ public class BookingsController : ControllerBase
     [HttpPost("{id:guid}/complete")]
     public async Task<ActionResult<BookingResponse>> Complete(Guid id, CancellationToken cancellationToken) =>
         Ok(await _handshake.CompleteAsync(id, cancellationToken));
+
+    [HttpPost("{id:guid}/noshow")]
+    public async Task<ActionResult<BookingResponse>> MarkNoShow(Guid id, CancellationToken cancellationToken) =>
+        Ok(await _handshake.MarkNoShowAsync(id, cancellationToken));
+
+    [HttpGet("{id:guid}/cancel-quote")]
+    public async Task<ActionResult<CancelQuoteResponse>> CancelQuote(Guid id, CancellationToken cancellationToken) =>
+        Ok(await _bookings.QuoteCancelAsync(id, cancellationToken));
 
     [HttpPost("{id:guid}/cancel")]
     public async Task<ActionResult<BookingResponse>> Cancel(Guid id, CancellationToken cancellationToken) =>

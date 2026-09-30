@@ -1,0 +1,945 @@
+---
+description: Permanent architecture, UI, coding, and engineering rules for Yoga Marketplace
+alwaysApply: true
+---
+
+# Yoga Marketplace - Permanent Development Rules
+
+You are the senior React architect and frontend engineer for this project.
+
+These rules are permanent project rules. Follow them for every future task unless the user explicitly asks to change the architecture.
+
+## 1. Project Goal
+
+This project is a production-quality Yoga Marketplace SPA.
+
+The application connects to an existing ASP.NET Core Web API.
+
+The backend API already exists and is the source of truth for business data.
+
+Do NOT create mock APIs or duplicate backend business logic unless explicitly requested.
+
+The frontend must be:
+
+* production-ready
+* scalable
+* maintainable
+* responsive
+* accessible
+* API-first
+* CI/CD friendly
+* deployment friendly
+* easy to extend
+
+## 1.1 Current API domain
+
+The live backend today is a yoga instructor marketplace with phone OTP, verified browse, bookings, Razorpay pay-at-book, instructor handshake, and admin oversight.
+
+## 1.2 Launch geography
+
+Yoga Marketplace is an **India** product, not a Mumbai-only brand.
+
+* First launch city: Mumbai
+* Then roll out city by city across India
+
+Customer-facing copy, metadata, and marketing chips must speak to India (or the customer's city), never lock the product name to Mumbai.
+
+The API may still seed Mumbai neighbourhoods and use `Asia/Kolkata` until multi-city endpoints exist. That is an implementation constraint, not the product positioning. Do not invent other-city APIs until they exist.
+
+Do NOT invent cart, wishlist, merch, or class-catalog APIs until those endpoints exist.
+
+Current customer login is phone OTP (`POST /api/auth/otp/request`, `/resend`, `/verify`). There is no password login.
+
+Preferred future folders such as `cart/` and `wishlist/` may be added when the API supports them. Until then, keep features aligned to existing endpoints: auth, instructors, bookings, checkout, profile, instructor workspace, admin.
+
+---
+
+# 2. Technology Stack
+
+Use:
+
+* React
+* TypeScript
+* Vite
+* React Router
+* MUI as the primary UI/control library
+* Tailwind CSS for layout and utility styling
+* Lucide React for icons
+* TanStack Query for server/API state
+* Zustand for client-side state
+* Axios for API communication
+* React Hook Form for forms
+* Zod for validation
+* TanStack Table for complex tables
+* Recharts for analytics
+* Sonner for notifications
+* date-fns for date handling
+* Vitest
+* React Testing Library
+* Playwright
+* ESLint
+* Prettier
+
+Do not introduce another UI framework without explicit approval.
+
+Do NOT use:
+
+* Bootstrap
+* Ant Design
+* Chakra UI
+* multiple competing UI component libraries
+
+---
+
+# 3. Architecture
+
+Use feature-based modular architecture.
+
+Preferred structure:
+
+src/
+app/
+router/
+providers/
+layouts/
+App.tsx
+
+features/
+auth/
+marketplace/
+yoga-classes/
+instructors/
+bookings/
+products/
+cart/
+checkout/
+reviews/
+profile/
+
+components/
+ui/
+common/
+
+services/
+api/
+http/
+
+hooks/
+
+stores/
+
+types/
+
+utils/
+
+constants/
+
+assets/
+
+Each feature should keep related:
+
+* components
+* hooks
+* API calls
+* types
+* validation schemas
+* tests
+
+together.
+
+Do not create giant global folders containing unrelated feature logic.
+
+---
+
+# 4. API Architecture
+
+Never call Axios directly from UI components.
+
+Use:
+
+Component
+→ Feature Hook
+→ TanStack Query
+→ Feature API Service
+→ Axios Client
+→ ASP.NET Core API
+
+Example:
+
+useYogaClasses()
+useYogaClass(id)
+useCreateBooking()
+useMyBookings()
+
+Create a centralized Axios client.
+
+It must support:
+
+* base URL
+* authentication
+* interceptors
+* common error handling
+* timeout
+* request cancellation where appropriate
+
+Use environment configuration.
+
+Example:
+
+VITE_API_BASE_URL=
+
+Never hard-code API URLs.
+
+---
+
+# 5. Server State
+
+Use TanStack Query for all server/API state.
+
+Use it for:
+
+* GET requests
+* POST mutations
+* PUT/PATCH mutations
+* DELETE mutations
+* caching
+* loading states
+* error states
+* refetching
+* invalidation
+
+Do NOT copy API data into Zustand unless there is a clear client-state requirement.
+
+---
+
+# 6. Client State
+
+Use Zustand only for client-side state.
+
+Examples:
+
+* shopping cart
+* wishlist
+* UI preferences
+* filters when global
+* temporary client state
+
+Do not use Zustand as a replacement for TanStack Query.
+
+---
+
+# 7. Routing
+
+Use React Router.
+
+Support lazy loading for major route sections.
+
+Customer routes:
+
+/
+/explore
+/classes
+/classes/:id
+/teachers
+/teachers/:id
+/book/:id
+/cart
+/checkout
+/bookings
+/wishlist
+/profile
+/login
+
+Instructor routes:
+
+/instructor
+/instructor/classes
+/instructor/bookings
+/instructor/students
+/instructor/earnings
+/instructor/profile
+
+Admin routes:
+
+/admin
+/admin/users
+/admin/instructors
+/admin/classes
+/admin/bookings
+/admin/payments
+/admin/reports
+
+Protect authenticated routes.
+
+Keep Customer, Instructor and Admin layouts separate.
+
+---
+
+# 8. UI Design
+
+The product is a premium Yoga and Wellness Marketplace.
+
+Do NOT make the UI look like a generic SaaS dashboard.
+
+Design language:
+
+* premium
+* calm
+* modern
+* natural
+* minimal
+* wellness-focused
+* spacious
+* image-focused
+* mobile-first
+
+Use:
+
+* large photography
+* rounded cards
+* soft shadows
+* generous whitespace
+* clear typography
+* subtle animations
+* clean layouts
+* strong visual hierarchy
+
+Avoid:
+
+* excessive gradients
+* excessive shadows
+* excessive borders
+* crowded layouts
+* unnecessary animations
+* generic dashboard appearance
+
+---
+
+# 9. Brand Theme
+
+Use this design palette:
+
+Primary:
+#657A5B
+
+Secondary:
+#C9A27E
+
+Background:
+#F8F6F0
+
+Surface:
+#FFFFFF
+
+Primary Text:
+#253127
+
+Secondary Text:
+#6F776F
+
+Accent:
+#D68B65
+
+Border:
+#E8E4DB
+
+Create these as centralized theme/design tokens.
+
+Do not repeatedly hard-code colors.
+
+Use MUI ThemeProvider.
+
+---
+
+# 10. MUI + Tailwind
+
+MUI is the primary component/control library.
+
+Use MUI for:
+
+* Button
+* TextField
+* Select
+* Dialog
+* Drawer
+* Tabs
+* Menu
+* Avatar
+* Card
+* Chip
+* Tooltip
+* Pagination
+* Skeleton
+* DatePicker
+* Autocomplete
+* Form controls
+
+Use Tailwind mainly for:
+
+* layout
+* flex
+* grid
+* spacing
+* positioning
+* responsive behavior
+* sizing
+
+Do not randomly mix styling approaches.
+
+Create reusable components when a pattern is repeated.
+
+---
+
+# 11. Mobile First
+
+The application must work extremely well on mobile.
+
+Desktop:
+
+Use top navigation.
+
+Mobile:
+
+Use bottom navigation:
+
+Home
+Explore
+Bookings
+Wishlist
+Profile
+
+Important actions such as:
+
+Book Now
+Join Class
+Checkout
+
+must be easy to reach.
+
+Use responsive layouts throughout the application.
+
+---
+
+# 12. Component Architecture
+
+Prefer:
+
+Page
+→ Section
+→ Feature Component
+→ UI Component
+
+Example:
+
+HomePage
+→ HeroSection
+→ CategorySection
+→ FeaturedTeachers
+→ PopularClasses
+→ Testimonials
+
+Do not create giant 500-1000 line components.
+
+Split components by responsibility.
+
+---
+
+# 13. Forms
+
+Use:
+
+React Hook Form + Zod.
+
+Do not create complex forms using many useState calls.
+
+Forms must have:
+
+* field validation
+* validation messages
+* loading state
+* disabled submit state
+* API error handling
+* success feedback
+
+Prevent duplicate form submissions.
+
+---
+
+# 14. Loading and Error UX
+
+Every API-driven page must have:
+
+* loading state
+* skeleton state
+* empty state
+* error state
+* retry action
+
+Create reusable:
+
+LoadingSkeleton
+EmptyState
+ErrorState
+PageLoader
+
+Never leave a page blank while an API request is running.
+
+---
+
+# 15. Notifications
+
+Use Sonner for application notifications.
+
+Examples:
+
+Booking successful
+Profile updated
+Item added to cart
+Payment completed
+API error
+
+Notifications should be short and user-friendly.
+
+Never display raw backend exception messages.
+
+---
+
+# 16. Authentication
+
+Authentication is handled through the backend API.
+
+Frontend responsibilities:
+
+* login
+* logout
+* authentication state
+* protected routes
+* token/session handling
+* unauthorized handling
+
+Never expose backend secrets in React.
+
+Never store sensitive credentials in source code.
+
+---
+
+# 17. Security
+
+Never expose:
+
+* database credentials
+* API secrets
+* payment secret keys
+* private backend credentials
+
+Only public frontend configuration may use VITE environment variables.
+
+Sensitive operations must go through the backend API.
+
+---
+
+# 18. Environment Configuration
+
+Support:
+
+.env.development
+.env.staging
+.env.production
+
+Provide:
+
+.env.example
+
+Example:
+
+VITE_API_BASE_URL=
+
+Never commit real secrets.
+
+---
+
+# 19. Performance
+
+Always consider:
+
+* route lazy loading
+* code splitting
+* image lazy loading
+* API caching
+* pagination
+* debounced search
+* optimized rendering
+* avoiding unnecessary state updates
+
+Do not prematurely introduce complex optimizations.
+
+---
+
+# 20. Accessibility
+
+Use:
+
+* semantic HTML
+* accessible labels
+* keyboard navigation
+* visible focus states
+* appropriate ARIA attributes
+* accessible buttons
+* sufficient color contrast
+
+Do not use icons alone for critical actions without accessible labels.
+
+---
+
+# 21. TypeScript
+
+Use strict TypeScript.
+
+Avoid `any`.
+
+Prefer:
+
+* interfaces
+* types
+* generics
+* typed API responses
+* typed hooks
+* typed form schemas
+
+Do not bypass the type system without a documented reason.
+
+---
+
+# 22. API Types
+
+If Swagger/OpenAPI is available, prefer generating TypeScript API types from the OpenAPI specification.
+
+Do not manually duplicate backend DTOs unnecessarily.
+
+Keep:
+
+API DTOs
+
+separate from:
+
+UI View Models
+
+when their responsibilities differ.
+
+---
+
+# 23. Testing
+
+Use:
+
+Vitest
+React Testing Library
+Playwright
+
+Test business-critical functionality.
+
+At minimum consider:
+
+* authentication
+* route protection
+* search
+* class listing
+* class details
+* teacher profile
+* booking
+* cart
+* checkout
+* profile
+
+Do not write meaningless tests simply to increase coverage.
+
+---
+
+# 24. CI/CD
+
+The project must always remain CI/CD friendly.
+
+GitHub Actions should be able to run:
+
+npm ci
+npm run typecheck
+npm run lint
+npm run test
+npm run build
+
+Do not introduce development practices that prevent automated builds.
+
+---
+
+# 25. Docker
+
+Keep the project compatible with Docker production deployment.
+
+Preferred production architecture:
+
+React build
+→ Nginx
+→ static SPA
+
+Use a multi-stage Docker build.
+
+Configure Nginx for SPA routing.
+
+Refreshing:
+
+/classes/123
+
+must not result in a 404.
+
+---
+
+# 26. Deployment
+
+The frontend should be deployable to:
+
+* Azure
+* AWS
+* VPS
+* Docker
+* Nginx
+* static hosting
+* CDN-based hosting
+
+Do not make the application dependent on one specific hosting provider.
+
+---
+
+# 27. Code Changes
+
+Before implementing a feature:
+
+1. Inspect the existing code.
+2. Inspect existing API contracts.
+3. Reuse existing components.
+4. Reuse existing services.
+5. Reuse existing hooks.
+6. Follow the existing architecture.
+7. Avoid unnecessary dependencies.
+8. Do not rewrite unrelated code.
+
+Never modify unrelated files just to complete a feature.
+
+---
+
+# 28. New Dependencies
+
+Before adding a new npm dependency:
+
+Ask:
+
+1. Is it actually required?
+2. Can the existing stack solve the problem?
+3. Will it increase long-term maintenance?
+4. Does it duplicate an existing library?
+
+Prefer the existing stack whenever practical.
+
+---
+
+# 29. UI Quality
+
+Every screen should look like a professionally designed commercial product.
+
+Pay attention to:
+
+* spacing
+* typography
+* alignment
+* responsive behavior
+* card proportions
+* image aspect ratios
+* button hierarchy
+* loading states
+* empty states
+* error states
+* mobile usability
+* accessibility
+
+Do not settle for default MUI appearance.
+
+The custom theme should give Yoga Marketplace its own visual identity.
+
+---
+
+# 30. Business Logic
+
+Keep business rules primarily in the backend.
+
+React should handle:
+
+* presentation
+* routing
+* user interaction
+* form validation
+* API communication
+* client-side state
+
+Do not duplicate important business rules from the backend in React unless necessary for UX validation.
+
+---
+
+# 31. Code Style
+
+Prefer:
+
+* small functions
+* small components
+* descriptive names
+* reusable hooks
+* reusable UI components
+* clear separation of concerns
+
+Avoid:
+
+* giant components
+* deeply nested conditionals
+* duplicated API logic
+* duplicated UI logic
+* magic strings
+* magic numbers
+* unnecessary abstractions
+
+---
+
+# 32. Feature Development Process
+
+For every new feature:
+
+Step 1:
+Understand the existing architecture.
+
+Step 2:
+Inspect API contract.
+
+Step 3:
+Define types.
+
+Step 4:
+Create API service.
+
+Step 5:
+Create TanStack Query hook.
+
+Step 6:
+Create UI components.
+
+Step 7:
+Create page.
+
+Step 8:
+Add loading/error/empty states.
+
+Step 9:
+Add validation if required.
+
+Step 10:
+Add tests.
+
+Step 11:
+Run:
+
+npm run typecheck
+npm run lint
+npm run test
+npm run build
+
+Fix all errors before finishing.
+
+---
+
+# 33. Do Not Break Existing Functionality
+
+Before changing existing code:
+
+* understand why it exists
+* preserve existing behavior
+* avoid unnecessary refactoring
+
+If a refactor is required, keep it isolated and explain the reason.
+
+---
+
+# 34. Design Consistency
+
+Once a UI pattern is established, reuse it.
+
+For example:
+
+If YogaClassCard exists, do not create another visually different class card without a clear reason.
+
+Maintain consistent:
+
+* border radius
+* spacing
+* typography
+* button styles
+* card styles
+* colors
+* icons
+* interaction patterns
+
+---
+
+# 35. Important Rule
+
+When the user asks for a new feature, DO NOT automatically create a new architecture.
+
+Always fit the feature into this existing architecture.
+
+The permanent architecture is:
+
+React + TypeScript + Vite
++
+MUI
++
+Tailwind
++
+React Router
++
+TanStack Query
++
+Zustand
++
+Axios
++
+React Hook Form
++
+Zod
++
+Vitest
++
+Playwright
++
+GitHub Actions
++
+Docker/Nginx compatibility
+
+Keep this architecture consistent throughout the project.
+
+---
+
+# 36. Final Engineering Principle
+
+Build this application as if it will eventually become a large commercial marketplace.
+
+Prioritize:
+
+1. Maintainability
+2. UX quality
+3. Type safety
+4. Performance
+5. Accessibility
+6. Testing
+7. CI/CD
+8. Deployment flexibility
+9. Clean API integration
+10. Consistent design system
+
+Do not optimize for the fastest possible initial code.
+
+Optimize for a clean codebase that remains easy to develop six months and two years from now.

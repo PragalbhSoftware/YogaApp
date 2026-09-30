@@ -1,0 +1,91 @@
+@import "tailwindcss";
+@import "@fontsource-variable/lora";
+@import "@fontsource-variable/raleway";
+
+@theme inline {
+  --font-heading: "Lora Variable", Lora, serif;
+  --font-sans: "Raleway Variable", Raleway, sans-serif;
+  --color-brand-primary: #657a5b;
+  --color-brand-secondary: #c9a27e;
+  --color-brand-background: #f8f6f0;
+  --color-brand-surface: #ffffff;
+  --color-brand-text: #253127;
+  --color-brand-muted: #6f776f;
+  --color-brand-accent: #d68b65;
+  --color-brand-border: #e8e4db;
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+  }
+
+  body {
+    @apply bg-brand-background text-brand-text antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  .font-heading {
+    font-family: var(--font-heading);
+  }
+
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  a[href] {
+    cursor: pointer;
+  }
+
+  .MuiOutlinedInput-input:-webkit-autofill,
+  .MuiOutlinedInput-input:-webkit-autofill:hover,
+  .MuiOutlinedInput-input:-webkit-autofill:focus {
+    -webkit-box-shadow: 0 0 0 1000px var(--color-brand-surface) inset;
+    box-shadow: 0 0 0 1000px var(--color-brand-surface) inset;
+    -webkit-text-fill-color: var(--color-brand-text);
+    caret-color: var(--color-brand-text);
+  }
+}
+
+iframe.razorpay-checkout-frame,
+.razorpay-container,
+.razorpay-backdrop {
+  z-index: 2147483646 !important;
+}
+
+iframe.razorpay-checkout-frame {
+  display: block !important;
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  background: transparent !important;
+}
+
+body.razorpay-checkout-open {
+  overflow: hidden;
+}
+
+.MuiDialog-paper {
+  background-color: #ffffff !important;
+  opacity: 1 !important;
+}
+
+.MuiBackdrop-root {
+  background-color: rgba(37, 49, 39, 0.45) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #root *,
+  #root *::before,
+  #root *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
