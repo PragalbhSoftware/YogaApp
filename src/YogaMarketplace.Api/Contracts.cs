@@ -9,6 +9,37 @@ public record OtpResponse(
 
 public record UserResponse(Guid Id, string? Name, string Phone, string? Gender, string Role);
 
+public record VisitAddressResponse(
+    string Line1,
+    string Area,
+    string City,
+    string Pin,
+    string Landmark,
+    string HomeAddress);
+
+public record CustomerProfileResponse(
+    Guid Id,
+    string? Name,
+    string Phone,
+    string? Gender,
+    string Role,
+    VisitAddressResponse? VisitAddress);
+
+public class UpdateVisitAddressRequest
+{
+    public string? Line1 { get; set; }
+    public string? Area { get; set; }
+    public string? City { get; set; }
+    public string? Pin { get; set; }
+    public string? Landmark { get; set; }
+}
+
+public class UpdateCustomerProfileRequest
+{
+    public string? Name { get; set; }
+    public string? Gender { get; set; }
+}
+
 public record VerifyResponse(string Token, UserResponse User);
 
 public class RequestOtpRequest
@@ -109,6 +140,43 @@ public class RegisterProviderRequest
     public Guid? CategoryId { get; set; }
 }
 
+public class UpdateProviderRatesRequest
+{
+    public decimal? HomeRate { get; set; }
+    public decimal? StudioRate { get; set; }
+    public decimal? OnlineRate { get; set; }
+}
+
+public class UpdateProviderProfileRequest
+{
+    public string? DisplayName { get; set; }
+    public int? Age { get; set; }
+    public string? Email { get; set; }
+    public Guid AreaId { get; set; }
+    public string? Bio { get; set; }
+    public bool OffersHome { get; set; }
+    public bool OffersStudio { get; set; }
+    public bool OffersOnline { get; set; }
+    public decimal? HomeRate { get; set; }
+    public decimal? StudioRate { get; set; }
+    public decimal? OnlineRate { get; set; }
+    public string? StudioAddress { get; set; }
+    public string? GoogleMeetLink { get; set; }
+}
+
+public record InstructorPayoutResponse(
+    Guid Id,
+    Guid BookingId,
+    decimal GrossAmount,
+    decimal FeePercent,
+    decimal FeeAmount,
+    decimal NetAmount,
+    string Status,
+    DateTimeOffset CreatedAt,
+    string BookingStatus);
+
+public record PublicReviewResponse(int Rating, string? Comment, string ReviewerName, DateTimeOffset CreatedAt);
+
 public record SlotResponse(Guid Id, string Mode, DateOnly Date, string Start, string End);
 
 public record SlotListResponse(string Mode, DateOnly From, DateOnly To, IReadOnlyList<SlotResponse> Slots);
@@ -124,6 +192,13 @@ public class AddSlotsRequest
 }
 
 public class SlotInput
+{
+    public DateOnly Date { get; set; }
+    public string? Start { get; set; }
+    public string? End { get; set; }
+}
+
+public class UpdateSlotRequest
 {
     public DateOnly Date { get; set; }
     public string? Start { get; set; }
@@ -147,14 +222,20 @@ public record CheckoutOrderResponse(
     string Currency,
     Guid SlotId,
     string Mode,
-    string ProviderName);
+    string ProviderName,
+    bool LocalCapture);
 
-public class ConfirmBookingPaymentRequest
-{
-    public string? OrderId { get; set; }
-    public string? PaymentId { get; set; }
-    public string? Signature { get; set; }
-}
+    public class ConfirmBookingPaymentRequest
+    {
+        public string? OrderId { get; set; }
+        public string? PaymentId { get; set; }
+        public string? Signature { get; set; }
+    }
+
+    public class LocalConfirmRequest
+    {
+        public string? OrderId { get; set; }
+    }
 
 public class CreateReviewRequest
 {
@@ -197,4 +278,16 @@ public record BookingResponse(
     string? GatewayOrderId,
     string? GatewayPaymentId,
     DateTimeOffset CreatedAt,
-    bool HasReviewed);
+    bool HasReviewed,
+    decimal RefundedAmount,
+    decimal? LateCancelFee,
+    string? CancelledBy,
+    string? CancelReason);
+
+public record CancelQuoteResponse(
+    decimal Amount,
+    decimal LateCancelFee,
+    decimal Refund,
+    string Currency,
+    decimal LateCancelFeePercent,
+    DateTimeOffset? FreeUntil);

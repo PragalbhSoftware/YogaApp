@@ -43,7 +43,14 @@ public enum PaymentStatus
     Pending,
     Paid,
     Failed,
-    Refunded
+    Refunded,
+    PartiallyRefunded
+}
+
+public enum CancelledBy
+{
+    Customer,
+    Admin
 }
 
 /// <summary>

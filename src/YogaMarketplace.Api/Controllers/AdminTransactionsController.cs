@@ -24,4 +24,22 @@ public class AdminTransactionsController : AdminControllerBase
         [FromQuery] string? status,
         CancellationToken cancellationToken) =>
         Ok(await _transactions.ListPayoutsAsync(status, cancellationToken));
+
+    [HttpGet("payouts/csv")]
+    public async Task<IActionResult> PayoutsCsv([FromQuery] string? status, CancellationToken cancellationToken)
+    {
+        var csv = await _transactions.DownloadPayoutsCsvAsync(status, cancellationToken);
+        return File(csv.Content, "text/csv", csv.FileName);
+    }
+
+    [HttpPost("payouts/export")]
+    public async Task<IActionResult> ExportPayouts(CancellationToken cancellationToken)
+    {
+        var csv = await _transactions.ExportPendingPayoutsAsync(cancellationToken);
+        return File(csv.Content, "text/csv", csv.FileName);
+    }
+
+    [HttpPost("payouts/{id:guid}/paid")]
+    public async Task<ActionResult<AdminPayoutResponse>> MarkPaid(Guid id, CancellationToken cancellationToken) =>
+        Ok(await _transactions.MarkPaidAsync(id, cancellationToken));
 }

@@ -305,6 +305,79 @@ public class AdminApiTests : IClassFixture<YogaApiFactory>
     }
 
     [Fact]
+    public async Task Admin_marks_a_pending_payout_paid_and_it_leaves_the_owed_total()
+    {
+        var instructor = await SignInAsync(SeedIds.AnanyaPhone);
+        var paid = await instructor.Client.PostAsJsonAsync("/api/admin/payouts/" + Guid.NewGuid() + "/paid", new { });
+        Assert.Equal(HttpStatusCode.Forbidden, paid.StatusCode);
+
+        var admin = await SignInAsync(SeedIds.AdminPhone);
+        var missing = await admin.Client.PostAsJsonAsync("/api/admin/payouts/" + Guid.NewGuid() + "/paid", new { });
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+
+        Guid payoutId;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<YogaDbContext>();
+            var slot = new AvailabilitySlot
+            {
+                Id = Guid.NewGuid(),
+                ProviderId = SeedIds.AnanyaProviderId,
+                Mode = SessionMode.Online,
+                Date = MumbaiClock.Today().AddDays(50),
+                StartTime = new TimeOnly(5, 15),
+                EndTime = new TimeOnly(6, 15),
+                IsBlocked = false
+            };
+            db.AvailabilitySlots.Add(slot);
+            var customer = new User
+            {
+                Id = Guid.NewGuid(),
+                Phone = NewPhone(),
+                Name = "Payout Customer",
+                Role = UserRole.Customer,
+                CreatedAt = DateTimeOffset.UtcNow
+            };
+            db.Users.Add(customer);
+            var booking = AddBooking(db, customer.Id, slot, BookingStatus.Completed, 200m, DateTimeOffset.UtcNow);
+            var payout = new PayoutPending
+            {
+                Id = Guid.NewGuid(),
+                BookingId = booking.Id,
+                ProviderId = SeedIds.AnanyaProviderId,
+                GrossAmount = 200m,
+                FeePercent = 15m,
+                FeeAmount = 30m,
+                NetAmount = 170m,
+                Status = PayoutStatus.Pending,
+                CreatedAt = DateTimeOffset.UtcNow
+            };
+            payoutId = payout.Id;
+            db.PayoutsPending.Add(payout);
+            await db.SaveChangesAsync();
+        }
+
+        var before = await admin.Client.GetFromJsonAsync<ReportBody>("/api/admin/reports/summary", Json);
+        var marked = await PostAsync<PayoutBody>(admin.Client, $"/api/admin/payouts/{payoutId}/paid", new { });
+        Assert.Equal("Paid", marked.Status);
+        Assert.Equal(170m, marked.NetAmount);
+        Assert.Equal("Ananya Desai", marked.ProviderName);
+
+        var pending = await admin.Client.GetFromJsonAsync<List<PayoutBody>>("/api/admin/payouts?status=Pending", Json);
+        Assert.DoesNotContain(pending!, payout => payout.Id == payoutId);
+        var settled = await admin.Client.GetFromJsonAsync<List<PayoutBody>>("/api/admin/payouts?status=Paid", Json);
+        Assert.Contains(settled!, payout => payout.Id == payoutId && payout.Status == "Paid");
+
+        var after = await admin.Client.GetFromJsonAsync<ReportBody>("/api/admin/reports/summary", Json);
+        Assert.Equal(before!.PendingPayouts.Count - 1, after!.PendingPayouts.Count);
+        Assert.Equal(before.PendingPayouts.Net - 170m, after.PendingPayouts.Net);
+
+        var again = await admin.Client.PostAsJsonAsync($"/api/admin/payouts/{payoutId}/paid", new { });
+        Assert.Equal(HttpStatusCode.Conflict, again.StatusCode);
+        Assert.Contains("already marked paid", (await again.Content.ReadFromJsonAsync<ErrorBody>(Json))!.Error, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Masters_patch_areas_the_category_label_and_the_policy_without_rewriting_payouts()
     {
         var admin = await SignInAsync(SeedIds.AdminPhone);
@@ -351,8 +424,16 @@ public class AdminApiTests : IClassFixture<YogaApiFactory>
 
         var duplicate = await admin.Client.PostAsJsonAsync("/api/admin/areas", new { name = " colaba ", city = "mumbai" });
         Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
-        var otherCity = await admin.Client.PostAsJsonAsync("/api/admin/areas", new { name = "Kothrud", city = "Pune" });
-        Assert.Equal(HttpStatusCode.BadRequest, otherCity.StatusCode);
+        var otherCity = await PostAsync<AreaAdminBody>(admin.Client, "/api/admin/areas", new { name = "Kothrud", city = "  pune " });
+        Assert.Equal("Pune", otherCity.City);
+        var sameNameOtherCity = await PostAsync<AreaAdminBody>(admin.Client, "/api/admin/areas", new { name = "Colaba", city = "Pune" });
+        Assert.Equal("Pune", sameNameOtherCity.City);
+        var badCity = await admin.Client.PostAsJsonAsync("/api/admin/areas", new { name = "Nowhere", city = "P1" });
+        Assert.Equal(HttpStatusCode.BadRequest, badCity.StatusCode);
+        var withPune = await _factory.CreateClient().GetFromJsonAsync<List<AreaBody>>("/api/areas", Json);
+        Assert.Contains(withPune!, area => area.City == "Pune" && area.Name == "Kothrud");
+        await PatchAsync<AreaAdminBody>(admin.Client, $"/api/admin/areas/{otherCity.Id}", new { isActive = false });
+        await PatchAsync<AreaAdminBody>(admin.Client, $"/api/admin/areas/{sameNameOtherCity.Id}", new { isActive = false });
 
         var inactive = await PatchAsync<AreaAdminBody>(admin.Client, $"/api/admin/areas/{created.Id}", new { isActive = false });
         Assert.False(inactive.IsActive);

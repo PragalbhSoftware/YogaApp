@@ -77,7 +77,7 @@ public class DbSeeder
 
         if (await _db.Providers.AnyAsync(p => p.Id == SeedIds.AnanyaProviderId, cancellationToken))
         {
-            await _db.SaveChangesAsync(cancellationToken);
+            await EnsureAnanyaWeekAsync(cancellationToken);
             return;
         }
 
@@ -99,7 +99,7 @@ public class DbSeeder
             UserId = SeedIds.AnanyaUserId,
             Status = ProviderStatus.Verified,
             DisplayName = "Ananya Desai",
-            Bio = "Hatha and restorative yoga. Home sessions in Bandra.",
+            Bio = "Teaches Hatha yoga (slow, posture-focused) and restorative yoga (gentle and restful).",
             Age = 32,
             AreaId = SeedIds.AreaBandra,
             OffersHome = true,
@@ -123,18 +123,43 @@ public class DbSeeder
             IsActive = true
         });
 
+        await EnsureAnanyaWeekAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Demo slots are dated when first seeded. Restock from today through the end of next month
+    /// so the month calendar still has times to book.
+    /// </summary>
+    private async Task EnsureAnanyaWeekAsync(CancellationToken cancellationToken)
+    {
         var today = MumbaiClock.Today();
-        for (var day = 0; day < 7; day++)
+        var next = today.AddMonths(1);
+        var last = new DateOnly(next.Year, next.Month, DateTime.DaysInMonth(next.Year, next.Month));
+        var existing = await _db.AvailabilitySlots
+            .Where(s => s.ProviderId == SeedIds.AnanyaProviderId && s.Date >= today && s.Date <= last)
+            .Select(s => new { s.Mode, s.Date, s.StartTime })
+            .ToListAsync(cancellationToken);
+        var seen = existing
+            .Select(s => (s.Mode, s.Date, Start: s.StartTime))
+            .ToHashSet();
+
+        for (var date = today; date <= last; date = date.AddDays(1))
         {
-            var date = today.AddDays(day);
-            AddSlot(provider.Id, SessionMode.Home, date, new TimeOnly(7, 0), new TimeOnly(8, 0));
-            AddSlot(provider.Id, SessionMode.Home, date, new TimeOnly(8, 0), new TimeOnly(9, 0));
-            AddSlot(provider.Id, SessionMode.Studio, date, new TimeOnly(10, 0), new TimeOnly(11, 0));
-            AddSlot(provider.Id, SessionMode.Online, date, new TimeOnly(18, 0), new TimeOnly(19, 0));
-            AddSlot(provider.Id, SessionMode.Online, date, new TimeOnly(19, 0), new TimeOnly(20, 0));
+            TryAdd(SessionMode.Home, date, new TimeOnly(7, 0), new TimeOnly(8, 0));
+            TryAdd(SessionMode.Home, date, new TimeOnly(8, 0), new TimeOnly(9, 0));
+            TryAdd(SessionMode.Studio, date, new TimeOnly(10, 0), new TimeOnly(11, 0));
+            TryAdd(SessionMode.Online, date, new TimeOnly(18, 0), new TimeOnly(19, 0));
+            TryAdd(SessionMode.Online, date, new TimeOnly(19, 0), new TimeOnly(20, 0));
         }
 
         await _db.SaveChangesAsync(cancellationToken);
+
+        void TryAdd(SessionMode mode, DateOnly date, TimeOnly start, TimeOnly end)
+        {
+            if (!seen.Add((mode, date, start)))
+                return;
+            AddSlot(SeedIds.AnanyaProviderId, mode, date, start, end);
+        }
     }
 
     private void AddSlot(Guid providerId, SessionMode mode, DateOnly date, TimeOnly start, TimeOnly end)

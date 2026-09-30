@@ -72,12 +72,21 @@ public class ProviderSlotEditTests : IClassFixture<YogaApiFactory>
         var listed = Assert.Single(stillMine!.Slots, s => s.Id == slot.Id);
         Assert.True(listed.IsBlocked);
 
+        var opened = await PostAsync<OwnedSlotBody>(instructor, $"/api/providers/me/slots/{slot.Id}/unblock");
+        Assert.False(opened.IsBlocked);
+
+        var againOpen = await PostAsync<OwnedSlotBody>(instructor, $"/api/providers/me/slots/{slot.Id}/unblock");
+        Assert.False(againOpen.IsBlocked);
+
+        var visible = await instructor.GetFromJsonAsync<SlotListBody>(
+            $"/api/providers/{SeedIds.AnanyaProviderId}/slots?mode=Home&from={day:yyyy-MM-dd}&to={day:yyyy-MM-dd}",
+            Json);
+        Assert.Contains(visible!.Slots, s => s.Id == slot.Id);
+
         var online = await instructor.GetFromJsonAsync<SlotListBody>(
             $"/api/providers/{SeedIds.AnanyaProviderId}/slots?mode=Online&from={day:yyyy-MM-dd}&to={day:yyyy-MM-dd}",
             Json);
         Assert.Equal(2, online!.Slots.Count);
-
-        await SetBlockedAsync(slot.Id, false);
     }
 
     [Fact]
@@ -112,6 +121,38 @@ public class ProviderSlotEditTests : IClassFixture<YogaApiFactory>
     }
 
     [Fact]
+    public async Task Unblock_refuses_an_occupying_booking_and_a_past_slot()
+    {
+        var instructor = await InstructorClientAsync();
+        var slot = await FirstHomeSlotAsync(instructor, "07:00");
+        var blocked = await PostAsync<OwnedSlotBody>(instructor, $"/api/providers/me/slots/{slot.Id}/block");
+        Assert.True(blocked.IsBlocked);
+
+        var bookingId = await InsertBookingAsync(slot.Id, BookingStatus.PendingAccept);
+        foreach (var status in Enum.GetValues<BookingStatus>().Where(BookingRules.OccupiesSlot))
+        {
+            await SetBookingStatusAsync(bookingId, status);
+            var conflict = await instructor.PostAsync($"/api/providers/me/slots/{slot.Id}/unblock", null);
+            Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
+            Assert.Contains("booking", (await conflict.Content.ReadFromJsonAsync<ErrorBody>(Json))!.Error, StringComparison.OrdinalIgnoreCase);
+            Assert.True(await IsBlockedAsync(slot.Id));
+        }
+
+        await SetBookingStatusAsync(bookingId, BookingStatus.Cancelled);
+        var opened = await PostAsync<OwnedSlotBody>(instructor, $"/api/providers/me/slots/{slot.Id}/unblock");
+        Assert.False(opened.IsBlocked);
+
+        var pastId = await InsertSlotAsync(MumbaiClock.Today().AddDays(-1), new TimeOnly(6, 0), new TimeOnly(7, 0), blocked: true);
+        var past = await instructor.PostAsync($"/api/providers/me/slots/{pastId}/unblock", null);
+        Assert.Equal(HttpStatusCode.BadRequest, past.StatusCode);
+        Assert.Contains("past", (await past.Content.ReadFromJsonAsync<ErrorBody>(Json))!.Error, StringComparison.OrdinalIgnoreCase);
+        Assert.True(await IsBlockedAsync(pastId));
+
+        await DeleteBookingAsync(bookingId);
+        await DeleteSlotAsync(pastId);
+    }
+
+    [Fact]
     public async Task Block_and_list_refuse_another_instructor_and_a_customer()
     {
         var owner = await InstructorClientAsync();
@@ -135,11 +176,30 @@ public class ProviderSlotEditTests : IClassFixture<YogaApiFactory>
 
         var wrong = await other.PostAsync($"/api/providers/me/slots/{slot.Id}/block", null);
         Assert.Equal(HttpStatusCode.Forbidden, wrong.StatusCode);
-        Assert.Contains("another instructor", (await wrong.Content.ReadFromJsonAsync<ErrorBody>(Json))!.Error, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("verified", (await wrong.Content.ReadFromJsonAsync<ErrorBody>(Json))!.Error, StringComparison.OrdinalIgnoreCase);
         Assert.False(await IsBlockedAsync(slot.Id));
 
         var missing = await other.PostAsync($"/api/providers/me/slots/{Guid.NewGuid()}/block", null);
-        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, missing.StatusCode);
+        Assert.Contains("verified", (await missing.Content.ReadFromJsonAsync<ErrorBody>(Json))!.Error, StringComparison.OrdinalIgnoreCase);
+
+        var add = await other.PostAsJsonAsync("/api/providers/me/slots", new
+        {
+            mode = "Home",
+            slots = new[] { new { date = MumbaiClock.Today().AddDays(1), start = "06:30", end = "07:30" } }
+        });
+        Assert.Equal(HttpStatusCode.Forbidden, add.StatusCode);
+
+        var edit = await other.PutAsJsonAsync($"/api/providers/me/slots/{slot.Id}", new
+        {
+            date = slot.Date,
+            start = "09:00",
+            end = "10:00"
+        });
+        Assert.Equal(HttpStatusCode.Forbidden, edit.StatusCode);
+
+        var delete = await other.DeleteAsync($"/api/providers/me/slots/{slot.Id}");
+        Assert.Equal(HttpStatusCode.Forbidden, delete.StatusCode);
 
         var theirs = await other.GetFromJsonAsync<OwnedSlotListBody>("/api/providers/me/slots?mode=Home", Json);
         Assert.Empty(theirs!.Slots);
@@ -152,7 +212,97 @@ public class ProviderSlotEditTests : IClassFixture<YogaApiFactory>
         Assert.Equal(HttpStatusCode.NotFound, list.StatusCode);
         var block = await customer.PostAsync($"/api/providers/me/slots/{slot.Id}/block", null);
         Assert.Equal(HttpStatusCode.NotFound, block.StatusCode);
+        var unblock = await customer.PostAsync($"/api/providers/me/slots/{slot.Id}/unblock", null);
+        Assert.Equal(HttpStatusCode.NotFound, unblock.StatusCode);
         Assert.False(await IsBlockedAsync(slot.Id));
+
+        var wrongUnblock = await other.PostAsync($"/api/providers/me/slots/{slot.Id}/unblock", null);
+        Assert.Equal(HttpStatusCode.Forbidden, wrongUnblock.StatusCode);
+    }
+
+    [Fact]
+    public async Task Instructor_can_edit_an_open_slot_and_cannot_edit_a_booked_or_past_slot()
+    {
+        var instructor = await InstructorClientAsync();
+        var slot = await FirstHomeSlotAsync(instructor, "07:00");
+        var day = slot.Date;
+
+        var updated = await PutAsync<OwnedSlotBody>(instructor, $"/api/providers/me/slots/{slot.Id}", new
+        {
+            date = day,
+            start = "09:00",
+            end = "10:00"
+        });
+        Assert.Equal(slot.Id, updated.Id);
+        Assert.Equal("09:00", updated.Start);
+        Assert.Equal("10:00", updated.End);
+        Assert.Equal(day, updated.Date);
+
+        var clash = await instructor.PutAsJsonAsync($"/api/providers/me/slots/{slot.Id}", new
+        {
+            date = day,
+            start = "08:00",
+            end = "09:00"
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, clash.StatusCode);
+
+        var bookingId = await InsertBookingAsync(slot.Id, BookingStatus.PendingAccept);
+        var occupied = await instructor.PutAsJsonAsync($"/api/providers/me/slots/{slot.Id}", new
+        {
+            date = day,
+            start = "11:00",
+            end = "12:00"
+        });
+        Assert.Equal(HttpStatusCode.Conflict, occupied.StatusCode);
+        await DeleteBookingAsync(bookingId);
+
+        var pastId = await InsertSlotAsync(MumbaiClock.Today().AddDays(-1), new TimeOnly(7, 0), new TimeOnly(8, 0));
+        var past = await instructor.PutAsJsonAsync($"/api/providers/me/slots/{pastId}", new
+        {
+            date = MumbaiClock.Today(),
+            start = "07:00",
+            end = "08:00"
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, past.StatusCode);
+        await DeleteSlotAsync(pastId);
+    }
+
+    [Fact]
+    public async Task Instructor_can_delete_an_unbooked_slot_and_cannot_delete_a_booked_slot()
+    {
+        var instructor = await InstructorClientAsync();
+        var day = MumbaiClock.Today().AddDays(3);
+        var created = await PostAsync<List<SlotBody>>(instructor, "/api/providers/me/slots", new
+        {
+            mode = "Home",
+            slots = new[] { new { date = day, start = "21:30", end = "22:30" } }
+        });
+        var slotId = Assert.Single(created).Id;
+
+        var deleted = await instructor.DeleteAsync($"/api/providers/me/slots/{slotId}");
+        Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
+        var gone = await instructor.GetFromJsonAsync<OwnedSlotListBody>(
+            $"/api/providers/me/slots?mode=Home&from={day:yyyy-MM-dd}&to={day:yyyy-MM-dd}", Json);
+        Assert.DoesNotContain(gone!.Slots, s => s.Id == slotId);
+
+        var hold = await PostAsync<List<SlotBody>>(instructor, "/api/providers/me/slots", new
+        {
+            mode = "Home",
+            slots = new[] { new { date = day, start = "21:30", end = "22:30" } }
+        });
+        var bookedId = Assert.Single(hold).Id;
+        var bookingId = await InsertBookingAsync(bookedId, BookingStatus.Upcoming);
+        try
+        {
+            var conflict = await instructor.DeleteAsync($"/api/providers/me/slots/{bookedId}");
+            Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
+            Assert.Contains("booking", (await conflict.Content.ReadFromJsonAsync<ErrorBody>(Json))!.Error, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            await DeleteBookingAsync(bookingId);
+            await DeleteSlotAsync(bookedId);
+        }
     }
 
     private async Task<HttpClient> InstructorClientAsync()
@@ -203,7 +353,7 @@ public class ProviderSlotEditTests : IClassFixture<YogaApiFactory>
         return bookingId;
     }
 
-    private async Task<Guid> InsertSlotAsync(DateOnly date, TimeOnly start, TimeOnly end)
+    private async Task<Guid> InsertSlotAsync(DateOnly date, TimeOnly start, TimeOnly end, bool blocked = false)
     {
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<YogaDbContext>();
@@ -216,7 +366,7 @@ public class ProviderSlotEditTests : IClassFixture<YogaApiFactory>
             Date = date,
             StartTime = start,
             EndTime = end,
-            IsBlocked = false
+            IsBlocked = blocked
         });
         await db.SaveChangesAsync();
         return id;
@@ -280,6 +430,16 @@ public class ProviderSlotEditTests : IClassFixture<YogaApiFactory>
         var response = body is null
             ? await client.PostAsync(url, null)
             : await client.PostAsJsonAsync(url, body);
+        var payload = await response.Content.ReadAsStringAsync();
+        Assert.True(response.IsSuccessStatusCode, payload);
+        var parsed = JsonSerializer.Deserialize<T>(payload, Json);
+        Assert.NotNull(parsed);
+        return parsed!;
+    }
+
+    private static async Task<T> PutAsync<T>(HttpClient client, string url, object body)
+    {
+        var response = await client.PutAsJsonAsync(url, body);
         var payload = await response.Content.ReadAsStringAsync();
         Assert.True(response.IsSuccessStatusCode, payload);
         var parsed = JsonSerializer.Deserialize<T>(payload, Json);

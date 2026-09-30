@@ -108,7 +108,7 @@ public class BookingRulesTests
     }
 
     [Fact]
-    public void Review_and_payout_unlock_only_after_complete()
+    public void Review_unlocks_after_complete_and_payout_unlocks_after_complete_or_no_show()
     {
         var upcoming = Sample(BookingStatus.Upcoming);
         Assert.Throws<DomainException>(() => ReviewRules.Create(upcoming, upcoming.CustomerId, 5, "Great"));
@@ -123,6 +123,13 @@ public class BookingRulesTests
         Assert.Equal(134.85m, payout.FeeAmount);
         Assert.Equal(764.15m, payout.NetAmount);
         Assert.Equal(PayoutStatus.Pending, payout.Status);
+
+        var missed = Sample(BookingStatus.Upcoming);
+        BookingRules.MarkNoShow(missed);
+        Assert.Throws<DomainException>(() => ReviewRules.Create(missed, missed.CustomerId, 5, "Late"));
+        var noShowPayout = PayoutCalculator.ForCompletedBooking(missed, 15m);
+        Assert.Equal(899m, noShowPayout.GrossAmount);
+        Assert.Equal(764.15m, noShowPayout.NetAmount);
     }
 
     [Fact]
@@ -133,6 +140,73 @@ public class BookingRulesTests
         PaymentRules.MarkPaid(payment, "pay_test");
         PaymentRules.MarkRefunded(payment);
         Assert.Equal(PaymentStatus.Refunded, payment.Status);
+    }
+
+    [Fact]
+    public void Partial_refund_keeps_the_rest_and_zero_leaves_the_payment_paid()
+    {
+        var payment = new Payment { Status = PaymentStatus.Paid, Amount = 899m };
+        Assert.Throws<DomainException>(() => PaymentRules.Refund(payment, 900m));
+        Assert.Throws<DomainException>(() => PaymentRules.Refund(payment, -1m));
+
+        PaymentRules.Refund(payment, 0m);
+        Assert.Equal(PaymentStatus.Paid, payment.Status);
+        Assert.Equal(0m, payment.RefundedAmount);
+
+        PaymentRules.Refund(payment, 449.50m);
+        Assert.Equal(PaymentStatus.PartiallyRefunded, payment.Status);
+        Assert.Equal(449.50m, payment.RefundedAmount);
+        Assert.Throws<DomainException>(() => PaymentRules.Refund(payment, 1m));
+    }
+
+    [Fact]
+    public void Late_cancel_fee_applies_only_to_upcoming_inside_the_window()
+    {
+        var start = new DateTimeOffset(2026, 9, 24, 1, 30, 0, TimeSpan.Zero);
+        var upcoming = Sample(BookingStatus.Upcoming);
+        Assert.Equal(0m, BookingRules.LateCancelFeeFor(upcoming, start, start.AddHours(-12), 12, 50m));
+        Assert.Equal(449.50m, BookingRules.LateCancelFeeFor(upcoming, start, start.AddHours(-11), 12, 50m));
+        Assert.Equal(0m, BookingRules.LateCancelFeeFor(upcoming, start, start.AddHours(-1), 12, 0m));
+
+        var pending = Sample(BookingStatus.PendingAccept);
+        Assert.Equal(0m, BookingRules.LateCancelFeeFor(pending, start, start.AddHours(-1), 12, 50m));
+        Assert.Equal(start.AddHours(-12), BookingRules.FreeCancelUntil(start, 12));
+    }
+
+    [Fact]
+    public void Late_cancel_payout_uses_the_kept_amount()
+    {
+        var start = new DateTimeOffset(2026, 9, 24, 1, 30, 0, TimeSpan.Zero);
+        var booking = Sample(BookingStatus.Upcoming);
+        Assert.Throws<DomainException>(() => PayoutCalculator.ForLateCancel(booking, 449.50m, 15m));
+
+        BookingRules.Cancel(booking, start, start.AddHours(-1));
+        Assert.Equal(CancelledBy.Customer, booking.CancelledBy);
+        Assert.Throws<DomainException>(() => PayoutCalculator.ForLateCancel(booking, 0m, 15m));
+        Assert.Throws<DomainException>(() => PayoutCalculator.ForLateCancel(booking, 900m, 15m));
+
+        var payout = PayoutCalculator.ForLateCancel(booking, 449.50m, 15m);
+        Assert.Equal(449.50m, payout.GrossAmount);
+        Assert.Equal(67.43m, payout.FeeAmount);
+        Assert.Equal(382.07m, payout.NetAmount);
+    }
+
+    [Fact]
+    public void Admin_cancel_needs_a_reason_and_a_live_booking()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var booking = Sample(BookingStatus.Upcoming);
+        Assert.Throws<DomainException>(() => BookingRules.AdminCancel(booking, " no ", now));
+        Assert.Throws<DomainException>(() => BookingRules.AdminCancel(booking, new string('x', 301), now));
+        Assert.Equal(BookingStatus.Upcoming, booking.Status);
+
+        BookingRules.AdminCancel(booking, "  Instructor is unwell  ", now);
+        Assert.Equal(BookingStatus.Cancelled, booking.Status);
+        Assert.Equal(CancelledBy.Admin, booking.CancelledBy);
+        Assert.Equal("Instructor is unwell", booking.CancelReason);
+
+        foreach (var status in new[] { BookingStatus.Declined, BookingStatus.Completed, BookingStatus.NoShow, BookingStatus.Cancelled })
+            Assert.Throws<DomainException>(() => BookingRules.AdminCancel(Sample(status), "Duplicate booking", now));
     }
 
     [Fact]

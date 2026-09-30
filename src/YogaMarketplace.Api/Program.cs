@@ -36,7 +36,7 @@ builder.Services.AddSwaggerGen(options =>
     {
         Title = "Yoga Marketplace API",
         Version = "v1",
-        Description = "OTP auth, Mumbai catalog, mode-specific slots, pay-at-book, the instructor handshake, customer cancel and reschedule, instructor availability edits, and admin oversight."
+        Description = "OTP auth, Mumbai catalog, mode-specific slots, pay-at-book, a saved customer visit address, the instructor handshake, customer cancel and reschedule, instructor availability and rate edits, and admin oversight."
     });
     options.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
     {
@@ -52,7 +52,7 @@ builder.Services.AddSwaggerGen(options =>
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddAppServices(builder.Configuration);
 builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
-    policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
+    policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod().WithExposedHeaders("Content-Disposition")));
 
 var jwt = builder.Configuration.GetSection(JwtOptions.Section).Get<JwtOptions>() ?? new JwtOptions();
 if (string.IsNullOrWhiteSpace(jwt.Key) || Encoding.UTF8.GetByteCount(jwt.Key) < 32)

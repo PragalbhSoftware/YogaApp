@@ -216,7 +216,7 @@ public class MarketplaceApiTests : IClassFixture<YogaApiFactory>
     }
 
     [Fact]
-    public async Task Provider_register_stays_pending_until_approval_and_can_add_mode_slots()
+    public async Task Provider_register_stays_pending_until_approval_and_cannot_change_slots()
     {
         var client = _factory.CreateClient();
         var (token, _) = await SignUpAsync(client, "Priya Nair", "Female");
@@ -256,12 +256,16 @@ public class MarketplaceApiTests : IClassFixture<YogaApiFactory>
         var hidden = await client.GetAsync($"/api/providers/{body.Provider.Id}");
         Assert.Equal(HttpStatusCode.NotFound, hidden.StatusCode);
 
-        var slots = await Post<List<SlotBody>>(client, "/api/providers/me/slots", new
+        var add = await client.PostAsJsonAsync("/api/providers/me/slots", new
         {
             mode = "Home",
             slots = new[] { new { date = tomorrow.ToString("yyyy-MM-dd"), start = "06:30", end = "07:30" } }
         });
-        Assert.Equal("06:30", Assert.Single(slots).Start);
+        Assert.Equal(HttpStatusCode.Forbidden, add.StatusCode);
+        Assert.Contains("verified", (await add.Content.ReadFromJsonAsync<ErrorBody>(Json))!.Error, StringComparison.OrdinalIgnoreCase);
+
+        var own = await client.GetFromJsonAsync<SlotListBody>("/api/providers/me/slots?mode=Home", Json);
+        Assert.Empty(own!.Slots);
 
         var publicSlots = await client.GetAsync($"/api/providers/{body.Provider.Id}/slots?mode=Home");
         Assert.Equal(HttpStatusCode.NotFound, publicSlots.StatusCode);

@@ -32,7 +32,8 @@ public class AdminMasterService : IAdminMasterService
 
     public async Task<IReadOnlyList<AdminAreaResponse>> ListAreasAsync(CancellationToken cancellationToken) =>
         await _db.Areas.AsNoTracking()
-            .OrderBy(a => a.Name)
+            .OrderBy(a => a.City)
+            .ThenBy(a => a.Name)
             .Select(a => new AdminAreaResponse(a.Id, a.City, a.Name, a.IsActive))
             .ToListAsync(cancellationToken);
 

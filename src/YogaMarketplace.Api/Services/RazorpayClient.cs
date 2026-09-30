@@ -42,6 +42,10 @@ public interface IRazorpayClient
         string expectedCurrency,
         CancellationToken cancellationToken);
 
+    bool SupportsLocalCapture { get; }
+
+    (string PaymentId, string Signature) CreateLocalCapture(string orderId);
+
     bool VerifyWebhookSignature(string rawBody, string? signature);
 
     /// <summary>
@@ -54,6 +58,9 @@ internal readonly record struct RecordedRefund(string PaymentId, long AmountPais
 
 internal static class RazorpaySignatures
 {
+    public static string ForPayment(string secret, string orderId, string paymentId) =>
+        Sign(secret, $"{orderId}|{paymentId}");
+
     public static bool MatchesPayment(string secret, string orderId, string paymentId, string? signature) =>
         Matches(secret, $"{orderId}|{paymentId}", signature);
 
@@ -104,6 +111,17 @@ public sealed class FakeRazorpayClient : IRazorpayClient
     internal IReadOnlyCollection<RecordedRefund> Refunds => _refunds.ToArray();
 
     public string KeyId => _options.KeyId;
+
+    public bool SupportsLocalCapture => true;
+
+    public (string PaymentId, string Signature) CreateLocalCapture(string orderId)
+    {
+        EnsureKeyId();
+        if (string.IsNullOrWhiteSpace(orderId) || string.IsNullOrWhiteSpace(_options.KeySecret))
+            throw new DomainException("Razorpay is not configured.", 503);
+        var paymentId = "pay_fake_" + Guid.NewGuid().ToString("N");
+        return (paymentId, RazorpaySignatures.ForPayment(_options.KeySecret, orderId, paymentId));
+    }
 
     public Task<RazorpayCreatedOrder> CreateOrderAsync(
         long amountPaise,
@@ -172,6 +190,11 @@ public sealed class RazorpayHttpClient : IRazorpayClient
     }
 
     public string KeyId => _options.KeyId;
+
+    public bool SupportsLocalCapture => false;
+
+    public (string PaymentId, string Signature) CreateLocalCapture(string orderId) =>
+        throw new DomainException("Pay with Razorpay Checkout.", 400);
 
     public async Task<RazorpayCreatedOrder> CreateOrderAsync(
         long amountPaise,

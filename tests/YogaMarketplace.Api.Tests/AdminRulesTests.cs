@@ -78,14 +78,17 @@ public class AdminRulesTests
     }
 
     [Fact]
-    public void Area_create_stays_in_mumbai_and_category_rename_does_not_touch_the_slug()
+    public void Area_create_defaults_to_mumbai_accepts_other_cities_and_category_rename_does_not_touch_the_slug()
     {
         var area = CatalogRules.CreateArea(null, "  Colaba  ");
         Assert.Equal(CatalogRules.LaunchCity, area.City);
         Assert.Equal("Colaba", area.Name);
         Assert.True(area.IsActive);
 
-        Assert.Throws<DomainException>(() => CatalogRules.CreateArea("Pune", "Kothrud"));
+        Assert.Equal("Pune", CatalogRules.CreateArea(" pune ", "Kothrud").City);
+        Assert.Equal("New Delhi", CatalogRules.CreateArea("new   DELHI", "Saket").City);
+        Assert.Throws<DomainException>(() => CatalogRules.CreateArea("P", "Kothrud"));
+        Assert.Throws<DomainException>(() => CatalogRules.CreateArea("Pune1", "Kothrud"));
         Assert.Throws<DomainException>(() => CatalogRules.CreateArea("Mumbai", " "));
 
         var category = new Category { Name = "Yoga", Slug = "yoga", IsActive = true };

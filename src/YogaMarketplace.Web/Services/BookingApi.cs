@@ -58,7 +58,8 @@ public sealed record CheckoutOrderDto(
     string Currency,
     Guid SlotId,
     string Mode,
-    string ProviderName);
+    string ProviderName,
+    bool LocalCapture);
 
 public sealed class ConfirmPaymentDto
 {

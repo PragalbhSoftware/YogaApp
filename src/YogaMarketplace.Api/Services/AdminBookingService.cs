@@ -1,5 +1,6 @@
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
+using YogaMarketplace.Api.Security;
 using YogaMarketplace.Domain;
 using YogaMarketplace.Infrastructure.Persistence;
 
@@ -15,15 +16,62 @@ public interface IAdminBookingService
         CancellationToken cancellationToken);
 
     Task<AdminBookingResponse> GetAsync(Guid id, CancellationToken cancellationToken);
+
+    Task<AdminBookingResponse> CancelAsync(Guid id, AdminCancelBookingRequest request, CancellationToken cancellationToken);
 }
 
 public class AdminBookingService : IAdminBookingService
 {
     private readonly YogaDbContext _db;
+    private readonly IRazorpayClient _razorpay;
+    private readonly ICurrentUser _current;
+    private readonly ILogger<AdminBookingService> _logger;
 
-    public AdminBookingService(YogaDbContext db)
+    public AdminBookingService(
+        YogaDbContext db,
+        IRazorpayClient razorpay,
+        ICurrentUser current,
+        ILogger<AdminBookingService> logger)
     {
         _db = db;
+        _razorpay = razorpay;
+        _current = current;
+        _logger = logger;
+    }
+
+    public async Task<AdminBookingResponse> CancelAsync(
+        Guid id,
+        AdminCancelBookingRequest request,
+        CancellationToken cancellationToken)
+    {
+        var booking = await _db.Bookings
+            .Include(b => b.Customer)
+            .Include(b => b.Provider)
+            .Include(b => b.Service)
+            .Include(b => b.Slot)
+            .Include(b => b.Payment)
+            .Include(b => b.Review)
+            .Include(b => b.Payout)
+            .SingleOrDefaultAsync(b => b.Id == id, cancellationToken)
+            ?? throw new DomainException("Booking not found.", 404);
+
+        if (booking.Status is not (BookingStatus.PendingAccept or BookingStatus.Upcoming))
+            throw new DomainException("Only a pending or upcoming booking can be cancelled.", 409);
+        var payment = booking.Payment;
+        if (payment is null || payment.Status != PaymentStatus.Paid || string.IsNullOrWhiteSpace(payment.GatewayPaymentId))
+            throw new DomainException("This booking has no captured payment to refund.", 409);
+
+        BookingRules.AdminCancel(booking, request.Reason, DateTimeOffset.UtcNow);
+        await PaymentRefunds.RefundAsync(_razorpay, booking, payment, payment.Amount, cancellationToken);
+        await _db.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "Admin {AdminId} force-cancelled booking {BookingId} and refunded {Amount} on payment {PaymentId}.",
+            _current.UserId,
+            booking.Id,
+            payment.RefundedAmount,
+            payment.GatewayPaymentId);
+        return ToResponse(booking, await CurrencyAsync(cancellationToken));
     }
 
     public async Task<IReadOnlyList<AdminBookingResponse>> ListAsync(
@@ -110,6 +158,10 @@ public class AdminBookingService : IAdminBookingService
             booking.Review?.Rating,
             booking.Payout?.NetAmount,
             booking.Payout?.Status.ToString(),
-            booking.CreatedAt);
+            booking.CreatedAt,
+            booking.Payment?.RefundedAmount,
+            booking.LateCancelFee,
+            booking.CancelledBy?.ToString(),
+            booking.CancelReason);
     }
 }

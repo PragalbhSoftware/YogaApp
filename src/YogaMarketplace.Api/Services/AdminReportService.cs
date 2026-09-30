@@ -31,10 +31,13 @@ public class AdminReportService : IAdminReportService
             .ToList();
 
         var gmv = await SumMoneyAsync(
-            _db.Payments.AsNoTracking().Where(p => p.Status == PaymentStatus.Paid).Select(p => p.Amount),
+            _db.Payments.AsNoTracking()
+                .Where(p => p.Status == PaymentStatus.Paid || p.Status == PaymentStatus.PartiallyRefunded)
+                .Select(p => p.Amount - p.RefundedAmount),
             cancellationToken);
 
-        var pending = _db.PayoutsPending.AsNoTracking().Where(p => p.Status == PayoutStatus.Pending);
+        var pending = _db.PayoutsPending.AsNoTracking()
+            .Where(p => p.Status == PayoutStatus.Pending || p.Status == PayoutStatus.Exported);
         var payoutCount = await pending.CountAsync(cancellationToken);
         var gross = await SumMoneyAsync(pending.Select(p => p.GrossAmount), cancellationToken);
         var net = await SumMoneyAsync(pending.Select(p => p.NetAmount), cancellationToken);
