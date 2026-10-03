@@ -22,6 +22,7 @@ import { isFakeOrder, type BookingRecord } from "@/features/bookings/types";
 import { toHomeVisitFormValues, type HomeVisitFormValues, type HomeVisitValues } from "@/features/bookings/schemas";
 import { digitsOnly } from "@/features/auth/utils/phone";
 import { useInstructor, useInstructorOpenSlots } from "@/features/marketplace/hooks/use-instructors";
+import { usePolicy } from "@/features/marketplace/hooks/use-site";
 import { offeredSessionModes } from "@/features/marketplace/utils/modes";
 import { VisitAddressCard } from "@/features/profile/components/visit-address-card";
 import { useCustomerProfile, useSaveVisitAddress } from "@/features/profile/hooks/use-profile";
@@ -48,6 +49,7 @@ export function BookPage() {
   const slotsFrom = startOfMonth(today);
   const slotsTo = endOfMonth(addMonths(today, 2));
   const slotsQuery = useInstructorOpenSlots(providerId, mode, slotsFrom, slotsTo, instructor.isSuccess);
+  const policy = usePolicy();
   const profile = useCustomerProfile();
   const saveAddress = useSaveVisitAddress();
   const createOrder = useCreateBookingOrder();
@@ -214,7 +216,13 @@ export function BookPage() {
         <p className="mt-1 text-sm text-brand-muted">Pay now with Razorpay. The instructor then accepts your request.</p>
       </header>
 
-      <BookSummary instructor={instructor.data} slot={slot} rate={Number(rate)} />
+      <BookSummary
+        instructor={instructor.data}
+        slot={slot}
+        rate={Number(rate)}
+        convenienceFee={policy.data?.convenienceFee}
+        feeLoading={policy.isLoading}
+      />
 
       {mode === "Home" ? (
         <HomeCheckout

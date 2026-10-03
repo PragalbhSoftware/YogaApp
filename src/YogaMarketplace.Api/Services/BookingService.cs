@@ -61,17 +61,20 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
     private readonly YogaDbContext _db;
     private readonly ICurrentUser _current;
     private readonly IRazorpayClient _razorpay;
+    private readonly IPlatformSettingsService _settings;
     private readonly ILogger<BookingService> _logger;
 
     public BookingService(
         YogaDbContext db,
         ICurrentUser current,
         IRazorpayClient razorpay,
+        IPlatformSettingsService settings,
         ILogger<BookingService> logger)
     {
         _db = db;
         _current = current;
         _razorpay = razorpay;
+        _settings = settings;
         _logger = logger;
     }
 
@@ -110,13 +113,15 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
         BookingRules.EnsureSessionLocation(slot.Mode, homeAddress, landmark, provider.GoogleMeetLink, provider.StudioAddress);
 
         var service = await ResolveServiceAsync(provider.Id, request.ServiceId, cancellationToken);
-        var policy = await _db.Policies.AsNoTracking().SingleAsync(cancellationToken);
-        var paise = RazorpayMoney.ToPaise(amount);
+        var settings = await _settings.GetAsync(cancellationToken);
+        var convenienceFee = settings.Terms.ConvenienceFee;
+        var total = amount + convenienceFee;
+        var paise = RazorpayMoney.ToPaise(total);
         var checkoutId = Guid.NewGuid();
 
         var created = await _razorpay.CreateOrderAsync(
             paise,
-            policy.Currency,
+            settings.Currency,
             checkoutId.ToString("N"),
             new Dictionary<string, string>
             {
@@ -135,7 +140,8 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
             SlotId = slot.Id,
             Mode = slot.Mode,
             Amount = amount,
-            Currency = policy.Currency,
+            ConvenienceFee = convenienceFee,
+            Currency = settings.Currency,
             HomeAddress = slot.Mode == SessionMode.Home ? homeAddress : null,
             Landmark = slot.Mode == SessionMode.Home ? landmark : null,
             Gateway = PaymentGateways.Razorpay,
@@ -153,7 +159,9 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
             _razorpay.KeyId,
             checkout.GatewayOrderId,
             paise,
+            total,
             amount,
+            convenienceFee,
             checkout.Currency,
             slot.Id,
             slot.Mode.ToString(),
@@ -178,7 +186,7 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
             orderId,
             paymentId,
             signature,
-            RazorpayMoney.ToPaise(preview.Amount),
+            RazorpayMoney.ToPaise(preview.Amount + preview.ConvenienceFee),
             preview.Currency,
             cancellationToken);
 
@@ -260,49 +268,49 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
         var (booking, currency) = await LoadForCustomerAsync(bookingId, cancellationToken);
         if (booking.Status is not (BookingStatus.PendingAccept or BookingStatus.Upcoming))
             throw new DomainException("Only a pending or upcoming booking can be cancelled.");
-        var policy = await _db.Policies.AsNoTracking().SingleAsync(cancellationToken);
+        var paid = booking.Payment?.Amount ?? booking.Amount + booking.ConvenienceFee;
         var start = SessionStartOf(booking);
-        var fee = BookingRules.LateCancelFeeFor(
-            booking, start, DateTimeOffset.UtcNow, policy.CancelFreeWindowHours, policy.LateCancelFeePercent);
+        var settlement = BookingRules.SettleCustomerCancel(booking, paid, start, DateTimeOffset.UtcNow);
         return new CancelQuoteResponse(
+            paid,
             booking.Amount,
-            fee,
-            booking.Amount - fee,
+            booking.ConvenienceFee,
+            settlement.LateCancelFee,
+            settlement.ConvenienceFeeKept,
+            settlement.Refund,
             currency,
-            policy.LateCancelFeePercent,
-            booking.Status == BookingStatus.Upcoming
-                ? BookingRules.FreeCancelUntil(start, policy.CancelFreeWindowHours)
-                : null);
+            booking.LateCancelFeeType.ToString(),
+            booking.LateCancelFeeValue,
+            booking.Status == BookingStatus.Upcoming ? BookingRules.FreeCancelUntil(booking, start) : null);
     }
 
     public async Task<BookingResponse> CancelAsync(Guid bookingId, CancellationToken cancellationToken)
     {
         var (booking, currency) = await LoadForCustomerAsync(bookingId, cancellationToken);
         var payment = RequireRefundablePayment(booking);
-        var policy = await _db.Policies.AsNoTracking().SingleAsync(cancellationToken);
         var start = SessionStartOf(booking);
         var now = DateTimeOffset.UtcNow;
-        var fee = BookingRules.LateCancelFeeFor(
-            booking, start, now, policy.CancelFreeWindowHours, policy.LateCancelFeePercent);
+        var settlement = BookingRules.SettleCustomerCancel(booking, payment.Amount, start, now);
 
         BookingRules.Cancel(booking, start, now);
-        booking.LateCancelFee = fee > 0 ? fee : null;
+        booking.LateCancelFee = settlement.LateCancelFee > 0 ? settlement.LateCancelFee : null;
 
         PayoutPending? payout = null;
-        if (fee > 0)
+        if (settlement.LateCancelFee > 0)
         {
-            payout = PayoutCalculator.ForLateCancel(booking, fee, policy.PlatformFeePercent);
+            payout = PayoutCalculator.ForLateCancel(booking, settlement.LateCancelFee);
             _db.PayoutsPending.Add(payout);
         }
-        await RefundAndSaveAsync(booking, payment, payment.Amount - fee, cancellationToken);
+        await RefundAndSaveAsync(booking, payment, settlement.Refund, cancellationToken);
 
         _logger.LogInformation(
-            "Customer {CustomerId} cancelled booking {BookingId}. Refunded {Refund} on payment {PaymentId}; late fee {LateFee}, payout {PayoutId}.",
+            "Customer {CustomerId} cancelled booking {BookingId}. Refunded {Refund} on payment {PaymentId}; late fee {LateFee}, convenience fee kept {ConvenienceKept}, payout {PayoutId}.",
             booking.CustomerId,
             booking.Id,
             payment.RefundedAmount,
             payment.GatewayPaymentId,
-            fee,
+            settlement.LateCancelFee,
+            settlement.ConvenienceFeeKept,
             payout?.Id);
         return ToResponse(booking, payment, currency);
     }
@@ -312,7 +320,7 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
         RescheduleBookingRequest request,
         CancellationToken cancellationToken)
     {
-        // RescheduleFreeWindowHours is a TBD default. The cancel window is what blocks a move, because it decides the fee.
+        // The booking's own cancel window blocks a move, because it decides the fee.
         var customer = await RequireCustomerAsync(CustomerChangeForbidden, cancellationToken);
         if (request.SlotId == Guid.Empty)
             throw new DomainException("Slot is required.");
@@ -331,10 +339,7 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
 
             var originalStart = SessionStartOf(booking);
             BookingRules.Reschedule(booking, newSlot);
-            var freeWindowHours = await _db.Policies.AsNoTracking()
-                .Select(p => p.CancelFreeWindowHours)
-                .SingleAsync(cancellationToken);
-            BookingRules.EnsureOutsideLateWindow(originalStart, DateTimeOffset.UtcNow, freeWindowHours);
+            BookingRules.EnsureOutsideLateWindow(booking, originalStart, DateTimeOffset.UtcNow);
             if (MumbaiClock.SessionStart(newSlot.Date, newSlot.EndTime) <= DateTimeOffset.UtcNow)
                 throw new DomainException("That slot has already ended.", 409);
             if (await SlotIsTakenAsync(newSlot.Id, cancellationToken, booking.Id))
@@ -379,10 +384,7 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
         if (booking.Payout is not null)
             throw new DomainException("This booking already has a payout.", 409);
 
-        var feePercent = await _db.Policies.AsNoTracking()
-            .Select(p => p.PlatformFeePercent)
-            .SingleAsync(cancellationToken);
-        var payout = PayoutCalculator.ForCompletedBooking(booking, feePercent);
+        var payout = PayoutCalculator.ForCompletedBooking(booking);
         _db.PayoutsPending.Add(payout);
         try
         {
@@ -475,7 +477,8 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
             if (expectedCustomerId is Guid customerId && checkout.CustomerId != customerId)
                 throw new DomainException("This payment belongs to another account.", 403);
 
-            if (amountPaise is long paise && paise != RazorpayMoney.ToPaise(checkout.Amount))
+            var total = checkout.Amount + checkout.ConvenienceFee;
+            if (amountPaise is long paise && paise != RazorpayMoney.ToPaise(total))
                 throw new DomainException("Payment amount does not match the slot price.");
             if (currency is not null && !currency.Equals(checkout.Currency, StringComparison.OrdinalIgnoreCase))
                 throw new DomainException("Payment currency does not match.");
@@ -512,11 +515,13 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
                 s => s.Id == checkout.ServiceId && s.ProviderId == slot.ProviderId && s.IsActive,
                 cancellationToken) ?? throw new DomainException("This session is no longer available.", 409);
 
+            var settings = await _settings.GetAsync(cancellationToken);
             var booking = BookingRules.CreateAfterPayment(
                 checkout.CustomerId,
                 service,
                 slot,
                 checkout.Amount,
+                settings.Terms with { ConvenienceFee = checkout.ConvenienceFee },
                 checkout.HomeAddress,
                 checkout.Landmark,
                 provider.GoogleMeetLink,
@@ -527,7 +532,7 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
             {
                 Id = Guid.NewGuid(),
                 BookingId = booking.Id,
-                Amount = checkout.Amount,
+                Amount = total,
                 Status = PaymentStatus.Pending,
                 Gateway = PaymentGateways.Razorpay,
                 GatewayOrderId = orderId,
@@ -616,8 +621,8 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
             .Include(b => b.Review);
     }
 
-    private Task<string> CurrencyAsync(CancellationToken cancellationToken) =>
-        _db.Policies.AsNoTracking().Select(p => p.Currency).SingleAsync(cancellationToken);
+    private async Task<string> CurrencyAsync(CancellationToken cancellationToken) =>
+        (await _settings.GetAsync(cancellationToken)).Currency;
 
     private static BookingStatus? ParseStatus(string? status)
     {
@@ -706,6 +711,7 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
             booking.Mode.ToString(),
             booking.Status.ToString(),
             booking.Amount,
+            booking.ConvenienceFee,
             currency,
             slot.Date,
             slot.StartTime.ToString("HH:mm", CultureInfo.InvariantCulture),

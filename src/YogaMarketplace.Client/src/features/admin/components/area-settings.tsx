@@ -32,7 +32,7 @@ export function AreaSettings() {
     <div className="flex flex-col gap-5">
       <SettingsIntro
         title="Cities and neighbourhoods"
-        lead="Customers pick a city, then a neighbourhood. Type a new city name to open it; it goes live once it has an active neighbourhood."
+        lead="Customers pick a city, then a neighbourhood. Add neighbourhoods to an open city, or hide one to take it out of browse. Existing bookings there carry on."
       />
       <SettingsCard className="space-y-0 p-0 sm:p-0">
         <div className="border-b border-brand-border p-5 sm:p-6">
@@ -104,12 +104,10 @@ function CreateAreaRow({ cities }: { cities: string[] }) {
           control={form.control}
           render={({ field, fieldState }) => (
             <Autocomplete
-              freeSolo
               options={cities}
-              value={field.value}
-              inputValue={field.value}
-              onInputChange={(_, next) => field.onChange(next)}
+              value={field.value || null}
               onChange={(_, next) => field.onChange(next ?? "")}
+              disabled={cities.length === 0}
               renderInput={(params) => (
                 <TextField
                   {...params}
@@ -117,7 +115,7 @@ function CreateAreaRow({ cities }: { cities: string[] }) {
                   inputRef={field.ref}
                   onBlur={field.onBlur}
                   error={Boolean(fieldState.error)}
-                  helperText={fieldState.error?.message ?? "Pick one or type a new city."}
+                  helperText={fieldState.error?.message ?? "Pick an open city. New cities are not available yet."}
                 />
               )}
             />
@@ -195,13 +193,13 @@ function AreaRow({ area }: { area: AdminArea }) {
                       const values = form.getValues();
                       save(
                         { ...values, isActive: checked },
-                        checked ? "Shown in the picker." : "Hidden from the picker.",
+                        checked ? "Open. Instructors here show in browse." : "Hidden from the picker and browse.",
                       );
                     });
                   }}
                 />
               }
-              label={field.value ? "In picker" : "Hidden"}
+              label={field.value ? "Open" : "Hidden"}
             />
           )}
         />

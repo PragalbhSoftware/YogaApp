@@ -25,4 +25,8 @@ public class CatalogController : ControllerBase
     [HttpGet("policy")]
     public async Task<ActionResult<PolicyResponse>> Policy(CancellationToken cancellationToken) =>
         Ok(await _catalog.PolicyAsync(cancellationToken));
+
+    [HttpGet("site/banner")]
+    public async Task<ActionResult<BannerResponse>> Banner(CancellationToken cancellationToken) =>
+        Ok(await _catalog.BannerAsync(cancellationToken));
 }

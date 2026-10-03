@@ -30,7 +30,7 @@ public class ProviderService
         CancellationToken cancellationToken)
     {
         var parsedMode = ParseOptionalMode(mode);
-        var query = VerifiedQuery();
+        var query = VerifiedQuery().Where(p => p.Area!.IsActive);
 
         if (!string.IsNullOrWhiteSpace(city))
         {

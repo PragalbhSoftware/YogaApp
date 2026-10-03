@@ -6,10 +6,12 @@ namespace YogaMarketplace.Api.Services;
 public class CatalogService
 {
     private readonly YogaDbContext _db;
+    private readonly IPlatformSettingsService _settings;
 
-    public CatalogService(YogaDbContext db)
+    public CatalogService(YogaDbContext db, IPlatformSettingsService settings)
     {
         _db = db;
+        _settings = settings;
     }
 
     public async Task<IReadOnlyList<AreaResponse>> AreasAsync(CancellationToken cancellationToken) =>
@@ -29,13 +31,21 @@ public class CatalogService
 
     public async Task<PolicyResponse> PolicyAsync(CancellationToken cancellationToken)
     {
-        var policy = await _db.Policies.AsNoTracking().SingleAsync(cancellationToken);
+        var settings = await _settings.GetAsync(cancellationToken);
+        var terms = settings.Terms;
         return new PolicyResponse(
-            policy.Currency,
-            policy.PlatformFeePercent,
-            policy.CancelFreeWindowHours,
-            policy.RescheduleFreeWindowHours,
-            policy.LateCancelFeePercent,
-            policy.PolicyNote);
+            settings.Currency,
+            terms.CommissionPercent,
+            terms.ConvenienceFee,
+            terms.CancelFreeWindowHours,
+            settings.RescheduleFreeWindowHours,
+            terms.LateCancelFeeType.ToString(),
+            terms.LateCancelFeeValue);
+    }
+
+    public async Task<BannerResponse> BannerAsync(CancellationToken cancellationToken)
+    {
+        var settings = await _settings.GetAsync(cancellationToken);
+        return new BannerResponse(settings.BannerTitle, settings.BannerSubtitle, settings.BannerOffer);
     }
 }

@@ -6,7 +6,9 @@ import { AreaPicker } from "@/features/marketplace/components/area-picker";
 import { HomeHero } from "@/features/marketplace/components/home-hero";
 import { InstructorList } from "@/features/marketplace/components/instructor-list";
 import { ModeFilter } from "@/features/marketplace/components/mode-filter";
+import { useClosedAreaReset } from "@/features/marketplace/hooks/use-closed-area-reset";
 import { useInstructors } from "@/features/marketplace/hooks/use-instructors";
+import { useSiteBanner } from "@/features/marketplace/hooks/use-site";
 import { usePageTitle } from "@/hooks/use-page-title";
 import { useAreaStore } from "@/stores/area-store";
 
@@ -35,6 +37,8 @@ export function HomePage() {
   const mode = readMode(searchParams.get("mode"));
   const pickingArea = Boolean(hydrated && (!city || !areaName || changingArea));
   const instructors = useInstructors(pickingArea ? null : city, pickingArea ? null : areaName, mode);
+  const banner = useSiteBanner();
+  useClosedAreaReset(hydrated ? city : null, hydrated ? areaName : null);
   usePageTitle(city && !pickingArea ? `Instructors in ${city}` : null);
 
   if (!hydrated) return <PageLoader />;
@@ -57,7 +61,13 @@ export function HomePage() {
 
   return (
     <main>
-      <HomeHero city={city} areaName={areaName} onChangeArea={() => setChangingArea(true)} />
+      <HomeHero
+        city={city}
+        areaName={areaName}
+        banner={banner.data}
+        bannerLoading={banner.isLoading}
+        onChangeArea={() => setChangingArea(true)}
+      />
       <section className="mx-auto max-w-3xl space-y-5 px-4 py-6 sm:px-8">
         <ModeFilter
           value={mode}

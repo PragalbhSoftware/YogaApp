@@ -38,6 +38,14 @@ export function SessionFacts({ booking }: SessionFactsProps) {
             <PriceText amount={Number(booking.amount)} />
           </dd>
         </div>
+        {booking.convenienceFee > 0 ? (
+          <div className="flex justify-between gap-3">
+            <dt className="text-brand-muted">Convenience fee</dt>
+            <dd>
+              <PriceText amount={Number(booking.convenienceFee)} />
+            </dd>
+          </div>
+        ) : null}
       </dl>
       {locationFacts.length > 0 ? <AddressFacts facts={locationFacts} /> : null}
       <p className="text-sm">{bookingDetail(booking)}</p>

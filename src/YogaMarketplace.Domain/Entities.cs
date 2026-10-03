@@ -151,6 +151,11 @@ public class Booking
     public CancelledBy? CancelledBy { get; set; }
     public string? CancelReason { get; set; }
     public decimal? LateCancelFee { get; set; }
+    public decimal CommissionPercent { get; set; }
+    public decimal ConvenienceFee { get; set; }
+    public int CancelFreeWindowHours { get; set; }
+    public LateCancelFeeType LateCancelFeeType { get; set; } = LateCancelFeeType.Percent;
+    public decimal LateCancelFeeValue { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     public Payment? Payment { get; set; }
@@ -171,6 +176,7 @@ public class CheckoutIntent
     public Guid SlotId { get; set; }
     public SessionMode Mode { get; set; }
     public decimal Amount { get; set; }
+    public decimal ConvenienceFee { get; set; }
     public string Currency { get; set; } = "INR";
     public string? HomeAddress { get; set; }
     public string? Landmark { get; set; }
@@ -224,15 +230,55 @@ public class PayoutPending
     public DateTimeOffset CreatedAt { get; set; }
 }
 
-public class MarketplacePolicy
+/// <summary>
+/// The single row of business values the owner edits from admin. Bookings copy the money fields
+/// when they are created (see <see cref="BookingTerms"/>), so edits only affect new bookings.
+/// </summary>
+public class PlatformSettings
 {
     public Guid Id { get; set; }
     public string Currency { get; set; } = "INR";
-    public decimal PlatformFeePercent { get; set; }
+    public decimal CommissionPercent { get; set; }
+    public decimal ConvenienceFee { get; set; }
     public int CancelFreeWindowHours { get; set; }
     public int RescheduleFreeWindowHours { get; set; }
-    public decimal LateCancelFeePercent { get; set; }
+    public LateCancelFeeType LateCancelFeeType { get; set; } = LateCancelFeeType.Percent;
+    public decimal LateCancelFeeValue { get; set; }
+    public PayoutCycle PayoutCycle { get; set; } = PayoutCycle.Weekly;
     public string PolicyNote { get; set; } = "";
+    public string? BannerTitle { get; set; }
+    public string? BannerSubtitle { get; set; }
+    public string? BannerOffer { get; set; }
+    public int Version { get; set; } = 1;
+    public DateTimeOffset? UpdatedAt { get; set; }
+}
+
+/// <summary>One changed field from one admin save of <see cref="PlatformSettings"/>.</summary>
+public class SettingsAudit
+{
+    public Guid Id { get; set; }
+    public Guid AdminUserId { get; set; }
+    public DateTimeOffset ChangedAt { get; set; }
+    public string Field { get; set; } = "";
+    public string? OldValue { get; set; }
+    public string? NewValue { get; set; }
+}
+
+/// <summary>A unit of work for the background runner. Handlers are looked up by <see cref="Type"/>.</summary>
+public class BackgroundJob
+{
+    public Guid Id { get; set; }
+    public string Type { get; set; } = "";
+    public string? Payload { get; set; }
+    public DateTimeOffset RunAt { get; set; }
+    public BackgroundJobStatus Status { get; set; } = BackgroundJobStatus.Pending;
+    public int Attempts { get; set; }
+    public int MaxAttempts { get; set; } = 5;
+    public string? LastError { get; set; }
+    public string? LockedBy { get; set; }
+    public DateTimeOffset? LockedUntil { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset? CompletedAt { get; set; }
 }
 
 public class OtpChallenge

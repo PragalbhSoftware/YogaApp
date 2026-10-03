@@ -15,10 +15,6 @@ public interface IAdminMasterService
     Task<IReadOnlyList<AdminCategoryResponse>> ListCategoriesAsync(CancellationToken cancellationToken);
 
     Task<AdminCategoryResponse> UpdateCategoryAsync(Guid id, PatchCategoryRequest request, CancellationToken cancellationToken);
-
-    Task<PolicyResponse> GetPolicyAsync(CancellationToken cancellationToken);
-
-    Task<PolicyResponse> UpdatePolicyAsync(PatchPolicyRequest request, CancellationToken cancellationToken);
 }
 
 public class AdminMasterService : IAdminMasterService
@@ -40,6 +36,9 @@ public class AdminMasterService : IAdminMasterService
     public async Task<AdminAreaResponse> CreateAreaAsync(CreateAreaRequest request, CancellationToken cancellationToken)
     {
         var area = CatalogRules.CreateArea(request.City, request.Name);
+        var cityOpen = await _db.Areas.AnyAsync(a => a.City == area.City, cancellationToken);
+        if (!cityOpen)
+            throw new DomainException("Pick one of the existing cities. Opening new cities is not available yet.");
         await EnsureAreaNameAvailableAsync(area.City, area.Name, null, cancellationToken);
         _db.Areas.Add(area);
         await _db.SaveChangesAsync(cancellationToken);
@@ -87,23 +86,6 @@ public class AdminMasterService : IAdminMasterService
         return new AdminCategoryResponse(category.Id, category.Name, category.Slug, category.IsActive);
     }
 
-    public async Task<PolicyResponse> GetPolicyAsync(CancellationToken cancellationToken) =>
-        ToPolicy(await _db.Policies.AsNoTracking().SingleAsync(cancellationToken));
-
-    public async Task<PolicyResponse> UpdatePolicyAsync(PatchPolicyRequest request, CancellationToken cancellationToken)
-    {
-        var policy = await _db.Policies.SingleAsync(cancellationToken);
-        CatalogRules.UpdatePolicy(
-            policy,
-            request.PlatformFeePercent,
-            request.CancelFreeWindowHours,
-            request.RescheduleFreeWindowHours,
-            request.LateCancelFeePercent,
-            request.PolicyNote);
-        await _db.SaveChangesAsync(cancellationToken);
-        return ToPolicy(policy);
-    }
-
     private async Task EnsureAreaNameAvailableAsync(string city, string name, Guid? exceptId, CancellationToken cancellationToken)
     {
         var lowered = name.ToLower();
@@ -116,12 +98,4 @@ public class AdminMasterService : IAdminMasterService
     }
 
     private static AdminAreaResponse ToArea(Area area) => new(area.Id, area.City, area.Name, area.IsActive);
-
-    private static PolicyResponse ToPolicy(MarketplacePolicy policy) => new(
-        policy.Currency,
-        policy.PlatformFeePercent,
-        policy.CancelFreeWindowHours,
-        policy.RescheduleFreeWindowHours,
-        policy.LateCancelFeePercent,
-        policy.PolicyNote);
 }

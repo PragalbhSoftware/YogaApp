@@ -25,17 +25,20 @@ public class AdminBookingService : IAdminBookingService
     private readonly YogaDbContext _db;
     private readonly IRazorpayClient _razorpay;
     private readonly ICurrentUser _current;
+    private readonly IPlatformSettingsService _settings;
     private readonly ILogger<AdminBookingService> _logger;
 
     public AdminBookingService(
         YogaDbContext db,
         IRazorpayClient razorpay,
         ICurrentUser current,
+        IPlatformSettingsService settings,
         ILogger<AdminBookingService> logger)
     {
         _db = db;
         _razorpay = razorpay;
         _current = current;
+        _settings = settings;
         _logger = logger;
     }
 
@@ -120,8 +123,8 @@ public class AdminBookingService : IAdminBookingService
             .Include(b => b.Review)
             .Include(b => b.Payout);
 
-    private Task<string> CurrencyAsync(CancellationToken cancellationToken) =>
-        _db.Policies.AsNoTracking().Select(p => p.Currency).SingleAsync(cancellationToken);
+    private async Task<string> CurrencyAsync(CancellationToken cancellationToken) =>
+        (await _settings.GetAsync(cancellationToken)).Currency;
 
     private static AdminBookingResponse ToResponse(Booking booking, string currency)
     {
@@ -142,6 +145,8 @@ public class AdminBookingService : IAdminBookingService
             booking.Mode.ToString(),
             booking.Status.ToString(),
             booking.Amount,
+            booking.ConvenienceFee,
+            booking.CommissionPercent,
             currency,
             slot.Date,
             slot.StartTime.ToString("HH:mm", CultureInfo.InvariantCulture),

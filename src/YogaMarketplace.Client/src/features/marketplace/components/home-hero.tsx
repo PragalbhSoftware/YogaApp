@@ -1,16 +1,19 @@
-import { Chip } from "@mui/material";
+import { Chip, Skeleton } from "@mui/material";
 import { MapPin } from "lucide-react";
-import { launch } from "@/constants/launch";
-import { site } from "@/constants/site";
+import type { SiteBanner } from "@/features/marketplace/types";
+import { bannerCopy } from "@/features/marketplace/utils/copy";
 
 type HomeHeroProps = {
   city: string;
   areaName: string;
+  banner: SiteBanner | undefined;
+  bannerLoading: boolean;
   onChangeArea: () => void;
 };
 
-export function HomeHero({ city, areaName, onChangeArea }: HomeHeroProps) {
+export function HomeHero({ city, areaName, banner, bannerLoading, onChangeArea }: HomeHeroProps) {
   const place = `${areaName}, ${city}`;
+  const copy = bannerCopy(banner);
 
   return (
     <header className="relative overflow-hidden bg-brand-primary px-5 py-6 text-white sm:px-8">
@@ -22,9 +25,17 @@ export function HomeHero({ city, areaName, onChangeArea }: HomeHeroProps) {
         <p className="text-[11px] font-medium tracking-[0.22em] uppercase opacity-80">
           Yoga Marketplace
         </p>
-        <h1 className="font-heading text-2xl leading-tight font-medium sm:text-3xl">
-          {site.tagline}
-        </h1>
+        {bannerLoading ? (
+          <div className="w-full max-w-md" aria-busy="true" aria-label="Loading">
+            <Skeleton variant="text" sx={{ bgcolor: "rgba(255,255,255,0.18)", fontSize: "1.75rem" }} />
+            <Skeleton variant="text" width="60%" sx={{ bgcolor: "rgba(255,255,255,0.18)" }} />
+          </div>
+        ) : (
+          <div className="space-y-1">
+            <h1 className="font-heading text-2xl leading-tight font-medium sm:text-3xl">{copy.title}</h1>
+            {copy.subtitle ? <p className="text-sm leading-relaxed opacity-90">{copy.subtitle}</p> : null}
+          </div>
+        )}
         <div className="flex flex-col items-start gap-2">
           <button
             type="button"
@@ -36,16 +47,19 @@ export function HomeHero({ city, areaName, onChangeArea }: HomeHeroProps) {
             <span className="truncate">{place}</span>
             <span className="text-xs opacity-80">Change</span>
           </button>
-          <Chip
-            label={launch.heroChip}
-            size="small"
-            sx={{
-              bgcolor: "rgba(255,255,255,0.12)",
-              color: "white",
-              border: "1px solid rgba(255,255,255,0.25)",
-              width: "fit-content",
-            }}
-          />
+          {bannerLoading ? null : (
+            <Chip
+              label={copy.offer}
+              size="small"
+              sx={{
+                bgcolor: "rgba(255,255,255,0.12)",
+                color: "white",
+                border: "1px solid rgba(255,255,255,0.25)",
+                width: "fit-content",
+                maxWidth: "100%",
+              }}
+            />
+          )}
         </div>
       </div>
     </header>

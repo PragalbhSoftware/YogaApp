@@ -77,8 +77,16 @@ function QuoteSummary({ quote }: { quote: CancelQuote }) {
         </div>
         {late ? (
           <div className="flex justify-between gap-3">
-            <dt className="text-brand-muted">Late-cancel fee ({quote.lateCancelFeePercent}%)</dt>
+            <dt className="text-brand-muted">
+              Late-cancel fee{quote.lateCancelFeeType === "Percent" ? ` (${quote.lateCancelFeeValue}%)` : ""}
+            </dt>
             <dd className="tabular-nums">− {formatInr(quote.lateCancelFee)}</dd>
+          </div>
+        ) : null}
+        {quote.convenienceFeeKept > 0 ? (
+          <div className="flex justify-between gap-3">
+            <dt className="text-brand-muted">Convenience fee</dt>
+            <dd className="tabular-nums">− {formatInr(quote.convenienceFeeKept)}</dd>
           </div>
         ) : null}
         <div className="flex justify-between gap-3 border-t border-brand-border pt-2 font-medium">
@@ -92,13 +100,21 @@ function QuoteSummary({ quote }: { quote: CancelQuote }) {
 }
 
 function quoteNote(quote: CancelQuote) {
-  if (quote.lateCancelFee > 0) {
+  if (quote.lateCancelFee > 0 || quote.convenienceFeeKept > 0) {
     return `The free cancellation window closed${
       quote.freeUntil ? ` at ${formatWhenKolkata(quote.freeUntil)}` : ""
-    }. The fee goes to your instructor, who kept this time for you.`;
+    }. The late fee goes to your instructor, who kept this time for you.`;
   }
   if (quote.freeUntil) {
-    return `Free cancellation until ${formatWhenKolkata(quote.freeUntil)}. After that, ${quote.lateCancelFeePercent}% is kept.`;
+    return `Free cancellation until ${formatWhenKolkata(quote.freeUntil)}. After that, ${lateFeeText(quote)} is kept.`;
   }
   return "Your instructor hasn’t accepted yet, so cancelling is free.";
+}
+
+function lateFeeText(quote: CancelQuote) {
+  const fee =
+    quote.lateCancelFeeType === "Flat"
+      ? formatInr(Math.min(quote.lateCancelFeeValue, quote.sessionAmount))
+      : `${quote.lateCancelFeeValue}% of the session`;
+  return quote.convenienceFee > 0 ? `${fee} plus the convenience fee` : fee;
 }

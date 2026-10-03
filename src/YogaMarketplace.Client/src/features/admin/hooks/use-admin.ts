@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { adminApi } from "@/features/admin/api/admin-api";
-import type { AdminPolicy, BookingListQuery, UserListQuery } from "@/features/admin/types";
+import type { BookingListQuery, UpdateSettingsInput, UserListQuery } from "@/features/admin/types";
+import { ApiError } from "@/services/http/api-error";
 
 export function useAdminSummary() {
   return useQuery({
@@ -170,6 +171,7 @@ export function useUpdateArea() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["admin-areas"] });
       void queryClient.invalidateQueries({ queryKey: ["areas"] });
+      void queryClient.invalidateQueries({ queryKey: ["instructors"] });
     },
   });
 }
@@ -191,19 +193,38 @@ export function useRenameCategory() {
   });
 }
 
-export function useAdminPolicy() {
+export function useAdminSettings() {
   return useQuery({
-    queryKey: ["admin-policy"],
-    queryFn: adminApi.policy,
+    queryKey: ["admin-settings"],
+    queryFn: adminApi.settings,
   });
 }
 
-export function useUpdatePolicy() {
+export function useSettingsAudit() {
+  return useQuery({
+    queryKey: ["admin-settings-audit"],
+    queryFn: adminApi.settingsAudit,
+  });
+}
+
+/** On a 409 another admin saved first, so the form reloads the latest values before the next try. */
+export function useUpdateSettings() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: Partial<AdminPolicy>) => adminApi.updatePolicy(input),
-    onSuccess: (policy) => {
-      queryClient.setQueryData(["admin-policy"], policy);
+    mutationFn: (input: UpdateSettingsInput) => adminApi.updateSettings(input),
+    onSuccess: (settings) => {
+      queryClient.setQueryData(["admin-settings"], settings);
+      for (const queryKey of settingsReaders) {
+        void queryClient.invalidateQueries({ queryKey });
+      }
+    },
+    onError: (error) => {
+      if (error instanceof ApiError && error.status === 409) {
+        void queryClient.invalidateQueries({ queryKey: ["admin-settings"] });
+        void queryClient.invalidateQueries({ queryKey: ["admin-settings-audit"] });
+      }
     },
   });
 }
+
+const settingsReaders = [["admin-settings-audit"], ["policy"], ["site-banner"], ["areas"], ["instructors"]];

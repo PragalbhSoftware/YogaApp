@@ -3,7 +3,10 @@ export type CheckoutOrder = {
   keyId: string;
   orderId: string;
   amountPaise: number;
+  /** Session price plus the convenience fee: what the customer pays. */
   amount: number;
+  sessionAmount: number;
+  convenienceFee: number;
   currency: string;
   slotId: string;
   mode: string;
@@ -32,6 +35,7 @@ export type BookingRecord = {
   mode: string;
   status: string;
   amount: number;
+  convenienceFee: number;
   currency: string;
   date: string;
   start: string;
@@ -52,11 +56,16 @@ export type BookingRecord = {
 };
 
 export type CancelQuote = {
+  /** Everything the customer paid: session plus convenience fee. */
   amount: number;
+  sessionAmount: number;
+  convenienceFee: number;
   lateCancelFee: number;
+  convenienceFeeKept: number;
   refund: number;
   currency: string;
-  lateCancelFeePercent: number;
+  lateCancelFeeType: "Percent" | "Flat";
+  lateCancelFeeValue: number;
   freeUntil: string | null;
 };
 

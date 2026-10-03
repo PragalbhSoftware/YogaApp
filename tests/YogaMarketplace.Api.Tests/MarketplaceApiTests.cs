@@ -124,8 +124,12 @@ public class MarketplaceApiTests : IClassFixture<YogaApiFactory>
 
         var policy = await client.GetFromJsonAsync<PolicyBody>("/api/policy", Json);
         Assert.Equal("INR", policy!.Currency);
-        Assert.Equal(15m, policy.PlatformFeePercent);
-        Assert.Contains("TBD", policy.PolicyNote, StringComparison.Ordinal);
+        Assert.Equal(15m, policy.CommissionPercent);
+        Assert.Equal(0m, policy.ConvenienceFee);
+        Assert.Equal(12, policy.CancelFreeWindowHours);
+
+        var banner = await client.GetFromJsonAsync<BannerBody>("/api/site/banner", Json);
+        Assert.Equal(new BannerBody(null, null, null), banner);
     }
 
     [Fact]
@@ -325,7 +329,8 @@ public class MarketplaceApiTests : IClassFixture<YogaApiFactory>
     private sealed record AuthBody(string Token, UserBody User);
     private sealed record AreaBody(Guid Id, string City, string Name);
     private sealed record CategoryBody(Guid Id, string Name, string Slug);
-    private sealed record PolicyBody(string Currency, decimal PlatformFeePercent, string PolicyNote);
+    private sealed record PolicyBody(string Currency, decimal CommissionPercent, decimal ConvenienceFee, int CancelFreeWindowHours);
+    private sealed record BannerBody(string? Title, string? Subtitle, string? Offer);
     private sealed record ModeBody(string Mode, decimal Rate);
     private sealed record ProviderBody(Guid Id, string DisplayName, string Area, string Status, List<ModeBody> Modes);
     private sealed record SlotBody(Guid Id, string Mode, DateOnly Date, string Start, string End);

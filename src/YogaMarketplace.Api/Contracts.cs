@@ -65,13 +65,17 @@ public record AreaResponse(Guid Id, string City, string Name);
 
 public record CategoryResponse(Guid Id, string Name, string Slug);
 
+/// <summary>Terms for new bookings. Existing bookings keep the terms they were made with.</summary>
 public record PolicyResponse(
     string Currency,
-    decimal PlatformFeePercent,
+    decimal CommissionPercent,
+    decimal ConvenienceFee,
     int CancelFreeWindowHours,
     int RescheduleFreeWindowHours,
-    decimal LateCancelFeePercent,
-    string PolicyNote);
+    string LateCancelFeeType,
+    decimal LateCancelFeeValue);
+
+public record BannerResponse(string? Title, string? Subtitle, string? Offer);
 
 public record ModeRate(string Mode, decimal Rate);
 
@@ -219,6 +223,8 @@ public record CheckoutOrderResponse(
     string OrderId,
     long AmountPaise,
     decimal Amount,
+    decimal SessionAmount,
+    decimal ConvenienceFee,
     string Currency,
     Guid SlotId,
     string Mode,
@@ -266,6 +272,7 @@ public record BookingResponse(
     string Mode,
     string Status,
     decimal Amount,
+    decimal ConvenienceFee,
     string Currency,
     DateOnly Date,
     string Start,
@@ -284,10 +291,18 @@ public record BookingResponse(
     string? CancelledBy,
     string? CancelReason);
 
+/// <summary>
+/// <see cref="Amount"/> is what the customer paid (session plus convenience fee). A late cancel keeps the
+/// late fee and the convenience fee. Terms come from the booking, not from current settings.
+/// </summary>
 public record CancelQuoteResponse(
     decimal Amount,
+    decimal SessionAmount,
+    decimal ConvenienceFee,
     decimal LateCancelFee,
+    decimal ConvenienceFeeKept,
     decimal Refund,
     string Currency,
-    decimal LateCancelFeePercent,
+    string LateCancelFeeType,
+    decimal LateCancelFeeValue,
     DateTimeOffset? FreeUntil);

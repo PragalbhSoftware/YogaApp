@@ -41,11 +41,16 @@ public class AdminTransactionService : IAdminTransactionService
     };
 
     private readonly YogaDbContext _db;
+    private readonly IPlatformSettingsService _settings;
     private readonly ILogger<AdminTransactionService> _logger;
 
-    public AdminTransactionService(YogaDbContext db, ILogger<AdminTransactionService> logger)
+    public AdminTransactionService(
+        YogaDbContext db,
+        IPlatformSettingsService settings,
+        ILogger<AdminTransactionService> logger)
     {
         _db = db;
+        _settings = settings;
         _logger = logger;
     }
 
@@ -124,13 +129,34 @@ public class AdminTransactionService : IAdminTransactionService
     }
 
     /// <summary>
-    /// Claims every Pending payout in one UPDATE, so two exports at the same moment never share a row.
+    /// Claims the Pending payouts created before the current payout cycle started, in one UPDATE,
+    /// so two exports at the same moment never share a row.
     /// </summary>
     public async Task<PayoutCsv> ExportPendingPayoutsAsync(CancellationToken cancellationToken)
     {
+        var cycle = (await _settings.GetAsync(cancellationToken)).PayoutCycle;
+        var now = DateTimeOffset.UtcNow;
+        var cutoff = PayoutCycleRules.CurrentPeriodStart(cycle, now);
+
+        // SQLite cannot compare DateTimeOffset, so pick the due rows here and claim them by id.
+        var pending = await _db.PayoutsPending.AsNoTracking()
+            .Where(p => p.Status == PayoutStatus.Pending)
+            .Select(p => new { p.Id, p.CreatedAt })
+            .ToListAsync(cancellationToken);
+        if (pending.Count == 0)
+            throw new DomainException("There are no pending payouts to export.", 409);
+        var dueIds = pending.Where(p => p.CreatedAt < cutoff).Select(p => p.Id).ToArray();
+        if (dueIds.Length == 0)
+        {
+            var opens = TimeZoneInfo.ConvertTime(PayoutCycleRules.NextPeriodStart(cycle, now), MumbaiClock.Zone);
+            throw new DomainException(
+                $"No payouts are due yet. This {cycle.ToString().ToLowerInvariant()} cycle can be exported from {opens.ToString("ddd d MMM", CultureInfo.InvariantCulture)}.",
+                409);
+        }
+
         var batchId = Guid.NewGuid();
         var claimed = await _db.PayoutsPending
-            .Where(p => p.Status == PayoutStatus.Pending)
+            .Where(p => dueIds.Contains(p.Id) && p.Status == PayoutStatus.Pending)
             .ExecuteUpdateAsync(
                 set => set
                     .SetProperty(p => p.Status, PayoutStatus.Exported)
@@ -227,8 +253,8 @@ public class AdminTransactionService : IAdminTransactionService
             ? PayoutStatus.Pending
             : AdminQuery.ParseRequired<PayoutStatus>(status, "Unknown payout status.");
 
-    private Task<string> CurrencyAsync(CancellationToken cancellationToken) =>
-        _db.Policies.AsNoTracking().Select(p => p.Currency).SingleAsync(cancellationToken);
+    private async Task<string> CurrencyAsync(CancellationToken cancellationToken) =>
+        (await _settings.GetAsync(cancellationToken)).Currency;
 
     private static AdminPayoutResponse ToPayout(PayoutPending payout, string providerName) => new(
         payout.Id,

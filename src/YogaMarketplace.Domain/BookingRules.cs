@@ -5,8 +5,9 @@ namespace YogaMarketplace.Domain;
 /// Decline refunds (the caller) and frees the slot. Complete unlocks a review and a pending payout.
 /// No-show keeps the slot occupied, creates the same pending payout, and does not unlock a review.
 /// Cancel allows PendingAccept or Upcoming before the session starts and frees the slot.
-/// Cancelling an Upcoming booking inside the policy's free window keeps <see cref="LateCancelFeeFor"/>;
-/// the rest is refunded and the kept fee becomes an instructor payout. PendingAccept cancels are always free.
+/// Fees, windows and commission come from the terms copied onto the booking at creation, never from current settings.
+/// Cancelling an Upcoming booking inside its free window keeps <see cref="LateCancelFeeFor"/> and the convenience fee;
+/// the rest is refunded and the kept late fee becomes an instructor payout. PendingAccept cancels are always free.
 /// Admin force-cancel allows PendingAccept or Upcoming at any time, needs a reason, and always refunds in full.
 /// Reschedule keeps one Upcoming booking on another slot with the same instructor and mode. It is never charged,
 /// so it is refused inside the late-cancel window; otherwise moving a late booking would reset the fee.
@@ -24,6 +25,7 @@ public static class BookingRules
         Service service,
         AvailabilitySlot slot,
         decimal amount,
+        BookingTerms terms,
         string? homeAddress,
         string? landmark,
         string? meetLink,
@@ -49,6 +51,11 @@ public static class BookingRules
             Mode = slot.Mode,
             Status = BookingStatus.PendingAccept,
             Amount = amount,
+            CommissionPercent = terms.CommissionPercent,
+            ConvenienceFee = terms.ConvenienceFee,
+            CancelFreeWindowHours = terms.CancelFreeWindowHours,
+            LateCancelFeeType = terms.LateCancelFeeType,
+            LateCancelFeeValue = terms.LateCancelFeeValue,
             HomeAddress = slot.Mode == SessionMode.Home ? homeAddress!.Trim() : null,
             Landmark = slot.Mode == SessionMode.Home ? landmark!.Trim() : null,
             MeetLinkSnapshot = slot.Mode == SessionMode.Online ? meetLink!.Trim() : null,
@@ -118,22 +125,35 @@ public static class BookingRules
         booking.UpdatedAt = now;
     }
 
-    public static DateTimeOffset FreeCancelUntil(DateTimeOffset sessionStart, int freeWindowHours) =>
-        sessionStart - TimeSpan.FromHours(freeWindowHours);
+    public static DateTimeOffset FreeCancelUntil(Booking booking, DateTimeOffset sessionStart) =>
+        sessionStart - TimeSpan.FromHours(booking.CancelFreeWindowHours);
 
-    /// <summary>Amount kept if the customer cancels now. Zero outside the late window or before the instructor accepts.</summary>
-    public static decimal LateCancelFeeFor(
-        Booking booking,
-        DateTimeOffset sessionStart,
-        DateTimeOffset now,
-        int freeWindowHours,
-        decimal lateCancelFeePercent)
+    /// <summary>True for an accepted booking cancelled inside its free window.</summary>
+    public static bool IsLateCancel(Booking booking, DateTimeOffset sessionStart, DateTimeOffset now) =>
+        booking.Status == BookingStatus.Upcoming && !IsFreeWindow(sessionStart, now, booking.CancelFreeWindowHours);
+
+    /// <summary>Late fee kept from the session amount if the customer cancels now. Never more than the session amount.</summary>
+    public static decimal LateCancelFeeFor(Booking booking, DateTimeOffset sessionStart, DateTimeOffset now)
     {
-        if (booking.Status != BookingStatus.Upcoming)
+        if (!IsLateCancel(booking, sessionStart, now))
             return 0m;
-        if (IsFreeWindow(sessionStart, now, freeWindowHours))
-            return 0m;
-        return Math.Round(booking.Amount * lateCancelFeePercent / 100m, 2, MidpointRounding.AwayFromZero);
+        var fee = booking.LateCancelFeeType == LateCancelFeeType.Flat
+            ? booking.LateCancelFeeValue
+            : Math.Round(booking.Amount * booking.LateCancelFeeValue / 100m, 2, MidpointRounding.AwayFromZero);
+        return Math.Clamp(fee, 0m, booking.Amount);
+    }
+
+    /// <summary>
+    /// Splits <paramref name="paid"/> for a customer cancel. A late cancel keeps the late fee and the convenience fee;
+    /// anything else refunds everything. The refund is never negative.
+    /// </summary>
+    public static CancelSettlement SettleCustomerCancel(Booking booking, decimal paid, DateTimeOffset sessionStart, DateTimeOffset now)
+    {
+        var lateFee = Math.Min(LateCancelFeeFor(booking, sessionStart, now), paid);
+        var convenienceKept = IsLateCancel(booking, sessionStart, now)
+            ? Math.Clamp(booking.ConvenienceFee, 0m, paid - lateFee)
+            : 0m;
+        return new CancelSettlement(lateFee, convenienceKept, paid - lateFee - convenienceKept);
     }
 
     public static void MarkNoShow(Booking booking)
@@ -169,15 +189,17 @@ public static class BookingRules
         booking.UpdatedAt = DateTimeOffset.UtcNow;
     }
 
-    public static void EnsureOutsideLateWindow(DateTimeOffset sessionStart, DateTimeOffset now, int freeWindowHours)
+    public static void EnsureOutsideLateWindow(Booking booking, DateTimeOffset sessionStart, DateTimeOffset now)
     {
-        if (!IsFreeWindow(sessionStart, now, freeWindowHours))
+        if (!IsFreeWindow(sessionStart, now, booking.CancelFreeWindowHours))
             throw new DomainException("This session is too close to move. You can still cancel it.", 409);
     }
 
     public static bool IsFreeWindow(DateTimeOffset sessionStart, DateTimeOffset now, int freeWindowHours) =>
         sessionStart - now >= TimeSpan.FromHours(freeWindowHours);
 }
+
+public sealed record CancelSettlement(decimal LateCancelFee, decimal ConvenienceFeeKept, decimal Refund);
 
 public static class PaymentRules
 {
@@ -234,26 +256,28 @@ public static class ReviewRules
     }
 }
 
+/// <summary>Instructor payouts use the commission copied onto the booking. The convenience fee is never paid out.</summary>
 public static class PayoutCalculator
 {
-    public static PayoutPending ForCompletedBooking(Booking booking, decimal feePercent)
+    public static PayoutPending ForCompletedBooking(Booking booking)
     {
         if (booking.Status is not (BookingStatus.Completed or BookingStatus.NoShow))
             throw new DomainException("A payout is created when a session is completed or marked no-show.");
-        return Build(booking, booking.Amount, feePercent);
+        return Build(booking, booking.Amount);
     }
 
-    public static PayoutPending ForLateCancel(Booking booking, decimal keptAmount, decimal feePercent)
+    public static PayoutPending ForLateCancel(Booking booking, decimal keptAmount)
     {
         if (booking.Status != BookingStatus.Cancelled || booking.CancelledBy != CancelledBy.Customer)
             throw new DomainException("A late-cancel payout needs a customer-cancelled booking.");
         if (keptAmount <= 0 || keptAmount > booking.Amount)
             throw new DomainException("Kept amount must be above zero and at most the booking amount.");
-        return Build(booking, keptAmount, feePercent);
+        return Build(booking, keptAmount);
     }
 
-    private static PayoutPending Build(Booking booking, decimal gross, decimal feePercent)
+    private static PayoutPending Build(Booking booking, decimal gross)
     {
+        var feePercent = booking.CommissionPercent;
         if (feePercent is < 0 or > 100)
             throw new DomainException("Platform fee percent must be between 0 and 100.");
 

@@ -25,7 +25,9 @@ public class YogaDbContext : DbContext
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<Review> Reviews => Set<Review>();
     public DbSet<PayoutPending> PayoutsPending => Set<PayoutPending>();
-    public DbSet<MarketplacePolicy> Policies => Set<MarketplacePolicy>();
+    public DbSet<PlatformSettings> Settings => Set<PlatformSettings>();
+    public DbSet<SettingsAudit> SettingsAudits => Set<SettingsAudit>();
+    public DbSet<BackgroundJob> BackgroundJobs => Set<BackgroundJob>();
     public DbSet<OtpChallenge> OtpChallenges => Set<OtpChallenge>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

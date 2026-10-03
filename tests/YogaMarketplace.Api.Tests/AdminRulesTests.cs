@@ -47,35 +47,103 @@ public class AdminRulesTests
     }
 
     [Fact]
-    public void Policy_patch_checks_fee_and_windows_and_leaves_omitted_fields()
+    public void Settings_apply_validates_leaves_omitted_fields_and_lists_only_real_changes()
     {
-        var policy = new MarketplacePolicy
-        {
-            Currency = "INR",
-            PlatformFeePercent = 15m,
-            CancelFreeWindowHours = 12,
-            RescheduleFreeWindowHours = 12,
-            LateCancelFeePercent = 50m,
-            PolicyNote = "TBD"
-        };
+        var settings = Settings();
 
-        CatalogRules.UpdatePolicy(policy, 10.5m, 0, 24, 0m, null);
-        Assert.Equal(10.5m, policy.PlatformFeePercent);
-        Assert.Equal(0, policy.CancelFreeWindowHours);
-        Assert.Equal(24, policy.RescheduleFreeWindowHours);
-        Assert.Equal(0m, policy.LateCancelFeePercent);
-        Assert.Equal("TBD", policy.PolicyNote);
+        var changes = PlatformSettingsRules.Apply(settings, new PlatformSettingsChanges(
+            CommissionPercent: 10.5m,
+            ConvenienceFee: 29m,
+            CancelFreeWindowHours: 0));
 
-        CatalogRules.UpdatePolicy(policy, null, null, null, null, "  Confirmed  ");
-        Assert.Equal("Confirmed", policy.PolicyNote);
-        Assert.Equal(10.5m, policy.PlatformFeePercent);
+        Assert.Equal(10.5m, settings.CommissionPercent);
+        Assert.Equal(29m, settings.ConvenienceFee);
+        Assert.Equal(0, settings.CancelFreeWindowHours);
+        Assert.Equal(12, settings.RescheduleFreeWindowHours);
+        Assert.Equal("TBD", settings.PolicyNote);
+        Assert.Equal(
+            new[] { "CommissionPercent", "ConvenienceFee", "CancelFreeWindowHours" },
+            changes.Select(c => c.Field));
+        Assert.Equal(new SettingChange("CommissionPercent", "15.00", "10.50"), changes[0]);
 
-        Assert.Throws<DomainException>(() => CatalogRules.UpdatePolicy(policy, 101m, null, null, null, null));
-        Assert.Throws<DomainException>(() => CatalogRules.UpdatePolicy(policy, null, -1, null, null, null));
-        Assert.Throws<DomainException>(() => CatalogRules.UpdatePolicy(policy, null, null, CatalogRules.MaxWindowHours + 1, null, null));
-        Assert.Throws<DomainException>(() => CatalogRules.UpdatePolicy(policy, 15.555m, null, null, null, null));
-        Assert.Throws<DomainException>(() => CatalogRules.UpdatePolicy(policy, null, null, null, null, null));
+        Assert.Empty(PlatformSettingsRules.Apply(settings, new PlatformSettingsChanges(CommissionPercent: 10.5m)));
+
+        var banner = PlatformSettingsRules.Apply(settings, new PlatformSettingsChanges(BannerTitle: "  Find calm  ", PolicyNote: "  Confirmed  "));
+        Assert.Equal("Find calm", settings.BannerTitle);
+        Assert.Equal("Confirmed", settings.PolicyNote);
+        Assert.Equal(2, banner.Count);
+        PlatformSettingsRules.Apply(settings, new PlatformSettingsChanges(BannerTitle: "   "));
+        Assert.Null(settings.BannerTitle);
     }
+
+    public static TheoryData<PlatformSettingsChanges> OutOfRange => new()
+    {
+        new PlatformSettingsChanges(CommissionPercent: 101m),
+        new PlatformSettingsChanges(CommissionPercent: 15.555m),
+        new PlatformSettingsChanges(ConvenienceFee: -1m),
+        new PlatformSettingsChanges(ConvenienceFee: PlatformSettingsRules.MaxFlatAmount + 1),
+        new PlatformSettingsChanges(CancelFreeWindowHours: -1),
+        new PlatformSettingsChanges(CancelFreeWindowHours: PlatformSettingsRules.MaxWindowHours + 1),
+        new PlatformSettingsChanges(LateCancelFeeValue: 101m),
+        new PlatformSettingsChanges(BannerTitle: new string('x', PlatformSettingsRules.BannerTitleMax + 1)),
+        new PlatformSettingsChanges(CommissionPercent: 10m, ConvenienceFee: -5m)
+    };
+
+    [Theory]
+    [MemberData(nameof(OutOfRange))]
+    public void Settings_apply_rejects_out_of_range_values_and_changes_nothing(PlatformSettingsChanges changes)
+    {
+        var settings = Settings();
+        Assert.Throws<DomainException>(() => PlatformSettingsRules.Apply(settings, changes));
+        Assert.Equal(15m, settings.CommissionPercent);
+        Assert.Equal(0m, settings.ConvenienceFee);
+        Assert.Equal(50m, settings.LateCancelFeeValue);
+    }
+
+    [Fact]
+    public void Late_fee_value_is_checked_against_its_type()
+    {
+        var settings = Settings();
+        Assert.Throws<DomainException>(() =>
+            PlatformSettingsRules.Apply(settings, new PlatformSettingsChanges(LateCancelFeeValue: 250m)));
+
+        PlatformSettingsRules.Apply(settings, new PlatformSettingsChanges(LateCancelFeeType: LateCancelFeeType.Flat, LateCancelFeeValue: 250m));
+        Assert.Equal(LateCancelFeeType.Flat, settings.LateCancelFeeType);
+        Assert.Equal(250m, settings.LateCancelFeeValue);
+
+        Assert.Throws<DomainException>(() =>
+            PlatformSettingsRules.Apply(settings, new PlatformSettingsChanges(LateCancelFeeType: LateCancelFeeType.Percent)));
+        Assert.Equal(LateCancelFeeType.Flat, settings.LateCancelFeeType);
+    }
+
+    [Fact]
+    public void Payout_periods_start_on_monday_india_time()
+    {
+        // Wednesday 8 Oct 2026, 10:00 IST.
+        var wednesday = new DateTimeOffset(2026, 10, 8, 4, 30, 0, TimeSpan.Zero);
+        var mondayIst = new DateTimeOffset(2026, 10, 5, 0, 0, 0, TimeSpan.FromHours(5.5));
+        Assert.Equal(mondayIst, PayoutCycleRules.CurrentPeriodStart(PayoutCycle.Weekly, wednesday));
+        Assert.Equal(mondayIst.AddDays(7), PayoutCycleRules.NextPeriodStart(PayoutCycle.Weekly, wednesday));
+
+        // Sunday 23:59 IST still belongs to the week that started on Monday.
+        var sundayLate = new DateTimeOffset(2026, 10, 11, 23, 59, 0, TimeSpan.FromHours(5.5));
+        Assert.Equal(mondayIst, PayoutCycleRules.CurrentPeriodStart(PayoutCycle.Weekly, sundayLate));
+
+        // Biweekly blocks run from Monday 5 Jan 2026: 28 Sep and 12 Oct start blocks; 5 Oct does not.
+        Assert.Equal(mondayIst.AddDays(-7), PayoutCycleRules.CurrentPeriodStart(PayoutCycle.Biweekly, wednesday));
+        Assert.Equal(mondayIst.AddDays(7), PayoutCycleRules.NextPeriodStart(PayoutCycle.Biweekly, wednesday));
+    }
+
+    private static PlatformSettings Settings() => new()
+    {
+        Currency = "INR",
+        CommissionPercent = 15m,
+        CancelFreeWindowHours = 12,
+        RescheduleFreeWindowHours = 12,
+        LateCancelFeeType = LateCancelFeeType.Percent,
+        LateCancelFeeValue = 50m,
+        PolicyNote = "TBD"
+    };
 
     [Fact]
     public void Area_create_requires_a_city_normalises_it_and_category_rename_does_not_touch_the_slug()
