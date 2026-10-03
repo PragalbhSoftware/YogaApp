@@ -1,10 +1,10 @@
 @import "tailwindcss";
-@import "@fontsource-variable/lora";
-@import "@fontsource-variable/raleway";
+@import "@fontsource-variable/fraunces";
+@import "@fontsource-variable/inter";
 
 @theme inline {
-  --font-heading: "Lora Variable", Lora, serif;
-  --font-sans: "Raleway Variable", Raleway, sans-serif;
+  --font-heading: "Fraunces Variable", Fraunces, Georgia, serif;
+  --font-sans: "Inter Variable", Inter, system-ui, sans-serif;
   --color-brand-primary: #657a5b;
   --color-brand-secondary: #c9a27e;
   --color-brand-background: #f8f6f0;
