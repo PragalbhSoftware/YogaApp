@@ -91,6 +91,9 @@ Set in `appsettings.*.json`, user secrets, or environment variables (`Section__K
 | --- | --- |
 | `ConnectionStrings:Default` | SQL Server |
 | `Jwt:Key`, `Jwt:Issuer`, `Jwt:Audience` | Token signing. The app refuses to start without `Jwt:Key`. |
+| `Jwt:ExpiresMinutes` | Access token lifetime (default 15). The client renews it silently with the refresh cookie. |
+| `RefreshToken:LifetimeDays`, `RefreshToken:ReuseGraceSeconds` | Refresh cookie lifetime (default 30 days) and how long a just-rotated token gets `409` (a parallel tab) before it counts as reuse (default 30 s) |
+| `RefreshToken:CookieSecure`, `RefreshToken:CookieSameSite` | Cookie flags. Defaults are `true` and `Strict`; Development and Testing turn `CookieSecure` off for plain HTTP. Use `None` (with HTTPS) only if the SPA and API are on different sites. |
 | `Otp:Pepper`, `Otp:ExposeCode`, `Otp:UseFixedCode` | OTP hashing and the dev shortcuts (forced off in Production) |
 | `Cors:AllowedOrigins` | Array of browser origins allowed to call the API cross-origin. Development allows `http://localhost:5173`. **Production refuses to start with an empty list.** |
 | `Razorpay:KeyId`, `Razorpay:KeySecret`, `Razorpay:WebhookSecret` | Payment gateway. Never commit live keys. |
@@ -124,7 +127,7 @@ server {
 
 `try_files … /index.html` keeps deep links such as `/teachers/123` working on refresh.
 
-**Option B: separate API origin.** Build with `VITE_API_BASE_URL=https://api.example.com` and add the SPA origin to the API: `Cors__AllowedOrigins__0=https://app.example.com`. The SPA host still needs the `index.html` fallback for client routes.
+**Option B: separate API origin.** Build with `VITE_API_BASE_URL=https://api.example.com` and add the SPA origin to the API: `Cors__AllowedOrigins__0=https://app.example.com`. CORS allows credentials so the refresh cookie is sent. The SPA host still needs the `index.html` fallback for client routes.
 
 ## Tests and checks
 
@@ -155,12 +158,14 @@ New columns must be nullable or defaulted, and every migration needs a working `
 
 - Amounts are rounded to 2 decimals; Razorpay gets integer paise.
 - State is saved to the database **before** calling Razorpay (refunds run inside a transaction: save, call the gateway, commit).
-- `Booking.Status`, `Payment.Status`, and `User.IsBlocked` are EF concurrency tokens. A lost race returns `409`.
+- `Booking.Status`, `Payment.Status`, `User.IsBlocked`, and `RefreshToken.RevokedAt` are EF concurrency tokens. A lost race returns `409`.
 - Times are India time (`Asia/Kolkata`); cancellation windows are measured from the session start in that zone.
 
 ## HTTP API
 
 Errors use `{ "error": "..." }` with the matching status code. Missing token is `401`; wrong role is `403`.
+
+Sessions: the access JWT is short-lived. On a `401` the client calls `/api/auth/refresh` once (shared by parallel requests), retries the original request, and signs out with a toast if the refresh fails. Blocking a user revokes all their refresh tokens, so their next request gets `401` and they are signed out.
 
 ### Public and auth
 
@@ -168,7 +173,9 @@ Errors use `{ "error": "..." }` with the matching status code. Missing token is 
 | --- | --- | --- | --- |
 | POST | `/api/auth/otp/request` | | Start OTP (`isNewUser` with name and gender for sign-up). Blocked accounts get `403`. |
 | POST | `/api/auth/otp/resend` | | New code; the previous one stops working |
-| POST | `/api/auth/otp/verify` | | Returns the JWT |
+| POST | `/api/auth/otp/verify` | | Returns the JWT and sets the httpOnly `ym_refresh` cookie |
+| POST | `/api/auth/refresh` | Cookie | Rotates the refresh cookie and returns a new JWT. `401` when missing, expired, revoked or reused (reuse revokes the whole sign-in); `403` when blocked; `409` when another tab just rotated it. |
+| POST | `/api/auth/logout` | Cookie | Revokes the sign-in and clears the cookie (`204`) |
 | GET | `/api/auth/me` | Bearer | Current user |
 | GET | `/api/areas` | | Active cities and neighbourhoods |
 | GET | `/api/categories` | | Active categories (`yoga`) |
