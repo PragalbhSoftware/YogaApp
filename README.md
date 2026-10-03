@@ -99,6 +99,7 @@ Set in `appsettings.*.json`, user secrets, or environment variables (`Section__K
 | `Razorpay:KeyId`, `Razorpay:KeySecret`, `Razorpay:WebhookSecret` | Payment gateway. Never commit live keys. |
 | `Razorpay:UseFakeGateway` | Development and tests issue `order_fake_…` ids and capture locally (`/api/bookings/local-confirm`). Production refuses to start when this is on. |
 | `Database:AutoMigrate`, `Seed:DemoData` | Off in Production |
+| `Jobs:Enabled`, `Jobs:PollSeconds`, `Jobs:BatchSize`, `Jobs:LockMinutes` | Background job runner (defaults: on, 15 s, 10 jobs per poll, 5 min lock). Off in Testing. |
 
 Environment variable form for an array: `Cors__AllowedOrigins__0=https://app.example.com`.
 
@@ -158,8 +159,37 @@ New columns must be nullable or defaulted, and every migration needs a working `
 
 - Amounts are rounded to 2 decimals; Razorpay gets integer paise.
 - State is saved to the database **before** calling Razorpay (refunds run inside a transaction: save, call the gateway, commit).
-- `Booking.Status`, `Payment.Status`, `User.IsBlocked`, and `RefreshToken.RevokedAt` are EF concurrency tokens. A lost race returns `409`.
+- `Booking.Status`, `Payment.Status`, `User.IsBlocked`, `RefreshToken.RevokedAt`, and `PlatformSettings.Version` are EF concurrency tokens. A lost race returns `409`.
 - Times are India time (`Asia/Kolkata`); cancellation windows are measured from the session start in that zone.
+
+## Platform settings
+
+Business values live in one typed `PlatformSettings` row that admins edit under **Settings**. Nothing is hardcoded.
+
+| Setting | Used for |
+| --- | --- |
+| Commission % | Platform share of each payout (completed, no-show, late cancel) |
+| Convenience fee (flat ₹) | Added to the session price at checkout |
+| Free cancel window (hours, 0–168) | Late cancel starts this many hours before the session. `0` means cancelling is always free. |
+| Late-cancel fee (% or flat ₹) | Kept on a late cancel, computed on the session price only and never more than it |
+| Free reschedule window (hours) | Reschedule is refused inside it |
+| Payout cycle (weekly / biweekly) | Which payouts `/payouts/export` may claim |
+| Banner title, subtitle, offer | Home hero text. Empty fields fall back to the built-in copy. |
+
+- **Snapshots.** Each booking copies the commission, convenience fee, cancel window and late fee when it is created. Cancel-quote, refunds and payouts always use the booking's copy, so a settings change only affects new bookings.
+- **Convenience fee.** The customer pays session price plus the fee. It is refunded on decline, admin cancel and free cancel, and kept on a late cancel. It is never paid out to the provider.
+- **Saving.** `PATCH /api/admin/settings` needs the `version` you edited. If another admin saved first you get `409` and reload. Every changed field is written to `SettingsAudits` (who, when, old, new).
+- **Cache.** Each API instance caches the settings for 60 seconds. A save clears the cache on the instance that handled it, so with several instances others can serve the old values for up to a minute.
+- **Payout cycles.** Weeks run Monday to Sunday, India time. Biweekly cycles are 14-day blocks starting Monday 5 Jan 2026. Export only claims payouts created before the current cycle started; otherwise it returns `409` with the date the next export opens.
+
+## Background jobs
+
+`BackgroundJobs` is a small DB-backed queue that later features (payouts, credit expiry, reminders) reuse.
+
+- Enqueue with `BackgroundJobQueue.Enqueue(type, payload, runAt)`; it is saved with the caller's own `SaveChanges`.
+- Handle a type by registering `IBackgroundJobHandler` (`services.AddScoped<IBackgroundJobHandler, MyHandler>()`).
+- A hosted service polls every `Jobs:PollSeconds`, claims due jobs with a conditional update (so two instances never run the same job), and runs each in its own scope.
+- A failure retries after 1, 2, 4… minutes (capped at 1 hour) until `MaxAttempts`, then the job is `Failed`. An unknown type fails at once. A job whose worker died is released when its lock expires.
 
 ## HTTP API
 
@@ -179,8 +209,9 @@ Sessions: the access JWT is short-lived. On a `401` the client calls `/api/auth/
 | GET | `/api/auth/me` | Bearer | Current user |
 | GET | `/api/areas` | | Active cities and neighbourhoods |
 | GET | `/api/categories` | | Active categories (`yoga`) |
-| GET | `/api/policy` | | Fee % and cancel/reschedule windows |
-| GET | `/api/providers?city=&area=&mode=&category=` | | Listed providers: verified and not blocked |
+| GET | `/api/policy` | | Commission %, convenience fee, cancel/reschedule windows and late-cancel fee for new bookings |
+| GET | `/api/site/banner` | | Home banner `{ title, subtitle, offer }`; `null` fields mean "use the default copy" |
+| GET | `/api/providers?city=&area=&mode=&category=` | | Listed providers: verified, not blocked, in an active area |
 | GET | `/api/providers/{id}` | | Public profile (no Meet link) |
 | GET | `/api/providers/{id}/slots?mode=` | | Open slots for that mode |
 | GET | `/api/providers/{id}/reviews` | | Public reviews |
@@ -203,14 +234,14 @@ Sessions: the access JWT is short-lived. On a `401` the client calls `/api/auth/
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| POST | `/api/bookings/orders` | Razorpay order for a slot. Home needs `homeAddress` and `landmark`. The server prices it. |
+| POST | `/api/bookings/orders` | Razorpay order for a slot. Home needs `homeAddress` and `landmark`. The server prices it: `amount` = `sessionAmount` + `convenienceFee`. |
 | POST | `/api/bookings/confirm` | Verify the checkout signature and create the booking (`PendingAccept`). Idempotent per payment. |
 | POST | `/api/bookings/local-confirm` | Fake gateway only |
 | GET / PATCH | `/api/profile` | Own account details |
 | PUT | `/api/profile/visit-address` | Default home-visit address |
 | GET | `/api/bookings/me` | Own bookings |
-| GET | `/api/bookings/{id}/cancel-quote` | Refund preview under the cancellation policy |
-| POST | `/api/bookings/{id}/cancel` | Cancel with full or partial refund per policy |
+| GET | `/api/bookings/{id}/cancel-quote` | Refund preview from the booking's own terms: `amount` paid, `lateCancelFee`, `convenienceFeeKept`, `refund` (never negative) |
+| POST | `/api/bookings/{id}/cancel` | Cancel with full or partial refund per the booking's terms |
 | POST | `/api/bookings/{id}/reschedule` | `{ "slotId" }`, same provider and mode |
 | POST | `/api/bookings/{id}/reviews` | One review after `Completed` |
 | POST | `/api/webhooks/razorpay` | `payment.captured` (signed with `X-Razorpay-Signature`) |
@@ -227,11 +258,12 @@ Sessions: the access JWT is short-lived. On a `401` the client calls `/api/auth/
 | GET | `/bookings?status=&providerId=&from=&to=`, `/bookings/{id}` | Oversight |
 | POST | `/bookings/{id}/cancel` | `{ "reason" }`; full refund on the customer's behalf |
 | GET | `/payments?status=`, `/payouts?status=`, `/payouts/csv?status=` | Transactions |
-| POST | `/payouts/export`, `/payouts/{id}/paid` | Claim pending payouts into a CSV batch; mark one paid |
+| POST | `/payouts/export`, `/payouts/{id}/paid` | Claim pending payouts from closed payout cycles into a CSV batch; mark one paid |
 | GET | `/reports/summary` | Booking counts, paid GMV, pending payouts |
-| GET / POST / PATCH | `/areas`, `/areas/{id}` | `{ "name", "city" }`; city is required (2–40 letters). Duplicate name in a city is `409`. |
+| GET / POST / PATCH | `/areas`, `/areas/{id}` | `{ "name", "city" }`. The city must already exist (opening cities is not available yet). Duplicate name in a city is `409`. `isActive: false` hides the area and its providers from browse; existing bookings are untouched. |
 | GET / PATCH | `/categories`, `/categories/{id}` | Rename the label; the slug never changes |
-| GET / PATCH | `/policy` | Fee and window settings. Existing payouts keep their stored fee. |
+| GET / PATCH | `/settings` | Platform settings (see above). PATCH sends `version` plus only the fields to change; a stale version is `409`. |
+| GET | `/settings/audit` | Last 50 settings changes, newest first |
 
 Lists return at most 100 rows, newest first.
 
