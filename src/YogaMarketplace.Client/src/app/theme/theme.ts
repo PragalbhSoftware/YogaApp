@@ -1,6 +1,9 @@
 import { createTheme } from "@mui/material/styles";
 import { brand } from "@/constants/brand";
 
+const headingFont = '"Fraunces Variable", Fraunces, Georgia, serif';
+const bodyFont = '"Inter Variable", Inter, system-ui, sans-serif';
+
 export const theme = createTheme({
   palette: {
     primary: { main: brand.primary, contrastText: brand.onPrimary },
@@ -11,14 +14,14 @@ export const theme = createTheme({
     warning: { main: brand.accent },
   },
   typography: {
-    fontFamily: '"Raleway Variable", Raleway, sans-serif',
+    fontFamily: bodyFont,
     button: { textTransform: "none", fontWeight: 600 },
-    h1: { fontFamily: '"Lora Variable", Lora, serif', fontWeight: 500 },
-    h2: { fontFamily: '"Lora Variable", Lora, serif', fontWeight: 500 },
-    h3: { fontFamily: '"Lora Variable", Lora, serif', fontWeight: 500 },
-    h4: { fontFamily: '"Lora Variable", Lora, serif', fontWeight: 500 },
-    h5: { fontFamily: '"Lora Variable", Lora, serif', fontWeight: 500 },
-    h6: { fontFamily: '"Lora Variable", Lora, serif', fontWeight: 500 },
+    h1: { fontFamily: headingFont, fontWeight: 500 },
+    h2: { fontFamily: headingFont, fontWeight: 500 },
+    h3: { fontFamily: headingFont, fontWeight: 500 },
+    h4: { fontFamily: headingFont, fontWeight: 500 },
+    h5: { fontFamily: headingFont, fontWeight: 500 },
+    h6: { fontFamily: headingFont, fontWeight: 500 },
   },
   shape: { borderRadius: 12 },
   components: {
