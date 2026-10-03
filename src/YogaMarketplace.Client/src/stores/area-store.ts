@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { launch } from "@/constants/launch";
 
 type AreaState = {
   city: string | null;
@@ -10,6 +9,13 @@ type AreaState = {
 };
 
 type PersistedArea = Pick<AreaState, "city" | "areaName">;
+
+/** Version 0 saved only a neighbourhood name. Without its city it is ambiguous, so the customer picks again. */
+export function migrateArea(persisted: unknown, version: number): PersistedArea {
+  const previous = (persisted ?? {}) as Partial<PersistedArea>;
+  if (version < 1 || !previous.city || !previous.areaName) return { city: null, areaName: null };
+  return { city: previous.city, areaName: previous.areaName };
+}
 
 export const useAreaStore = create<AreaState>()(
   persist(
@@ -23,14 +29,7 @@ export const useAreaStore = create<AreaState>()(
       name: "ym.area",
       version: 1,
       partialize: (state): PersistedArea => ({ city: state.city, areaName: state.areaName }),
-      migrate: (persisted, version) => {
-        const previous = (persisted ?? {}) as Partial<PersistedArea>;
-        if (version < 1) {
-          const areaName = previous.areaName ?? null;
-          return { areaName, city: areaName ? launch.firstCity : null };
-        }
-        return { city: previous.city ?? null, areaName: previous.areaName ?? null };
-      },
+      migrate: migrateArea,
     },
   ),
 );

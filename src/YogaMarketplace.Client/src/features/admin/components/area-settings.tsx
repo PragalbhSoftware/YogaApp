@@ -5,7 +5,6 @@ import { toast } from "sonner";
 import { EmptyState } from "@/components/common/empty-state";
 import { ErrorState } from "@/components/common/error-state";
 import { BookingListSkeleton } from "@/components/common/loading-skeleton";
-import { launch } from "@/constants/launch";
 import { SettingsCard, SettingsIntro } from "@/features/admin/components/settings-card";
 import { useAdminAreas, useCreateArea, useUpdateArea } from "@/features/admin/hooks/use-admin";
 import { areaEditSchema, areaSchema, type AreaEditValues, type AreaFormValues } from "@/features/admin/schemas";
@@ -79,7 +78,7 @@ function CreateAreaRow({ cities }: { cities: string[] }) {
   const createArea = useCreateArea();
   const form = useForm<AreaFormValues>({
     resolver: zodResolver(areaSchema),
-    defaultValues: { name: "", city: launch.firstCity },
+    defaultValues: { name: "", city: "" },
   });
 
   return (

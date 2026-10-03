@@ -33,8 +33,9 @@ export const areaSchema = z.object({
   city: z
     .string()
     .trim()
-    .min(2, "City must be 2 to 60 characters.")
-    .max(60, "City must be 2 to 60 characters.")
+    .min(1, "City is required.")
+    .min(2, "City must be 2 to 40 characters.")
+    .max(40, "City must be 2 to 40 characters.")
     .regex(/^[A-Za-z .-]+$/, "Use letters, spaces, hyphens or dots only."),
 });
 
