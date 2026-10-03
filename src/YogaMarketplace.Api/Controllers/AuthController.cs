@@ -16,13 +16,23 @@ public class AuthController : ControllerBase
     private readonly JwtTokenService _tokens;
     private readonly YogaDbContext _db;
     private readonly ICurrentUser _current;
+    private readonly RefreshTokenService _refreshTokens;
+    private readonly RefreshCookie _refreshCookie;
 
-    public AuthController(OtpService otp, JwtTokenService tokens, YogaDbContext db, ICurrentUser current)
+    public AuthController(
+        OtpService otp,
+        JwtTokenService tokens,
+        YogaDbContext db,
+        ICurrentUser current,
+        RefreshTokenService refreshTokens,
+        RefreshCookie refreshCookie)
     {
         _otp = otp;
         _tokens = tokens;
         _db = db;
         _current = current;
+        _refreshTokens = refreshTokens;
+        _refreshCookie = refreshCookie;
     }
 
     [HttpPost("otp/request")]
@@ -47,7 +57,34 @@ public class AuthController : ControllerBase
         if (request is null)
             return BadRequest(new { error = "Invalid request." });
         var user = await _otp.VerifyAsync(request, cancellationToken);
+        _refreshCookie.Write(Response, await _refreshTokens.IssueAsync(user, cancellationToken));
         return Ok(new VerifyResponse(_tokens.Create(user), ToResponse(user)));
+    }
+
+    /// <summary>Swaps the refresh cookie for a new one and returns a fresh access token.</summary>
+    [HttpPost("refresh")]
+    public async Task<ActionResult<VerifyResponse>> Refresh(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var (user, refresh) = await _refreshTokens.RotateAsync(_refreshCookie.Read(Request), cancellationToken);
+            _refreshCookie.Write(Response, refresh);
+            return Ok(new VerifyResponse(_tokens.Create(user), ToResponse(user)));
+        }
+        catch (DomainException ex) when (ex.StatusCode != StatusCodes.Status409Conflict)
+        {
+            // On 409 another request already set a newer cookie; clearing it would sign that tab out.
+            _refreshCookie.Clear(Response);
+            throw;
+        }
+    }
+
+    [HttpPost("logout")]
+    public async Task<IActionResult> Logout(CancellationToken cancellationToken)
+    {
+        await _refreshTokens.SignOutAsync(_refreshCookie.Read(Request), cancellationToken);
+        _refreshCookie.Clear(Response);
+        return NoContent();
     }
 
     [Authorize]

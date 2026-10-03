@@ -6,7 +6,22 @@ public class JwtOptions
     public string Issuer { get; set; } = "YogaMarketplace";
     public string Audience { get; set; } = "YogaMarketplace";
     public string Key { get; set; } = "";
-    public int ExpiresMinutes { get; set; } = 10080;
+    /// <summary>Access-token lifetime. Kept short; the client refreshes silently.</summary>
+    public int ExpiresMinutes { get; set; } = 15;
+}
+
+public class RefreshTokenOptions
+{
+    public const string Section = "RefreshToken";
+    public const string CookieName = "ym_refresh";
+    public const string CookiePath = "/api/auth";
+    public int LifetimeDays { get; set; } = 30;
+    /// <summary>How long a just-rotated token is treated as a tab race rather than theft.</summary>
+    public int ReuseGraceSeconds { get; set; } = 30;
+    /// <summary>Must be true wherever the API is served over HTTPS (Production).</summary>
+    public bool CookieSecure { get; set; } = true;
+    /// <summary>Strict works for same-site setups. Use None only for a cross-site API, with CookieSecure.</summary>
+    public string CookieSameSite { get; set; } = "Strict";
 }
 
 public class OtpOptions

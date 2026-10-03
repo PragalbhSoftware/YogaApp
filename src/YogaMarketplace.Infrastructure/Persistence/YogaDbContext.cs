@@ -16,6 +16,7 @@ public class YogaDbContext : DbContext
     public DbSet<Area> Areas => Set<Area>();
     public DbSet<User> Users => Set<User>();
     public DbSet<UserBlockEvent> UserBlockEvents => Set<UserBlockEvent>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<Provider> Providers => Set<Provider>();
     public DbSet<Service> Services => Set<Service>();
     public DbSet<AvailabilitySlot> AvailabilitySlots => Set<AvailabilitySlot>();

@@ -17,6 +17,9 @@ public static class ServiceRegistration
         services.AddScoped<IOtpSender, LoggingOtpSender>();
         services.AddScoped<OtpService>();
         services.AddScoped<JwtTokenService>();
+        services.Configure<RefreshTokenOptions>(configuration.GetSection(RefreshTokenOptions.Section));
+        services.AddScoped<RefreshTokenService>();
+        services.AddSingleton<RefreshCookie>();
         services.AddScoped<ProviderService>();
         services.AddScoped<CatalogService>();
         services.AddScoped<BookingService>();

@@ -53,6 +53,14 @@ public enum UserBlockAction
     Unblocked
 }
 
+public enum RefreshTokenRevokeReason
+{
+    Rotated,
+    Reused,
+    SignedOut,
+    Blocked
+}
+
 public enum CancelledBy
 {
     Customer,

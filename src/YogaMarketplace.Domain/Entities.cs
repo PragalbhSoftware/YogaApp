@@ -47,6 +47,24 @@ public class UserBlockEvent
     public DateTimeOffset CreatedAt { get; set; }
 }
 
+/// <summary>
+/// One link in a refresh-token chain. Only the SHA-256 hash of the token is stored.
+/// Every token issued from one sign-in shares a <see cref="FamilyId"/>.
+/// </summary>
+public class RefreshToken
+{
+    public Guid Id { get; set; }
+    public Guid UserId { get; set; }
+    public User? User { get; set; }
+    public Guid FamilyId { get; set; }
+    public string TokenHash { get; set; } = "";
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset ExpiresAt { get; set; }
+    public DateTimeOffset? RevokedAt { get; set; }
+    public RefreshTokenRevokeReason? RevokeReason { get; set; }
+    public Guid? ReplacedById { get; set; }
+}
+
 public class Provider
 {
     public Guid Id { get; set; }

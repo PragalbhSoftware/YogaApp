@@ -12,6 +12,7 @@ internal static class ModelConfiguration
         ConfigureArea(modelBuilder.Entity<Area>());
         ConfigureUser(modelBuilder.Entity<User>());
         ConfigureUserBlockEvent(modelBuilder.Entity<UserBlockEvent>());
+        ConfigureRefreshToken(modelBuilder.Entity<RefreshToken>());
         ConfigureProvider(modelBuilder.Entity<Provider>());
         ConfigureService(modelBuilder.Entity<Service>());
         ConfigureSlot(modelBuilder.Entity<AvailabilitySlot>());
@@ -63,6 +64,17 @@ internal static class ModelConfiguration
 
         entity.HasOne<User>().WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Restrict);
         entity.HasOne<User>().WithMany().HasForeignKey(e => e.AdminUserId).OnDelete(DeleteBehavior.Restrict);
+    }
+
+    private static void ConfigureRefreshToken(EntityTypeBuilder<RefreshToken> entity)
+    {
+        entity.Property(t => t.TokenHash).HasMaxLength(64);
+        entity.HasIndex(t => t.TokenHash).IsUnique();
+        entity.HasIndex(t => t.FamilyId);
+        entity.HasIndex(t => new { t.UserId, t.RevokedAt });
+        entity.Property(t => t.RevokedAt).IsConcurrencyToken();
+        entity.Property(t => t.RevokeReason).HasConversion<string>().HasMaxLength(16);
+        entity.HasOne(t => t.User).WithMany().HasForeignKey(t => t.UserId).OnDelete(DeleteBehavior.Cascade);
     }
 
     private static void ConfigureProvider(EntityTypeBuilder<Provider> entity)

@@ -21,12 +21,18 @@ public class AdminUserService : IAdminUserService
     private readonly YogaDbContext _db;
     private readonly ICurrentUser _current;
     private readonly ILogger<AdminUserService> _logger;
+    private readonly RefreshTokenService _refreshTokens;
 
-    public AdminUserService(YogaDbContext db, ICurrentUser current, ILogger<AdminUserService> logger)
+    public AdminUserService(
+        YogaDbContext db,
+        ICurrentUser current,
+        ILogger<AdminUserService> logger,
+        RefreshTokenService refreshTokens)
     {
         _db = db;
         _current = current;
         _logger = logger;
+        _refreshTokens = refreshTokens;
     }
 
     public async Task<IReadOnlyList<AdminUserSummary>> ListAsync(
@@ -95,6 +101,8 @@ public class AdminUserService : IAdminUserService
         var adminId = _current.UserId;
         var entry = change(user, adminId, DateTimeOffset.UtcNow);
         _db.UserBlockEvents.Add(entry);
+        if (entry.Action == UserBlockAction.Blocked)
+            await _refreshTokens.RevokeAllForUserAsync(user.Id, RefreshTokenRevokeReason.Blocked, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation("Admin {AdminId} {Action} user {UserId}.", adminId, entry.Action, user.Id);

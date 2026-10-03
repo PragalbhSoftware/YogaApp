@@ -54,7 +54,11 @@ builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddAppServices(builder.Configuration);
 var allowedOrigins = CorsSettings.AllowedOriginsFrom(builder.Configuration, builder.Environment.IsProduction());
 builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
-    policy.WithOrigins(allowedOrigins).AllowAnyHeader().AllowAnyMethod().WithExposedHeaders("Content-Disposition")));
+    policy.WithOrigins(allowedOrigins)
+        .AllowAnyHeader()
+        .AllowAnyMethod()
+        .AllowCredentials()
+        .WithExposedHeaders("Content-Disposition")));
 
 var jwt = builder.Configuration.GetSection(JwtOptions.Section).Get<JwtOptions>() ?? new JwtOptions();
 if (string.IsNullOrWhiteSpace(jwt.Key) || Encoding.UTF8.GetByteCount(jwt.Key) < 32)
