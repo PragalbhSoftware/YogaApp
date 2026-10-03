@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Linq.Expressions;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using YogaMarketplace.Domain;
@@ -122,31 +123,39 @@ public class AdminTransactionService : IAdminTransactionService
         return BuildCsv(rows, currency, $"payouts-{parsed.ToString().ToLowerInvariant()}");
     }
 
+    /// <summary>
+    /// Claims every Pending payout in one UPDATE, so two exports at the same moment never share a row.
+    /// </summary>
     public async Task<PayoutCsv> ExportPendingPayoutsAsync(CancellationToken cancellationToken)
     {
-        var rows = await PayoutRowsAsync(PayoutStatus.Pending, cancellationToken, tracking: true);
-        if (rows.Count == 0)
+        var batchId = Guid.NewGuid();
+        var claimed = await _db.PayoutsPending
+            .Where(p => p.Status == PayoutStatus.Pending)
+            .ExecuteUpdateAsync(
+                set => set
+                    .SetProperty(p => p.Status, PayoutStatus.Exported)
+                    .SetProperty(p => p.ExportBatchId, (Guid?)batchId),
+                cancellationToken);
+        if (claimed == 0)
             throw new DomainException("There are no pending payouts to export.", 409);
 
-        foreach (var row in rows)
-            row.Payout.Status = PayoutStatus.Exported;
-        await _db.SaveChangesAsync(cancellationToken);
-
+        var rows = await PayoutRowsAsync(p => p.ExportBatchId == batchId, cancellationToken);
         var currency = await CurrencyAsync(cancellationToken);
         var csv = BuildCsv(rows, currency, "payouts-export");
-        _logger.LogInformation("Exported {Count} pending payouts for manual transfer.", csv.Count);
+        _logger.LogInformation("Exported {Count} pending payouts in batch {BatchId} for manual transfer.", csv.Count, batchId);
         return csv;
     }
 
+    private Task<List<PayoutRow>> PayoutRowsAsync(PayoutStatus status, CancellationToken cancellationToken) =>
+        PayoutRowsAsync(p => p.Status == status, cancellationToken);
+
     private async Task<List<PayoutRow>> PayoutRowsAsync(
-        PayoutStatus status,
-        CancellationToken cancellationToken,
-        bool tracking = false)
+        Expression<Func<PayoutPending, bool>> filter,
+        CancellationToken cancellationToken)
     {
-        var source = tracking ? _db.PayoutsPending : _db.PayoutsPending.AsNoTracking();
-        var payouts = await source
+        var payouts = await _db.PayoutsPending.AsNoTracking()
             .Include(p => p.Booking!).ThenInclude(b => b.Slot)
-            .Where(p => p.Status == status)
+            .Where(filter)
             .ToListAsync(cancellationToken);
 
         var providerIds = payouts.Select(p => p.ProviderId).Distinct().ToArray();

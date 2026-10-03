@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using YogaMarketplace.Domain;
 
 namespace YogaMarketplace.Api.Middleware;
@@ -24,6 +25,14 @@ public class DomainExceptionMiddleware
 
             context.Response.StatusCode = ex.StatusCode;
             await context.Response.WriteAsJsonAsync(new { error = ex.Message });
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            if (context.Response.HasStarted)
+                throw;
+
+            context.Response.StatusCode = StatusCodes.Status409Conflict;
+            await context.Response.WriteAsJsonAsync(new { error = "This was just changed by someone else. Refresh and try again." });
         }
     }
 }

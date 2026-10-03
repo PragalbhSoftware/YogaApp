@@ -173,6 +173,127 @@ public class CancellationAndPayoutTests : IClassFixture<YogaApiFactory>
     }
 
     [Fact]
+    public async Task Customer_and_admin_cancelling_at_once_refund_only_once()
+    {
+        var admin = await SignInAsync(SeedIds.AdminPhone);
+        var customer = await SignUpAsync("Ira Gokhale", "Female");
+        var instructor = await SignInAsync("9876543210");
+        var slotId = await TomorrowSlotAsync(instructor, "Online", "06:05");
+        var booked = await BookAsync(customer, slotId, "pay_double_cancel");
+
+        // The slow refund keeps the first cancel in flight while the second one reads the booking.
+        FakeRazorpayClient? gateway = null;
+        await using var slow = _factory.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
+            services.AddSingleton<IRazorpayClient>(sp =>
+            {
+                gateway = ActivatorUtilities.CreateInstance<FakeRazorpayClient>(sp);
+                return new RefundHookClient(gateway, () => Task.Delay(TimeSpan.FromMilliseconds(750)));
+            })));
+        var slowCustomer = slow.CreateClient();
+        slowCustomer.DefaultRequestHeaders.Authorization = customer.DefaultRequestHeaders.Authorization;
+        var slowAdmin = slow.CreateClient();
+        slowAdmin.DefaultRequestHeaders.Authorization = admin.DefaultRequestHeaders.Authorization;
+
+        var first = slowCustomer.PostAsJsonAsync($"/api/bookings/{booked.Id}/cancel", new { });
+        await Task.Delay(TimeSpan.FromMilliseconds(200));
+        var second = slowAdmin.PostAsJsonAsync($"/api/admin/bookings/{booked.Id}/cancel", new { reason = "Duplicate request" });
+        var responses = await Task.WhenAll(first, second);
+
+        Assert.Single(responses, r => r.IsSuccessStatusCode);
+        Assert.Single(responses, r => r.StatusCode == HttpStatusCode.Conflict);
+        Assert.Single(gateway!.Refunds, r => r.PaymentId == booked.GatewayPaymentId);
+        Assert.Equal(PaymentStatus.Refunded, await QueryAsync(db => db.Payments.Where(p => p.BookingId == booked.Id).Select(p => p.Status).SingleAsync()));
+    }
+
+    [Fact]
+    public async Task Failed_gateway_refund_leaves_the_booking_and_payment_unchanged()
+    {
+        var customer = await SignUpAsync("Neha Joshi", "Female");
+        var instructor = await SignInAsync("9876543210");
+        var slotId = await TomorrowSlotAsync(instructor, "Online", "06:25");
+        var booked = await BookAsync(customer, slotId, "pay_refund_fails");
+
+        await using var failing = _factory.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
+            services.AddSingleton<IRazorpayClient>(sp => new RefundHookClient(
+                ActivatorUtilities.CreateInstance<FakeRazorpayClient>(sp),
+                () => throw new DomainException("Could not refund the payment. Try again.", 502)))));
+        var failingCustomer = failing.CreateClient();
+        failingCustomer.DefaultRequestHeaders.Authorization = customer.DefaultRequestHeaders.Authorization;
+
+        var failed = await failingCustomer.PostAsJsonAsync($"/api/bookings/{booked.Id}/cancel", new { });
+        Assert.Equal(HttpStatusCode.BadGateway, failed.StatusCode);
+        Assert.Equal(BookingStatus.PendingAccept, await QueryAsync(db => db.Bookings.Where(b => b.Id == booked.Id).Select(b => b.Status).SingleAsync()));
+        Assert.Equal(PaymentStatus.Paid, await QueryAsync(db => db.Payments.Where(p => p.BookingId == booked.Id).Select(p => p.Status).SingleAsync()));
+
+        var retried = await PostAsync<BookingBody>(customer, $"/api/bookings/{booked.Id}/cancel", new { });
+        Assert.Equal("Refunded", retried.PaymentStatus);
+        Assert.Single(RefundsFor(booked.GatewayPaymentId!));
+    }
+
+    [Fact]
+    public async Task Reschedule_inside_the_late_window_is_refused_so_the_fee_still_applies()
+    {
+        var admin = await SignInAsync(SeedIds.AdminPhone);
+        await SetCancelWindowAsync(admin, 48);
+        try
+        {
+            var customer = await SignUpAsync("Gauri Patil", "Female");
+            var instructor = await SignInAsync("9876543210");
+            var slotId = await TomorrowSlotAsync(instructor, "Studio", "06:45");
+            var farSlotId = await SlotInDaysAsync(instructor, "Studio", "06:45", days: 6);
+            var booked = await BookAsync(customer, slotId, "pay_late_reschedule");
+            await PostAsync<BookingBody>(instructor, $"/api/bookings/{booked.Id}/accept", new { });
+
+            var moved = await customer.PostAsJsonAsync($"/api/bookings/{booked.Id}/reschedule", new { slotId = farSlotId });
+            Assert.Equal(HttpStatusCode.Conflict, moved.StatusCode);
+            Assert.Equal(slotId, await QueryAsync(db => db.Bookings.Where(b => b.Id == booked.Id).Select(b => b.SlotId).SingleAsync()));
+
+            var cancelled = await PostAsync<BookingBody>(customer, $"/api/bookings/{booked.Id}/cancel", new { });
+            Assert.Equal(374.50m, cancelled.LateCancelFee);
+            Assert.Equal(374.50m, cancelled.RefundedAmount);
+        }
+        finally
+        {
+            await SetCancelWindowAsync(admin, 12);
+        }
+    }
+
+    [Fact]
+    public async Task Two_exports_at_once_never_share_a_payout()
+    {
+        var admin = await SignInAsync(SeedIds.AdminPhone);
+        var customer = await SignUpAsync("Mira Shetty", "Female");
+        var instructor = await SignInAsync("9876543210");
+        var slotId = await TomorrowSlotAsync(instructor, "Online", "07:05");
+        var booked = await BookAsync(customer, slotId, "pay_double_export");
+        await PostAsync<BookingBody>(instructor, $"/api/bookings/{booked.Id}/accept", new { });
+        await PostAsync<BookingBody>(instructor, $"/api/bookings/{booked.Id}/complete", new { });
+        var payoutId = await PayoutIdAsync(booked.Id);
+
+        var exports = await Task.WhenAll(
+            admin.PostAsync("/api/admin/payouts/export", null),
+            admin.PostAsync("/api/admin/payouts/export", null));
+
+        var ids = new List<string>();
+        foreach (var export in exports)
+        {
+            if (!export.IsSuccessStatusCode)
+            {
+                Assert.Equal(HttpStatusCode.Conflict, export.StatusCode);
+                continue;
+            }
+            var lines = (await export.Content.ReadAsStringAsync()).TrimStart('\uFEFF')
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                .Skip(1);
+            ids.AddRange(lines.Select(line => line.Split(',')[0].Trim('"')));
+        }
+
+        Assert.Equal(ids.Count, ids.Distinct().Count());
+        Assert.Single(ids, id => id == payoutId.ToString());
+        Assert.Equal(PayoutStatus.Exported, await PayoutStatusAsync(payoutId));
+    }
+
+    [Fact]
     public async Task Browse_filters_instructors_by_city()
     {
         var admin = await SignInAsync(SeedIds.AdminPhone);
@@ -209,9 +330,12 @@ public class CancellationAndPayoutTests : IClassFixture<YogaApiFactory>
         Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
     }
 
-    private static async Task<Guid> TomorrowSlotAsync(HttpClient instructor, string mode, string start)
+    private static Task<Guid> TomorrowSlotAsync(HttpClient instructor, string mode, string start) =>
+        SlotInDaysAsync(instructor, mode, start, days: 1);
+
+    private static async Task<Guid> SlotInDaysAsync(HttpClient instructor, string mode, string start, int days)
     {
-        var day = MumbaiClock.Today().AddDays(1);
+        var day = MumbaiClock.Today().AddDays(days);
         var end = TimeOnly.Parse(start).AddMinutes(30).ToString("HH:mm");
         var created = await PostAsync<List<SlotBody>>(instructor, "/api/providers/me/slots", new
         {
@@ -282,6 +406,39 @@ public class CancellationAndPayoutTests : IClassFixture<YogaApiFactory>
     {
         using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(KeySecret));
         return Convert.ToHexString(hmac.ComputeHash(Encoding.UTF8.GetBytes(payload))).ToLowerInvariant();
+    }
+
+    /// <summary>Runs <c>beforeRefund</c> ahead of every refund, then forwards everything to the fake gateway.</summary>
+    private sealed class RefundHookClient : IRazorpayClient
+    {
+        private readonly IRazorpayClient _inner;
+        private readonly Func<Task> _beforeRefund;
+
+        public RefundHookClient(IRazorpayClient inner, Func<Task> beforeRefund)
+        {
+            _inner = inner;
+            _beforeRefund = beforeRefund;
+        }
+
+        public string KeyId => _inner.KeyId;
+
+        public bool SupportsLocalCapture => _inner.SupportsLocalCapture;
+
+        public Task<RazorpayCreatedOrder> CreateOrderAsync(long amountPaise, string currency, string receipt, IReadOnlyDictionary<string, string> notes, CancellationToken cancellationToken) =>
+            _inner.CreateOrderAsync(amountPaise, currency, receipt, notes, cancellationToken);
+
+        public Task RequireCapturedCheckoutAsync(string orderId, string paymentId, string signature, long expectedAmountPaise, string expectedCurrency, CancellationToken cancellationToken) =>
+            _inner.RequireCapturedCheckoutAsync(orderId, paymentId, signature, expectedAmountPaise, expectedCurrency, cancellationToken);
+
+        public (string PaymentId, string Signature) CreateLocalCapture(string orderId) => _inner.CreateLocalCapture(orderId);
+
+        public bool VerifyWebhookSignature(string rawBody, string? signature) => _inner.VerifyWebhookSignature(rawBody, signature);
+
+        public async Task RefundPaymentAsync(string paymentId, long amountPaise, string receipt, CancellationToken cancellationToken)
+        {
+            await _beforeRefund();
+            await _inner.RefundPaymentAsync(paymentId, amountPaise, receipt, cancellationToken);
+        }
     }
 
     private sealed record OtpBody(Guid ChallengeId, DateTimeOffset ExpiresAt, string? DevCode);
