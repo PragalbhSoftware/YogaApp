@@ -47,6 +47,12 @@ public enum PaymentStatus
     PartiallyRefunded
 }
 
+public enum UserBlockAction
+{
+    Blocked,
+    Unblocked
+}
+
 public enum CancelledBy
 {
     Customer,

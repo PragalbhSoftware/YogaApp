@@ -1,6 +1,7 @@
 import { Chip } from "@mui/material";
 import { MapPin } from "lucide-react";
 import { launch } from "@/constants/launch";
+import { site } from "@/constants/site";
 
 type HomeHeroProps = {
   city: string;
@@ -22,7 +23,7 @@ export function HomeHero({ city, areaName, onChangeArea }: HomeHeroProps) {
           Yoga Marketplace
         </p>
         <h1 className="font-heading text-2xl leading-tight font-medium sm:text-3xl">
-          Verified instructors — home, studio, or online.
+          {site.tagline}
         </h1>
         <div className="flex flex-col items-start gap-2">
           <button

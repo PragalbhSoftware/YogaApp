@@ -1,356 +1,243 @@
 # Yoga Marketplace
 
-India yoga instructor marketplace. First live city is Mumbai; more Indian cities follow in phases. Customer-facing copy should not lock the brand to Mumbai.
+A service-booking marketplace. Customers sign in with a phone OTP, pick a city and neighbourhood, browse verified providers, and pay at booking (Razorpay). Providers register as **Pending** until an admin verifies them, then publish Home, Studio, or Online slots and accept or decline requests. Admins oversee providers, users, bookings, payments, payouts, and the city/area catalog.
 
-The API covers OTP auth, the domain model, EF Core, SQL Server, verified browse, **pay-at-book** (Razorpay), the instructor handshake, and admin oversight. Customers authenticate with a one-time passcode, instructors register as **Pending** until an admin verifies them, and verified instructors can be browsed with **mode-specific** slots (Home, Studio, Online). A captured payment creates a booking in `PendingAccept`. The web app includes a local admin area for that oversight.
-
-Yoga is the first `Category`. The model is generic enough for another category later. The customer web app is `src/YogaMarketplace.Web`: phone OTP, area, verified instructors, then book and pay. The browser never calls the Razorpay webhook. The API still seeds Mumbai areas until city expansion ships.
+Yoga is the first `Category`. The model (Provider, Service, Category, Booking) is generic so another category can follow. The product opens city by city across India. **Cities and areas are data** (admin Settings), never part of titles, headings, or code defaults. Session times are India time (`Asia/Kolkata`).
 
 ## Solution
 
 | Project | Role |
 | --- | --- |
-| `src/YogaMarketplace.Api` | Controllers, OTP/JWT, browse, slots, book and pay, instructor handshake, admin APIs |
-| `src/YogaMarketplace.Domain` | Entities, booking rules, provider approval, catalog edits |
-| `src/YogaMarketplace.Infrastructure` | EF Core, SQL Server, seed |
-| `src/YogaMarketplace.Web` | Razor Pages app (OTP, area, browse, book and pay, instructor requests, reviews, local admin) |
+| `src/YogaMarketplace.Client` | React SPA (Vite, TypeScript, MUI, Tailwind, TanStack Query, Zustand). The only front end. |
+| `src/YogaMarketplace.Api` | ASP.NET Core 8 Web API: OTP/JWT, browse, slots, book and pay, provider handshake, admin |
+| `src/YogaMarketplace.Domain` | Entities and rules (booking, cancellation, provider approval, user blocking, catalog) |
+| `src/YogaMarketplace.Infrastructure` | EF Core, SQL Server, migrations, seed |
 | `tests/YogaMarketplace.Api.Tests` | Domain rules and API tests (SQLite) |
-| `tests/YogaMarketplace.Web.Tests` | Customer shell against the API test host |
 
 Flow is controllers to services to EF Core. No CQRS and no message bus.
 
 ## Run locally
 
-Requires the .NET 8 SDK.
+Requires the .NET 8 SDK and Node 20.19+ (CI uses Node 22).
 
-### SQL Server in Docker
+### 1. SQL Server
+
+Docker:
 
 ```bash
 docker compose up -d
 ```
 
-The compose file publishes `localhost:1433` with SA password `YogaDev!Passw0rd`. That matches `appsettings.Development.json`.
+That publishes `localhost:1433` with the SA password in `appsettings.Development.json`.
 
-### SQL Server LocalDB (Windows)
+Or a local SQL Server / LocalDB instance, overriding the connection string with an environment variable:
 
-Put this in `src/YogaMarketplace.Api/appsettings.Development.json` (or user secrets):
-
-```text
-Server=(localdb)\mssqllocaldb;Database=YogaMarketplace;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=true
+```powershell
+$env:ConnectionStrings__Default = "Server=(localdb)\mssqllocaldb;Database=YogaMarketplace;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=true"
 ```
 
-### Migrate and start
+### 2. API (port 5080)
 
-Development applies migrations and seeds on startup (`Database:AutoMigrate` and `Seed:DemoData`).
+Development applies migrations and seeds on startup (`Database:AutoMigrate`, `Seed:DemoData`).
 
 ```bash
 dotnet tool restore
-dotnet run --project src/YogaMarketplace.Api
+dotnet run --project src/YogaMarketplace.Api --launch-profile http
 ```
 
-API: `http://localhost:5080`  
-Swagger: `http://localhost:5080/swagger`  
-Liveness: `http://localhost:5080/health`  
-Database: `http://localhost:5080/health/ready`
+- API: `http://localhost:5080`
+- Swagger: `http://localhost:5080/swagger`
+- Liveness / database: `http://localhost:5080/health`, `/health/ready`
 
-To apply migrations without starting the API:
+### 3. Client (port 5173)
+
+```bash
+cd src/YogaMarketplace.Client
+npm ci
+npm run dev
+```
+
+Open `http://localhost:5173/login`.
+
+In development `VITE_API_BASE_URL` is empty, so the client calls its own origin and the **Vite dev proxy** (`vite.config.ts`) forwards `/api` and `/health` to `http://localhost:5080`. No CORS is involved.
+
+### Dev sign-in
+
+SMS is a log stub. In Development the OTP is always `123456` and the API returns it as `devCode`.
+
+| Who | Phone | Lands on |
+| --- | --- | --- |
+| Seeded provider (Ananya Desai) | `+919876543210` | `/instructor` |
+| Seeded admin | `+919000000001` | `/admin` |
+| Any new number | sign up with name and gender | `/` |
+
+## Configuration
+
+### Client (`src/YogaMarketplace.Client`)
+
+Only public values belong here; everything prefixed `VITE_` ends up in the browser bundle.
+
+| Variable | Purpose |
+| --- | --- |
+| `VITE_API_BASE_URL` | API origin, e.g. `https://api.example.com`. Leave empty to call the same origin (dev proxy, or a production reverse proxy). Read at **build** time. |
+
+See `.env.example`. Vite loads `.env.development`, `.env.staging` (`vite build --mode staging`), and `.env.production`.
+
+### API
+
+Set in `appsettings.*.json`, user secrets, or environment variables (`Section__Key`).
+
+| Setting | Purpose |
+| --- | --- |
+| `ConnectionStrings:Default` | SQL Server |
+| `Jwt:Key`, `Jwt:Issuer`, `Jwt:Audience` | Token signing. The app refuses to start without `Jwt:Key`. |
+| `Otp:Pepper`, `Otp:ExposeCode`, `Otp:UseFixedCode` | OTP hashing and the dev shortcuts (forced off in Production) |
+| `Cors:AllowedOrigins` | Array of browser origins allowed to call the API cross-origin. Development allows `http://localhost:5173`. **Production refuses to start with an empty list.** |
+| `Razorpay:KeyId`, `Razorpay:KeySecret`, `Razorpay:WebhookSecret` | Payment gateway. Never commit live keys. |
+| `Razorpay:UseFakeGateway` | Development and tests issue `order_fake_…` ids and capture locally (`/api/bookings/local-confirm`). Production refuses to start when this is on. |
+| `Database:AutoMigrate`, `Seed:DemoData` | Off in Production |
+
+Environment variable form for an array: `Cors__AllowedOrigins__0=https://app.example.com`.
+
+## Production API routing for the SPA
+
+The build output is static (`npm run build` → `dist/`). Production has no Vite proxy, so choose one of:
+
+**Option A: same origin (recommended).** Serve `dist/` and reverse-proxy `/api` to the API from the same host. Build with `VITE_API_BASE_URL` empty. No CORS needed. Example Nginx:
+
+```nginx
+server {
+  listen 80;
+  root /usr/share/nginx/html;
+
+  location /api/ {
+    proxy_pass http://api:8080;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+
+  location / {
+    try_files $uri /index.html;
+  }
+}
+```
+
+`try_files … /index.html` keeps deep links such as `/teachers/123` working on refresh.
+
+**Option B: separate API origin.** Build with `VITE_API_BASE_URL=https://api.example.com` and add the SPA origin to the API: `Cors__AllowedOrigins__0=https://app.example.com`. The SPA host still needs the `index.html` fallback for client routes.
+
+## Tests and checks
+
+```bash
+dotnet test YogaMarketplace.sln
+
+cd src/YogaMarketplace.Client
+npm run typecheck
+npm run lint
+npm test
+npm run build
+```
+
+API tests build the model with SQLite; the app itself uses SQL Server. CI (`.github/workflows/ci.yml`) runs both sets.
+
+## Migrations
 
 ```bash
 dotnet tool restore
+dotnet ef migrations add <Name> --project src/YogaMarketplace.Infrastructure --startup-project src/YogaMarketplace.Infrastructure --output-dir Persistence/Migrations
 dotnet ef database update --project src/YogaMarketplace.Infrastructure --startup-project src/YogaMarketplace.Api
-```
-
-Idempotent script for a host you cannot reach with the EF tool:
-
-```bash
 dotnet ef migrations script --project src/YogaMarketplace.Infrastructure --startup-project src/YogaMarketplace.Api --idempotent -o deploy.sql
 ```
 
-### Tests
+New columns must be nullable or defaulted, and every migration needs a working `Down()`.
 
-```bash
-dotnet test
-```
+## Money and concurrency rules
 
-Tests build the model with SQLite. The app itself uses SQL Server.
-
-## Customer web
-
-`src/YogaMarketplace.Web` is a mobile-first Razor Pages shell. It does not open SQL Server. It calls the API with `HttpClient` (`Api:BaseUrl`, default `http://localhost:5080`).
-
-Start SQL Server and the API (sections above), then in a second terminal:
-
-```bash
-dotnet run --project src/YogaMarketplace.Web
-```
-
-Web: `http://localhost:5081`
-
-1. **Account.** New customers send name, gender (Female, Male, or Other), and phone. Existing customers send phone only. Verify the code.
-2. **Area.** Pick a Mumbai neighbourhood from `GET /api/areas`.
-3. **Instructors.** Filter by area and Home / Studio / Online. The list is verified instructors for the `yoga` category (`Api:CategorySlug`). Open a profile to see this week's slots.
-4. **Book and pay.** Choose a slot. Home asks for an address and a landmark before the order is created. Studio and Online go straight to checkout. Development uses a local stand-in for Razorpay Checkout (`Payments:UseFakeCheckout`). Pay calls `POST /api/bookings/confirm` and the booking is `PendingAccept`. Payment failed and Cancel payment do not confirm, so no booking is created.
-5. **My bookings.** `GET /api/bookings/me` for the signed-in customer. The page is `/bookings`. Cancel is on `PendingAccept` and `Upcoming` until the session's Mumbai start (`POST /api/bookings/{id}/cancel`). Reschedule is on `Upcoming` only: the page loads open slots for that instructor and mode from `GET /api/providers/{id}/slots?mode=`, then posts `{ "slotId" }` to `POST /api/bookings/{id}/reschedule`. A taken slot stays on the page with the API error (409). The 12-hour window and 50% late fee are not applied. After a session is `Completed`, the customer can leave one rating (1–5) and an optional comment. The form stays hidden until then, and after the review is saved.
-6. **Instructor requests.** Ananya (and any provider account) signs in with the same phone OTP. The role on the JWT is `Provider`, and the app opens `/instructor/bookings`. Filter by status, accept or decline `PendingAccept`, and mark `Upcoming` complete. Customers cannot open that page. A provider cannot open My bookings.
-7. **Instructor register.** A signed-in customer opens `/instructor/register` (linked from sign-in, access denied, and the customer nav). The form posts `POST /api/providers/register`. The new token replaces `ym.session` with role `Provider`. The same page then shows `GET /api/providers/me` (Pending, Verified, or Rejected, and the Meet link when present) instead of the form. Pending profiles stay off public browse until an admin verifies them at `/admin/approvals`.
-
-The API JWT from `POST /api/auth/otp/verify` is stored in the encrypted `ym.session` cookie and sent as `Authorization: Bearer` on later API calls. The chosen area is the `ym.area` cookie.
-
-In Development the API code is `123456` and the response includes `devCode`. The verify step shows that code (and fills it in) when the API returns it. `Api:ShowDevOtpHint` is true only in `appsettings.Development.json`, which is not published. Seeded instructor Ananya Desai (`+919876543210`, Bandra) can sign in with her phone. The seeded admin (`+919000000001`) uses the same existing-account OTP and lands on `/admin` (see Admin web).
-
-If the API is stopped, pages show an error and empty lists. The web app does not keep a second catalog or a fake OTP store.
-
-Labels live in `src/YogaMarketplace.Web/Copy/UiCopy.cs` so the first category and city can be renamed later without changing the flow.
-
-## Admin web
-
-Local only. These pages are not part of the YogaDemo deploy. They live in `src/YogaMarketplace.Web` and call `/api/admin` with the JWT from the encrypted `ym.session` cookie. The web app does not open SQL Server.
-
-The cookie stores the role on the same claim customers and instructors already use (`Customer`, `Provider`, or `Admin`). `/bookings` requires `Customer`. `/instructor/bookings` and `/instructor/availability` require `Provider`. `/instructor/register` allows a signed-in customer or instructor. `/admin` requires `Admin`. Anyone else is sent to `/account/access-denied`.
-
-Sign in at `http://localhost:5081/account/sign-in` as an existing account (leave "I'm new" off):
-
-1. Phone `9000000001` or `+919000000001`. That user is seeded when `Seed:DemoData` is on.
-2. In Development the code is `123456`. The verify step shows it as `devCode` when the API returns it.
-3. The app opens `/admin`.
-
-| Page | Path | What it does |
-| --- | --- | --- |
-| Dashboard | `/admin` | Booking counts by status, paid GMV, pending payout count / gross / net |
-| Approvals | `/admin/approvals` | Pending instructors. Verify makes them public. Reject takes an optional reason up to 300 characters. Neither call creates a booking |
-| Users | `/admin/users` | Search and role filter, then a detail page. No OTP or other secrets |
-| Bookings | `/admin/bookings` | Read-only list and detail |
-| Transactions | `/admin/transactions` | Payments (`Paid`, `Refunded`, `Failed`) and payouts (`Pending`, `Exported`, `Paid`). Read-only |
-| Masters | `/admin/masters` | Areas (add, rename, active), category label, and policy. The category slug stays `yoga` |
-
-The customer neighbourhood picker stays at `/areas`. Admin pages are `/admin`, not under that folder.
-
-## Dev OTP and seed
-
-SMS is a log stub (`LoggingOtpSender`). In Development the code is fixed at `123456` and the request response includes `devCode`.
-
-| Who | Phone | Notes |
-| --- | --- | --- |
-| Ananya Desai | `+919876543210` | Verified, Bandra, Home ₹899 / Studio ₹749 / Online ₹599, Google Meet link on her own profile |
-| Marketplace admin | `+919000000001` | Seeded when `Seed:DemoData` is on. Sign in as an existing user (`isNewUser: false`). Development code `123456`. The JWT role is `Admin` and the web app opens `/admin` |
-
-New customer: `name` + `gender` + `phone`, then OTP. Existing customer: `phone`, then OTP. Slots are Mumbai local time (`Asia/Kolkata`), separate per Home / Studio / Online. Bookings are not seeded.
-
-`Seed:DemoData` is off in Production. `appsettings.Development.json` is excluded from `dotnet publish`.
+- Amounts are rounded to 2 decimals; Razorpay gets integer paise.
+- State is saved to the database **before** calling Razorpay (refunds run inside a transaction: save, call the gateway, commit).
+- `Booking.Status`, `Payment.Status`, and `User.IsBlocked` are EF concurrency tokens. A lost race returns `409`.
+- Times are India time (`Asia/Kolkata`); cancellation windows are measured from the session start in that zone.
 
 ## HTTP API
 
+Errors use `{ "error": "..." }` with the matching status code. Missing token is `401`; wrong role is `403`.
+
+### Public and auth
+
 | Method | Path | Auth | Purpose |
 | --- | --- | --- | --- |
-| GET | `/health`, `/health/ready` | | Process up, SQL reachable |
-| POST | `/api/auth/otp/request` | | Start OTP |
-| POST | `/api/auth/otp/resend` | | New code, previous code stops working |
-| POST | `/api/auth/otp/verify` | | JWT |
+| POST | `/api/auth/otp/request` | | Start OTP (`isNewUser` with name and gender for sign-up). Blocked accounts get `403`. |
+| POST | `/api/auth/otp/resend` | | New code; the previous one stops working |
+| POST | `/api/auth/otp/verify` | | Returns the JWT |
 | GET | `/api/auth/me` | Bearer | Current user |
-| GET | `/api/areas` | | Mumbai neighbourhoods |
-| GET | `/api/categories` | | Includes `yoga` |
-| GET | `/api/policy` | | Fee % and cancel/reschedule hours (TBD defaults) |
-| GET | `/api/providers?area=&mode=&category=` | | Verified instructors only |
-| GET | `/api/providers/{id}` | | Public profile. Meet link is omitted |
-| GET | `/api/providers/{id}/slots?mode=Home` | | Open slots for that mode |
-| POST | `/api/providers/register` | Bearer | Creates a **Pending** instructor |
-| GET | `/api/providers/me` | Bearer | Own profile, including Meet link |
-| GET | `/api/providers/me/slots?mode=&from=&to=` | Provider Bearer | Own slots for that mode, including blocked |
-| POST | `/api/providers/me/slots` | Bearer | Add slots for a mode the instructor offers |
-| POST | `/api/providers/me/slots/{id}/block` | Provider Bearer | Block an unbooked future slot the instructor owns |
-| POST | `/api/providers/me/slots/{id}/unblock` | Provider Bearer | Open a blocked future slot that has no paid booking |
+| GET | `/api/areas` | | Active cities and neighbourhoods |
+| GET | `/api/categories` | | Active categories (`yoga`) |
+| GET | `/api/policy` | | Fee % and cancel/reschedule windows |
+| GET | `/api/providers?city=&area=&mode=&category=` | | Listed providers: verified and not blocked |
+| GET | `/api/providers/{id}` | | Public profile (no Meet link) |
+| GET | `/api/providers/{id}/slots?mode=` | | Open slots for that mode |
+| GET | `/api/providers/{id}/reviews` | | Public reviews |
 
-Booking states: `PendingAccept` → `Upcoming`, `Declined`, or `Cancelled`. `Upcoming` → `Completed`, `NoShow`, `Cancelled`, or another slot while staying `Upcoming`. A captured Razorpay payment creates `PendingAccept`. The instructor accepts, declines, or completes on the handshake endpoints. Decline refunds the captured payment and frees the slot. Complete records a pending payout (`gross − fee%`) and unlocks one customer review. The fee is **not** copied onto the payment at book time. The customer who booked can cancel or reschedule on the endpoints below.
-
-## Instructor availability (local)
-
-Provider JWT, and only for that instructor. A customer JWT is 404 until they register. Pending instructors can list, block, and unblock; public `GET /api/providers/{id}/slots` still returns 404 until they are verified.
-
-`GET /api/providers/me/slots` uses the same `mode`, `from`, and `to` query as the public slot list. `mode` is required (`Home`, `Studio`, or `Online`). `from` and `to` are inclusive Mumbai dates. Omitted `from` is today; omitted `to` is six days after `from`. `to` before `from` is 400. The list includes blocked slots and slots that already have a booking. Each item is `{ id, mode, date, start, end, isBlocked }`. `start` and `end` are `HH:mm`.
-
-`POST /api/providers/me/slots/{id}/block` has no body. It sets `isBlocked` and returns that same slot shape. The slot leaves the public list and stays on the instructor list. Blocking again is a no-op and returns 200. A past date (`date` before today in Mumbai) is 400 `{ error: "Past slots cannot be blocked." }`. An occupying booking (`PendingAccept`, `Upcoming`, `Completed`, `NoShow`, per `BookingRules.OccupiesSlot`) is 409 `{ error: "That slot has a booking." }` and the slot stays open. `Declined` and `Cancelled` do not occupy the slot. Another instructor's slot is 403. A missing id is 404.
-
-`POST /api/providers/me/slots/{id}/unblock` has no body. It clears `isBlocked` and returns that same slot shape. The slot returns to the public list. Unblocking again is a no-op and returns 200. A past date is 400 `{ error: "Past slots cannot be unblocked." }`. An occupying booking is 409 `{ error: "That slot has a booking." }` and the slot stays blocked. Ownership and missing-id errors match block.
-
-## Book and pay (local)
-
-Customer JWT only. Create a Razorpay order for a free slot, then confirm from the checkout callback or from the `payment.captured` webhook. Nothing is written to `Bookings` until the payment is captured. An unpaid checkout is a `CheckoutIntent` row only.
-
-| Method | Path | Auth | Purpose |
-| --- | --- | --- | --- |
-| POST | `/api/bookings/orders` | Customer Bearer | Razorpay order for one slot. Home requires `homeAddress` and `landmark`. |
-| POST | `/api/bookings/confirm` | Customer Bearer | Verify `orderId`, `paymentId`, and HMAC signature. Idempotent for the same payment id. |
-| POST | `/api/bookings/local-confirm` | Customer Bearer | Development fake gateway only. Signs and captures on the server. |
-| GET | `/api/bookings/me` | Customer Bearer | That customer's bookings, including the Meet link snapshot after an online booking. |
-| POST | `/api/webhooks/razorpay` | `X-Razorpay-Signature` | `payment.captured` creates the same booking. Other events are acknowledged and do not book. |
-
-Rules enforced here:
-
-- Verified instructors only. The slot's mode (Home, Studio, Online) must be one they offer, and the slot must be free under `BookingRules.OccupiesSlot`.
-- Price is the instructor's rate for that mode. The client does not send an amount.
-- Online stores the instructor's Google Meet link on the booking at capture. Public browse still omits it.
-- Studio stores the studio address on the booking.
-- The same Razorpay payment id cannot create a second booking. A second captured payment for a slot that was just taken is rejected and does not insert a booking. Refund of that losing payment is a later slice.
-- Platform fee percent stays on `MarketplacePolicy`. A payout row is created only when the instructor completes the booking.
-
-## Instructor handshake (local)
-
-Provider JWT, and only for that instructor's booking. Customer JWT for the review. Admin oversight is a separate set of routes. The same OTP sign-in issues that JWT: a provider lands on `/instructor/bookings`, and the customer leaves the review on `/bookings`.
-
-| Method | Path | Auth | Purpose |
-| --- | --- | --- | --- |
-| GET | `/api/bookings/instructor?status=` | Provider Bearer | That instructor's bookings. `status` is optional (`PendingAccept`, `Upcoming`, `Declined`, `Completed`, `NoShow`, `Cancelled`). |
-| POST | `/api/bookings/{id}/accept` | Provider Bearer | `PendingAccept` → `Upcoming`. |
-| POST | `/api/bookings/{id}/decline` | Provider Bearer | `PendingAccept` → `Declined`, payment `Refunded`, Razorpay refund. The slot is free again. No payout. |
-| POST | `/api/bookings/{id}/complete` | Provider Bearer | `Upcoming` → `Completed`. Writes `PayoutPending` from `MarketplacePolicy.PlatformFeePercent`. |
-| POST | `/api/bookings/{id}/reviews` | Customer Bearer | One review on a `Completed` booking the customer owns. Rating 1–5, optional comment up to 1000 characters. |
-
-Illegal transitions, another instructor's booking, and a second review return `{ error }`. Decline calls `IRazorpayClient.RefundPaymentAsync`. Development and tests use the fake client, which records the refund and does not call Razorpay.
-
-## Customer cancel and reschedule (local)
-
-Customer JWT, and only for that customer's booking. An instructor or admin JWT receives 403. Another customer receives 403. Admin oversight stays on `/api/admin` and does not force-cancel.
-
-| Method | Path | Auth | Purpose |
-| --- | --- | --- | --- |
-| POST | `/api/bookings/{id}/cancel` | Customer Bearer | `PendingAccept` or `Upcoming` → `Cancelled` when the request is before the session's Mumbai start. Payment becomes `Refunded`, `IRazorpayClient.RefundPaymentAsync` runs for the captured amount, and the slot is free (`Cancelled` is outside `BookingRules.OccupiesSlot`). |
-| POST | `/api/bookings/{id}/reschedule` | Customer Bearer | JSON body `{ "slotId": "<guid>" }`. `Upcoming` only. `BookingRules.Reschedule` moves that same booking onto an open slot with the same instructor and the same mode. Payment stays `Paid`. One booking row, not a second one. |
-
-A missing body on reschedule is 400 `{ error }`. An illegal status, the same slot, a different instructor, a different mode, or a session that has already started is 400 `{ error }`. An unknown booking or slot is 404. A slot that is already taken or has ended is 409 `{ error }`.
-
-`MarketplacePolicy` still stores the TBD defaults: `CancelFreeWindowHours` 12, `RescheduleFreeWindowHours` 12, and `LateCancelFeePercent` 50. `BookingRules.IsFreeWindow` is the predicate for those hours. This slice does not apply them. Cancel before the session starts refunds the full captured amount, and reschedule is not limited to the free window. The late-cancel fee is not charged until ops confirms it.
-
-### Razorpay configuration
-
-Do not commit live keys. `appsettings.json` leaves them empty. Development uses a **fake gateway** (`Razorpay:UseFakeGateway` true) and placeholder secrets that are not Razorpay credentials. Production refuses to start when the fake gateway is on.
-
-| Configuration | Environment variable | Purpose |
-| --- | --- | --- |
-| `Razorpay:KeyId` | `Razorpay__KeyId` | Key id. Returned to the customer when an order is created. |
-| `Razorpay:KeySecret` | `Razorpay__KeySecret` | HMAC secret for the checkout signature (`orderId\|paymentId`). |
-| `Razorpay:WebhookSecret` | `Razorpay__WebhookSecret` | HMAC secret for the raw webhook body. |
-| `Razorpay:UseFakeGateway` | `Razorpay__UseFakeGateway` | `true` skips Razorpay HTTP and issues `order_fake_…` ids. Signatures are still checked. |
-
-Fake mode is on in `appsettings.Development.json` and in the API tests. To call Razorpay's test API from this machine, put real **test** keys in user secrets or the environment and turn the fake gateway off:
-
-```bash
-dotnet user-secrets set "Razorpay:KeyId" "rzp_test_..." --project src/YogaMarketplace.Api
-dotnet user-secrets set "Razorpay:KeySecret" "..." --project src/YogaMarketplace.Api
-dotnet user-secrets set "Razorpay:WebhookSecret" "..." --project src/YogaMarketplace.Api
-dotnet user-secrets set "Razorpay:UseFakeGateway" "false" --project src/YogaMarketplace.Api
-```
-
-The checkout signature is hex HMAC-SHA256 of `{orderId}|{paymentId}` with `Razorpay:KeySecret`. The webhook signature is hex HMAC-SHA256 of the raw body with `Razorpay:WebhookSecret`, sent in `X-Razorpay-Signature`. Subscribe the webhook to `payment.captured`. The web app does not call the webhook.
-
-In Development the web pay page does not load `checkout.razorpay.com`. `Payments:UseFakeCheckout` is true only in `appsettings.Development.json` (not published). The server signs with `Payments:KeySecret`, the same Development placeholder as `Razorpay:KeySecret` (`dev-only-not-a-live-key-secret`). That value is not a live credential and is not sent to the browser. Pay now, Payment failed, and Cancel payment are the local checkout. When `Payments:UseFakeCheckout` is false, the pay page opens Razorpay Checkout.js and posts the returned order id, payment id, and signature to confirm. Production refuses to start if the fake checkout is on.
-
-To try Razorpay's test checkout later, set `Payments__UseFakeCheckout=false` in the environment (it overrides `appsettings.Development.json`) and put test keys in API user secrets as above. Do not commit them. `Payments__KeySecret` overrides the local signing secret the same way; leave it unset unless fake checkout is on. The published `appsettings.json` keeps `UseFakeCheckout` false and `KeySecret` empty.
-
-Local fake example, after OTP verify and `GET /api/providers/{id}/slots?mode=Home`:
-
-```bash
-curl -s -X POST http://localhost:5080/api/bookings/orders \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"slotId":"<slot>","homeAddress":"14th Road, Bandra West","landmark":"Near the station"}'
-```
-
-Sign `orderId|paymentId` with `dev-only-not-a-live-key-secret` (the Development placeholder) and `POST /api/bookings/confirm`.
-
-Cancel / reschedule free-window hours and the platform fee are stored on `MarketplacePolicy` (12 hours, 15% fee, 50% late-cancel fee). The note says they are TBD. Admin can patch the stored numbers (see the admin section). Customer cancel and reschedule HTTP does not apply those windows or the late-cancel fee. The platform fee is still applied only when the instructor completes a booking.
-
-## Admin API (local)
-
-Admin JWT only. Sign in with the seeded admin phone above (`POST /api/auth/otp/request` with `isNewUser: false`, then verify). The same OTP on the web app opens `/admin`. Every route below is under `/api/admin`. A missing token is `401` `{ error: "Sign in required." }`. A customer or provider token is `403` `{ error: "Admin access required." }`. Other failures use the same `{ error }` body as the rest of the API.
-
-Provider, booking, payment, and payout lists return at most 100 rows, newest first. User search is ordered by name, then phone, and capped at 100. Area and category lists return every row, ordered by name. There is no cursor. The admin pages call these routes and show the same cap.
+### Provider
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET | `/api/admin/providers?status=` | Instructors. Omitted or `Pending` is the approval queue. Also `Verified`, `Rejected`, or `all`. |
-| GET | `/api/admin/providers/{id}` | Review record, including the Google Meet link and rejection reason. |
-| POST | `/api/admin/providers/{id}/verify` | `Pending` or `Rejected` → `Verified`. Clears the reason. A second call is a no-op. |
-| POST | `/api/admin/providers/{id}/reject` | Body `{ "reason": "..." }` is optional, max 300 characters. `Verified` can be rejected and then drops out of public browse. |
-| GET | `/api/admin/users?q=&role=` | Customers and providers. `q` matches name, display name, or phone. `role` is `Customer`, `Provider`, or `Admin` (admins are omitted unless `role=Admin`). |
-| GET | `/api/admin/users/{id}` | That user, plus the instructor record when they have one. No OTP hash, code, or password field exists on the user. |
-| GET | `/api/admin/bookings?status=&providerId=&from=&to=` | Read-only. `from` / `to` are slot dates (`yyyy-MM-dd`), inclusive. |
-| GET | `/api/admin/bookings/{id}` | Customer, slot, payment, review rating, and payout net when present. |
-| GET | `/api/admin/payments?status=` | `Paid`, `Refunded`, and `Failed`. Omit `status` for all three. `Pending` is rejected. |
-| GET | `/api/admin/payouts?status=` | Read-only. Omitted `status` is `Pending`. Also `Exported` or `Paid`. |
-| GET | `/api/admin/reports/summary` | Booking count per status, GMV (sum of `Paid` amounts), and pending payout count / gross / net. |
-| GET | `/api/admin/areas` | Every neighbourhood, including inactive. |
-| POST | `/api/admin/areas` | `{ "name": "Colaba", "city": "Mumbai" }`. City defaults to Mumbai. Another city is `400`. Duplicate name is `409`. |
-| PATCH | `/api/admin/areas/{id}` | `{ "name": "...", "isActive": false }`. At least one field. Inactive areas leave `GET /api/areas`. |
-| GET | `/api/admin/categories` | Includes inactive. |
-| PATCH | `/api/admin/categories/{id}` | `{ "name": "Hatha Yoga" }` changes the label only. Slug stays `yoga`. |
-| GET | `/api/admin/policy` | Same shape as `GET /api/policy`. |
-| PATCH | `/api/admin/policy` | Any of `platformFeePercent`, `cancelFreeWindowHours`, `rescheduleFreeWindowHours`, `lateCancelFeePercent`, `policyNote`. Omitted fields stay. Percents are 0–100 with at most 2 decimal places. Windows are 0–168 hours. |
+| POST | `/api/providers/register` | Creates a **Pending** provider and returns a new token |
+| GET / PATCH | `/api/providers/me` | Own profile, including the Meet link |
+| PATCH | `/api/providers/me/rates` | Per-mode rates |
+| GET | `/api/providers/me/payouts?status=` | Own payouts |
+| GET / POST | `/api/providers/me/slots?mode=&from=&to=` | List or add slots for an offered mode |
+| PUT / DELETE | `/api/providers/me/slots/{id}` | Edit or remove a future slot without a booking |
+| POST | `/api/providers/me/slots/{id}/block`, `/unblock` | Close or reopen a future slot without a booking |
+| GET | `/api/bookings/instructor?status=` | Own bookings |
+| POST | `/api/bookings/{id}/accept`, `/decline`, `/complete`, `/noshow` | Handshake. Decline refunds; complete writes a pending payout. |
 
-The admin Razor pages call these routes. See Admin web. Tradeoffs:
+### Customer
 
-- Bookings, payments, and payouts are read-only on the admin routes. Customer cancel and reschedule use the customer endpoints above. Admin does not force-cancel or issue a second refund.
-- Rejecting a verified instructor removes them from `GET /api/providers`. Bookings they already have stay. Verifying a rejected instructor is allowed and clears the reason.
-- A policy edit applies to the next completion. `PayoutPending` rows keep the fee percent stored when the instructor completed the booking.
-- Deactivating an area hides it from the public area list. Instructors already placed there stay browsable.
-- Category slug is not editable, so `?category=yoga` and `Api:CategorySlug` keep working after a label change.
-- GMV is the sum of payments still `Paid`. Refunded and failed amounts are not included.
-- The demo admin user is seeded only when `Seed:DemoData` is true. Production does not create that user and this slice does not add a production admin bootstrap.
-- Admin provider and booking payloads include the Google Meet link so ops can review online sessions. Public provider JSON still omits it.
-- Provider, booking, payment, and payout lists load the filtered rows, then keep the newest 100. Summary totals stay aggregate queries: booking counts, paid GMV, and pending payout sums.
+| Method | Path | Purpose |
+| --- | --- | --- |
+| POST | `/api/bookings/orders` | Razorpay order for a slot. Home needs `homeAddress` and `landmark`. The server prices it. |
+| POST | `/api/bookings/confirm` | Verify the checkout signature and create the booking (`PendingAccept`). Idempotent per payment. |
+| POST | `/api/bookings/local-confirm` | Fake gateway only |
+| GET / PATCH | `/api/profile` | Own account details |
+| PUT | `/api/profile/visit-address` | Default home-visit address |
+| GET | `/api/bookings/me` | Own bookings |
+| GET | `/api/bookings/{id}/cancel-quote` | Refund preview under the cancellation policy |
+| POST | `/api/bookings/{id}/cancel` | Cancel with full or partial refund per policy |
+| POST | `/api/bookings/{id}/reschedule` | `{ "slotId" }`, same provider and mode |
+| POST | `/api/bookings/{id}/reviews` | One review after `Completed` |
+| POST | `/api/webhooks/razorpay` | `payment.captured` (signed with `X-Razorpay-Signature`) |
 
-## Deploy to PeoplesHost Plesk (`YogaDemo.psoftcs.com`)
+### Admin (`/api/admin`, Admin JWT)
 
-Target is IIS on Plesk with SQL Server, subdomain `YogaDemo.psoftcs.com`.
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/providers?status=`, `/providers/{id}` | Approval queue and review record |
+| POST | `/providers/{id}/verify`, `/reject` | Verify, or reject with an optional reason (max 300) |
+| GET | `/users?q=&role=`, `/users/{id}` | Directory and detail, including block status and history |
+| POST | `/users/{id}/block` | `{ "reason" }` required (5–300). Signs the user out, blocks OTP sign-in, and hides a provider from browse and checkout. Existing bookings stay. Admins cannot be blocked. |
+| POST | `/users/{id}/unblock` | Optional `{ "reason" }` |
+| GET | `/bookings?status=&providerId=&from=&to=`, `/bookings/{id}` | Oversight |
+| POST | `/bookings/{id}/cancel` | `{ "reason" }`; full refund on the customer's behalf |
+| GET | `/payments?status=`, `/payouts?status=`, `/payouts/csv?status=` | Transactions |
+| POST | `/payouts/export`, `/payouts/{id}/paid` | Claim pending payouts into a CSV batch; mark one paid |
+| GET | `/reports/summary` | Booking counts, paid GMV, pending payouts |
+| GET / POST / PATCH | `/areas`, `/areas/{id}` | `{ "name", "city" }`; city is required (2–40 letters). Duplicate name in a city is `409`. |
+| GET / PATCH | `/categories`, `/categories/{id}` | Rename the label; the slug never changes |
+| GET / PATCH | `/policy` | Fee and window settings. Existing payouts keep their stored fee. |
 
-1. Install the **.NET 8 Hosting Bundle** and the Plesk ASP.NET Core extension on the server.
-2. Create a SQL Server database and SQL login on that host.
-3. Publish on a build machine:
+Lists return at most 100 rows, newest first.
 
-   ```bash
-   dotnet publish src/YogaMarketplace.Api -c Release -o ./publish
-   ```
+## Deploying the API (IIS / Plesk example)
 
-4. Upload `./publish` to the site root for `YogaDemo.psoftcs.com`.
-5. In Plesk, set the ASP.NET Core app to `YogaMarketplace.Api.dll` and the application pool to **No Managed Code**.
-6. Set environment variables on the site (Plesk → ASP.NET Core → environment variables):
+1. Install the .NET 8 Hosting Bundle; create the SQL Server database and login.
+2. `dotnet publish src/YogaMarketplace.Api -c Release -o ./publish`, upload, set the app pool to **No Managed Code**.
+3. Set at least: `ASPNETCORE_ENVIRONMENT=Production`, `ConnectionStrings__Default`, `Jwt__Key` (32+ bytes), `Otp__Pepper`, `Cors__AllowedOrigins__0` (when using option B), `Razorpay__KeyId`, `Razorpay__KeySecret`, `Razorpay__WebhookSecret`, `Razorpay__UseFakeGateway=false`, `Database__AutoMigrate=false`, `Seed__DemoData=false`.
+4. Apply the schema with `dotnet ef database update --connection "<prod>"` or the idempotent `deploy.sql`.
+5. Wire a real SMS/WhatsApp OTP sender before public sign-in.
 
-   | Name | Value |
-   | --- | --- |
-   | `ASPNETCORE_ENVIRONMENT` | `Production` |
-   | `ConnectionStrings__Default` | `Server=...;Database=...;User Id=...;Password=...;TrustServerCertificate=True;MultipleActiveResultSets=true` |
-   | `Jwt__Key` | Random string, at least 32 bytes |
-   | `Jwt__Issuer` | `YogaMarketplace` |
-   | `Jwt__Audience` | `YogaMarketplace` |
-   | `Otp__Pepper` | Random string, at least 8 characters |
-   | `Otp__ExposeCode` | `false` |
-   | `Otp__UseFixedCode` | `false` |
-   | `Database__AutoMigrate` | `false` |
-   | `Seed__DemoData` | `false` |
-   | `Razorpay__KeyId` | Razorpay key id. Required before any live checkout. |
-   | `Razorpay__KeySecret` | Razorpay key secret. |
-   | `Razorpay__WebhookSecret` | Razorpay webhook signing secret. |
-   | `Razorpay__UseFakeGateway` | `false` |
-
-   The app refuses to start when `Jwt:Key` is missing. Production also forces the demo OTP and demo seed off via `appsettings.Production.json`.
-7. Apply the schema before the first request. From a machine that can reach the database:
-
-   ```bash
-   dotnet ef database update --project src/YogaMarketplace.Infrastructure --startup-project src/YogaMarketplace.Api --connection "<production connection string>"
-   ```
-
-   Or run `deploy.sql` from `dotnet ef migrations script --idempotent` in SSMS.
-8. Bind `YogaDemo.psoftcs.com` and the Plesk certificate. TLS terminates at Plesk; the app listens on HTTP behind it.
-9. Startup seeds Mumbai areas, the Yoga category, and the TBD policy row. It does not seed Ananya when `Seed__DemoData` is false.
-10. OTP delivery is still the log stub. Wire a real SMS or WhatsApp sender before any public login. Book and pay is in the API; set the Razorpay variables above before taking a live payment. `Razorpay__UseFakeGateway` must stay `false` on this host.
-
-## Later slices
-
-1. Auth, domain, EF, browse/slots — already in the repo
-2. Customer web (OTP, area, verified browse, book and pay) and book + pay HTTP — already in the repo. Pay-at-book creates `PendingAccept`
-3. Accept / decline / complete, reviews, payout pending, and refund of a captured payment whose slot was lost — API and the instructor/customer pages are in the repo. Payout export UI is later
-4. Admin approve/reject, users, bookings, payments, masters, summary report, and the local admin Razor pages — already in the repo
-5. Payout export. Customer cancel and reschedule HTTP, and the My bookings buttons, are in the repo.
+Deploy the SPA `dist/` with either routing option above.
 
 ## Out of scope
 
-Native apps, in-app video (Online stores a Google Meet link), multi-city launch, merch, SOS, and a Meta ads CMS.
+Native apps, in-app video (Online uses a Google Meet link), cart, wishlist, merch.

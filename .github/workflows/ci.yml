@@ -13,3 +13,22 @@ jobs:
         with:
           dotnet-version: 8.0.x
       - run: dotnet test YogaMarketplace.sln -c Release
+
+  client:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/YogaMarketplace.Client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # Vite 8 needs Node 20.19+.
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/YogaMarketplace.Client/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build

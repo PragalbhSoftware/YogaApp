@@ -77,11 +77,7 @@ public class ProviderService
         DateOnly? to,
         CancellationToken cancellationToken)
     {
-        var exists = await _db.Providers.AnyAsync(
-            p => p.Id == providerId && p.Status == ProviderStatus.Verified,
-            cancellationToken);
-        if (!exists)
-            throw new DomainException("Instructor not found.", 404);
+        await RequireListedAsync(providerId, cancellationToken);
 
         var parsed = ParseRequiredMode(mode);
         var (start, end) = ResolveWindow(from, to);
@@ -331,11 +327,7 @@ public class ProviderService
         Guid providerId,
         CancellationToken cancellationToken)
     {
-        var exists = await _db.Providers.AnyAsync(
-            p => p.Id == providerId && p.Status == ProviderStatus.Verified,
-            cancellationToken);
-        if (!exists)
-            throw new DomainException("Instructor not found.", 404);
+        await RequireListedAsync(providerId, cancellationToken);
 
         var rows = await (
                 from review in _db.Reviews.AsNoTracking()
@@ -537,7 +529,14 @@ public class ProviderService
         _db.Providers.AsNoTracking()
             .Include(p => p.Area)
             .Include(p => p.Services).ThenInclude(s => s.Category)
-            .Where(p => p.Status == ProviderStatus.Verified);
+            .Where(ProviderApproval.IsListed);
+
+    private async Task RequireListedAsync(Guid providerId, CancellationToken cancellationToken)
+    {
+        var listed = await _db.Providers.Where(p => p.Id == providerId).AnyAsync(ProviderApproval.IsListed, cancellationToken);
+        if (!listed)
+            throw new DomainException("Instructor not found.", 404);
+    }
 
     private async Task<Dictionary<Guid, (decimal Average, int Count)>> LoadRatingsAsync(Guid[] ids, CancellationToken cancellationToken)
     {

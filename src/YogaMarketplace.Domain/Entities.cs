@@ -11,7 +11,7 @@ public class Category
 public class Area
 {
     public Guid Id { get; set; }
-    public string City { get; set; } = "Mumbai";
+    public string City { get; set; } = "";
     public string Name { get; set; } = "";
     public bool IsActive { get; set; } = true;
 }
@@ -29,8 +29,22 @@ public class User
     public string? HomeCity { get; set; }
     public string? HomePin { get; set; }
     public string? HomeLandmark { get; set; }
+    public bool IsBlocked { get; set; }
+    public DateTimeOffset? BlockedAt { get; set; }
+    public string? BlockedReason { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public Provider? Provider { get; set; }
+}
+
+/// <summary>Audit row for every admin block or unblock of a user.</summary>
+public class UserBlockEvent
+{
+    public Guid Id { get; set; }
+    public Guid UserId { get; set; }
+    public Guid AdminUserId { get; set; }
+    public UserBlockAction Action { get; set; }
+    public string? Reason { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
 }
 
 public class Provider

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { usePageTitle } from "@/hooks/use-page-title";
 import { EmptyState } from "@/components/common/empty-state";
 import { ErrorState } from "@/components/common/error-state";
 import { BookingListSkeleton } from "@/components/common/loading-skeleton";
@@ -19,6 +20,7 @@ import { toUserMessage } from "@/services/http/api-error";
 import { formatInr } from "@/utils/money";
 
 export function BookingsPage() {
+  usePageTitle("My bookings");
   const navigate = useNavigate();
   const bookings = useMyBookings();
   const cancel = useCancelBooking();

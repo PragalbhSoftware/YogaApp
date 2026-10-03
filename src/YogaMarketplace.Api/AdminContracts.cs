@@ -39,7 +39,16 @@ public record AdminUserSummary(
     string? Email,
     string Role,
     DateTimeOffset CreatedAt,
-    AdminUserProvider? Provider);
+    AdminUserProvider? Provider,
+    bool IsBlocked);
+
+public record AdminUserBlockEventResponse(
+    Guid Id,
+    string Action,
+    string? Reason,
+    Guid AdminUserId,
+    string? AdminName,
+    DateTimeOffset CreatedAt);
 
 public record AdminUserDetail(
     Guid Id,
@@ -49,7 +58,16 @@ public record AdminUserDetail(
     string? Email,
     string Role,
     DateTimeOffset CreatedAt,
-    AdminProviderResponse? Provider);
+    AdminProviderResponse? Provider,
+    bool IsBlocked,
+    DateTimeOffset? BlockedAt,
+    string? BlockedReason,
+    IReadOnlyList<AdminUserBlockEventResponse> BlockHistory);
+
+public class AdminBlockUserRequest
+{
+    public string? Reason { get; set; }
+}
 
 public record AdminBookingResponse(
     Guid Id,

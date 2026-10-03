@@ -7,6 +7,7 @@ using Microsoft.IdentityModel.Tokens;
 using YogaMarketplace.Api;
 using YogaMarketplace.Api.Middleware;
 using YogaMarketplace.Api.Options;
+using YogaMarketplace.Api.Security;
 using YogaMarketplace.Infrastructure;
 using YogaMarketplace.Infrastructure.Persistence;
 
@@ -36,7 +37,7 @@ builder.Services.AddSwaggerGen(options =>
     {
         Title = "Yoga Marketplace API",
         Version = "v1",
-        Description = "OTP auth, Mumbai catalog, mode-specific slots, pay-at-book, a saved customer visit address, the instructor handshake, customer cancel and reschedule, instructor availability and rate edits, and admin oversight."
+        Description = "OTP auth, city and area catalog, mode-specific slots, pay-at-book, a saved customer visit address, the instructor handshake, customer cancel and reschedule, instructor availability and rate edits, and admin oversight."
     });
     options.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
     {
@@ -51,8 +52,9 @@ builder.Services.AddSwaggerGen(options =>
 
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddAppServices(builder.Configuration);
+var allowedOrigins = CorsSettings.AllowedOriginsFrom(builder.Configuration, builder.Environment.IsProduction());
 builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
-    policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod().WithExposedHeaders("Content-Disposition")));
+    policy.WithOrigins(allowedOrigins).AllowAnyHeader().AllowAnyMethod().WithExposedHeaders("Content-Disposition")));
 
 var jwt = builder.Configuration.GetSection(JwtOptions.Section).Get<JwtOptions>() ?? new JwtOptions();
 if (string.IsNullOrWhiteSpace(jwt.Key) || Encoding.UTF8.GetByteCount(jwt.Key) < 32)
@@ -74,6 +76,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             NameClaimType = System.Security.Claims.ClaimTypes.NameIdentifier,
             ClockSkew = TimeSpan.FromMinutes(1)
         };
+        options.Events = new JwtBearerEvents { OnTokenValidated = ActiveUserTokenValidator.ValidateAsync };
     });
 builder.Services.AddAuthorization();
 

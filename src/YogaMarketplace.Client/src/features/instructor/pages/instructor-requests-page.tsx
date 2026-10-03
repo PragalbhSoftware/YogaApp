@@ -1,5 +1,6 @@
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
+import { usePageTitle } from "@/hooks/use-page-title";
 import { EmptyState } from "@/components/common/empty-state";
 import { ErrorState } from "@/components/common/error-state";
 import { BookingListSkeleton } from "@/components/common/loading-skeleton";
@@ -20,6 +21,7 @@ function readStatus(value: string | null) {
 }
 
 export function InstructorRequestsPage() {
+  usePageTitle("Booking requests");
   const [searchParams, setSearchParams] = useSearchParams();
   const status = readStatus(searchParams.get("status"));
   const requests = useInstructorRequests(status);

@@ -1,6 +1,7 @@
 import { MapPin, ShieldCheck } from "lucide-react";
 import { Chip } from "@mui/material";
 import { launch } from "@/constants/launch";
+import { site } from "@/constants/site";
 
 const highlights = [
   { icon: ShieldCheck, label: "Verified instructors" },
@@ -31,7 +32,7 @@ export function LoginHero() {
             Yoga Marketplace
           </p>
           <h1 className="font-heading text-[1.75rem] leading-tight font-medium sm:text-3xl">
-            Book verified yoga instructors — home, studio, or online.
+            {site.tagline}
           </h1>
         </div>
         <div className="flex flex-wrap gap-2">

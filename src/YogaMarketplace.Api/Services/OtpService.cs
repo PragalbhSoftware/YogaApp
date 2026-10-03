@@ -49,6 +49,7 @@ public class OtpService
         {
             throw new DomainException("No account for this phone. Create an account first.", 404);
         }
+        UserBlocking.EnsureCanSignIn(user);
 
         return await IssueAsync(phone, request.IsNewUser, name, gender, UserRole.Customer, cancellationToken);
     }
@@ -63,10 +64,11 @@ public class OtpService
         if (previous is null)
             throw new DomainException("Request a code before resending.");
 
-        var userExists = await _db.Users.AnyAsync(u => u.Phone == phone, cancellationToken);
+        var user = await _db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Phone == phone, cancellationToken);
+        UserBlocking.EnsureCanSignIn(user);
         return await IssueAsync(
             phone,
-            previous.IsNewUser && !userExists,
+            previous.IsNewUser && user is null,
             previous.PendingName,
             previous.PendingGender,
             previous.IntendedRole,
@@ -80,6 +82,7 @@ public class OtpService
         if (string.IsNullOrWhiteSpace(request.Code))
             throw new DomainException("Enter the code we sent.");
 
+        UserBlocking.EnsureCanSignIn(await _db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Phone == phone, cancellationToken));
         var challenge = await LatestChallengeAsync(phone, openOnly: true, cancellationToken);
 
         if (challenge is null)

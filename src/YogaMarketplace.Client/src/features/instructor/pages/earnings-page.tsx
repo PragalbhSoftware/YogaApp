@@ -1,5 +1,6 @@
 import { useSearchParams } from "react-router-dom";
 import { Chip } from "@mui/material";
+import { usePageTitle } from "@/hooks/use-page-title";
 import { EmptyState } from "@/components/common/empty-state";
 import { ErrorState } from "@/components/common/error-state";
 import { BookingListSkeleton } from "@/components/common/loading-skeleton";
@@ -15,6 +16,7 @@ const filters = [
 ] as const;
 
 export function InstructorEarningsPage() {
+  usePageTitle("Earnings");
   const [searchParams, setSearchParams] = useSearchParams();
   const status = readPayoutStatus(searchParams.get("status"));
   const payouts = useInstructorPayouts(status);

@@ -56,8 +56,14 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
         }
 
         /// <inheritdoc />
+        /// <remarks>
+        /// Rolling back loses data: RefundedAmount, LateCancelFee, CancelledBy and CancelReason are dropped,
+        /// and PartiallyRefunded payments become Refunded because the old 16-character column cannot hold it.
+        /// </remarks>
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.Sql("UPDATE Payments SET Status = 'Refunded' WHERE Status = 'PartiallyRefunded'");
+
             migrationBuilder.DropColumn(
                 name: "RefundedAmount",
                 table: "Payments");

@@ -3,13 +3,12 @@ using System.Globalization;
 namespace YogaMarketplace.Domain;
 
 /// <summary>
-/// Masters edits. Mumbai is the launch city and the default when no city is sent; the owner adds other Indian cities by adding their first area.
-/// Category slug stays put so public browse and the web shell keep using <c>yoga</c>.
+/// Masters edits. Cities are data: every new area names its city, and the owner opens a city by adding its first area.
+/// Category slug stays put so public browse keeps using the slug it was created with.
 /// Policy changes apply to future payouts. Rows already in <see cref="PayoutPending"/> keep the fee captured at completion.
 /// </summary>
 public static class CatalogRules
 {
-    public const string LaunchCity = "Mumbai";
     public const int MaxWindowHours = 168;
 
     public static Area CreateArea(string? city, string? name) => new()
@@ -66,12 +65,13 @@ public static class CatalogRules
     }
 
     public const int CityMin = 2;
-    public const int CityMax = 60;
+    /// <summary>Matches the <c>Areas.City</c> column length.</summary>
+    public const int CityMax = 40;
 
     public static string NormalizeCity(string? city)
     {
         if (string.IsNullOrWhiteSpace(city))
-            return LaunchCity;
+            throw new DomainException("City is required.");
         var collapsed = string.Join(' ', city.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
         if (collapsed.Length is < CityMin or > CityMax)
             throw new DomainException($"City must be {CityMin} to {CityMax} characters.");

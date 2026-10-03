@@ -15,6 +15,7 @@ public class YogaDbContext : DbContext
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<Area> Areas => Set<Area>();
     public DbSet<User> Users => Set<User>();
+    public DbSet<UserBlockEvent> UserBlockEvents => Set<UserBlockEvent>();
     public DbSet<Provider> Providers => Set<Provider>();
     public DbSet<Service> Services => Set<Service>();
     public DbSet<AvailabilitySlot> AvailabilitySlots => Set<AvailabilitySlot>();

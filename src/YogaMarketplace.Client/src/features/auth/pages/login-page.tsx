@@ -1,7 +1,9 @@
+import { usePageTitle } from "@/hooks/use-page-title";
 import { LoginForm } from "@/features/auth/components/login-form";
 import { LoginHero } from "@/features/auth/components/login-hero";
 
 export function LoginPage() {
+  usePageTitle("Sign in");
   return (
     <main className="min-h-svh overflow-x-hidden bg-brand-background">
       <LoginHero />

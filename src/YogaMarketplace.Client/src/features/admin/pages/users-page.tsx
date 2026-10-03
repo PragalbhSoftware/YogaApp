@@ -7,6 +7,7 @@ import { BookingListSkeleton } from "@/components/common/loading-skeleton";
 import { PhoneText } from "@/components/common/phone-text";
 import { adminUserPath } from "@/constants/routes";
 import { AdminPage } from "@/features/admin/components/admin-page";
+import { BlockedBadge } from "@/features/admin/components/blocked-badge";
 import { FilterChips } from "@/features/admin/components/filter-chips";
 import { useAdminUsers } from "@/features/admin/hooks/use-admin";
 import { adminRoles } from "@/features/admin/types";
@@ -83,7 +84,10 @@ export function UsersPage() {
               className="flex flex-wrap items-center justify-between gap-3 rounded-[24px] border border-brand-border bg-brand-surface p-5"
             >
               <div className="min-w-0">
-                <h2 className="font-heading text-lg font-medium">{displayName(user.name, user.phone)}</h2>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="font-heading text-lg font-medium">{displayName(user.name, user.phone)}</h2>
+                  {user.isBlocked ? <BlockedBadge /> : null}
+                </div>
                 <p className="mt-1 text-sm text-brand-muted">
                   {user.role === "Provider" ? "Instructor" : user.role} · <PhoneText value={user.phone} />
                 </p>

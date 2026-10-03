@@ -7,8 +7,14 @@ import { PageLoader } from "@/components/common/page-loader";
 import { PhoneText } from "@/components/common/phone-text";
 import { routes } from "@/constants/routes";
 import { AdminPage } from "@/features/admin/components/admin-page";
+import { AccountStatusCard } from "@/features/admin/components/account-status-card";
 import { ProviderReviewCard } from "@/features/admin/components/provider-review-card";
-import { useAdminUser, useRejectProvider, useVerifyProvider } from "@/features/admin/hooks/use-admin";
+import {
+  useAdminUser,
+  useRejectProvider,
+  useSetUserBlocked,
+  useVerifyProvider,
+} from "@/features/admin/hooks/use-admin";
 import { displayName, formatAdminWhen } from "@/features/admin/utils";
 import { toUserMessage } from "@/services/http/api-error";
 import { toast } from "sonner";
@@ -18,6 +24,7 @@ export function UserDetailPage() {
   const user = useAdminUser(id);
   const verify = useVerifyProvider();
   const reject = useRejectProvider();
+  const setBlocked = useSetUserBlocked();
   const busy =
     (verify.isPending && verify.variables === user.data?.provider?.id) ||
     (reject.isPending && reject.variables?.id === user.data?.provider?.id);
@@ -84,6 +91,20 @@ export function UserDetailPage() {
           <dd>{formatAdminWhen(account.createdAt)}</dd>
         </div>
       </dl>
+
+      <AccountStatusCard
+        user={account}
+        busy={setBlocked.isPending}
+        onChange={(blocked, reason) => {
+          setBlocked.mutate(
+            { id: account.id, blocked, reason },
+            {
+              onSuccess: () => toast.success(blocked ? "Account blocked." : "Account unblocked."),
+              onError: (error) => toast.error(toUserMessage(error)),
+            },
+          );
+        }}
+      />
 
       {account.provider ? (
         <ProviderReviewCard

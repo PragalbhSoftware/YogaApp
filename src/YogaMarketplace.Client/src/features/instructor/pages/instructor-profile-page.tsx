@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { Button, Card, CardContent, Chip, Typography } from "@mui/material";
 import { toast } from "sonner";
+import { usePageTitle } from "@/hooks/use-page-title";
 import { PhoneText } from "@/components/common/phone-text";
 import { ErrorState } from "@/components/common/error-state";
 import { PageLoader } from "@/components/common/page-loader";
@@ -16,6 +17,7 @@ import { routes } from "@/constants/routes";
 import { toUserMessage } from "@/services/http/api-error";
 
 export function InstructorProfilePage() {
+  usePageTitle("Instructor profile");
   const { user, signOut } = useAuth();
   const profile = useInstructorProfile();
   const areas = useAreas();
