@@ -13,6 +13,15 @@ export function formatAdminWhen(value: string) {
   }).format(new Date(value));
 }
 
+export function formatAdminDay(value: string) {
+  return new Intl.DateTimeFormat("en-IN", {
+    timeZone: "Asia/Kolkata",
+    weekday: "long",
+    day: "numeric",
+    month: "short",
+  }).format(new Date(value));
+}
+
 export function formatSessionWhen(date: string, start: string, end: string) {
   return `${formatSlotDay(date)} · ${formatTimeRange12(start, end)}`;
 }
@@ -53,4 +62,20 @@ export function bookingStatusCount(rows: { status: string; count: number }[], st
 
 export function sumPayoutFees(rows: { feeAmount: number }[]) {
   return rows.reduce((sum, row) => sum + row.feeAmount, 0);
+}
+
+/** Keeps only the fields the admin touched, so a save never overwrites values another admin changed. */
+export function changedFields<T extends Record<string, unknown>>(
+  values: T,
+  dirty: Partial<Record<keyof T, unknown>>,
+): Partial<T> {
+  const changed: Partial<T> = {};
+  for (const key of Object.keys(values) as (keyof T)[]) {
+    if (dirty[key]) changed[key] = values[key];
+  }
+  return changed;
+}
+
+export function lateFeeLabel(type: "Percent" | "Flat", value: number) {
+  return type === "Flat" ? formatInr(value) : `${value}%`;
 }

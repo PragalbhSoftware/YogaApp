@@ -91,6 +91,8 @@ export type AdminBooking = {
   mode: string;
   status: string;
   amount: number;
+  convenienceFee: number;
+  commissionPercent: number;
   currency: string;
   date: string;
   start: string;
@@ -160,13 +162,58 @@ export type AdminCategory = {
   isActive: boolean;
 };
 
-export type AdminPolicy = {
+export const lateCancelFeeTypes = ["Percent", "Flat"] as const;
+export type LateCancelFeeType = (typeof lateCancelFeeTypes)[number];
+
+export const payoutCycles = ["Weekly", "Biweekly"] as const;
+export type PayoutCycle = (typeof payoutCycles)[number];
+
+export type AdminSettings = {
+  version: number;
   currency: string;
-  platformFeePercent: number;
+  commissionPercent: number;
+  convenienceFee: number;
   cancelFreeWindowHours: number;
   rescheduleFreeWindowHours: number;
-  lateCancelFeePercent: number;
+  lateCancelFeeType: LateCancelFeeType;
+  lateCancelFeeValue: number;
+  payoutCycle: PayoutCycle;
+  payoutPeriodStart: string;
   policyNote: string;
+  bannerTitle: string | null;
+  bannerSubtitle: string | null;
+  bannerOffer: string | null;
+  updatedAt: string | null;
+};
+
+/** Fields an admin can edit. Send only what changed, plus the version that was edited. */
+export type UpdateSettingsInput = Partial<
+  Pick<
+    AdminSettings,
+    | "commissionPercent"
+    | "convenienceFee"
+    | "cancelFreeWindowHours"
+    | "rescheduleFreeWindowHours"
+    | "lateCancelFeeType"
+    | "lateCancelFeeValue"
+    | "payoutCycle"
+    | "policyNote"
+  >
+> & {
+  version: number;
+  bannerTitle?: string;
+  bannerSubtitle?: string;
+  bannerOffer?: string;
+};
+
+export type SettingsAuditEntry = {
+  id: string;
+  changedAt: string;
+  adminUserId: string;
+  adminName: string | null;
+  field: string;
+  oldValue: string | null;
+  newValue: string | null;
 };
 
 export type AdminReport = {

@@ -1,4 +1,15 @@
-import type { ModeRate } from "@/features/marketplace/types";
+import { launch } from "@/constants/launch";
+import { site } from "@/constants/site";
+import type { ModeRate, SiteBanner } from "@/features/marketplace/types";
+
+/** Admin banner text, falling back to the built-in copy for any field left empty. */
+export function bannerCopy(banner: SiteBanner | undefined) {
+  return {
+    title: banner?.title?.trim() || site.tagline,
+    subtitle: banner?.subtitle?.trim() || null,
+    offer: banner?.offer?.trim() || launch.heroChip,
+  };
+}
 
 function joinWords(items: string[]) {
   if (items.length === 0) return "";

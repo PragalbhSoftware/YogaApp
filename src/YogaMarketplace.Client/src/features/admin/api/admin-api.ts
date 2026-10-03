@@ -6,12 +6,14 @@ import type {
   AdminCategory,
   AdminPayment,
   AdminPayout,
-  AdminPolicy,
   AdminProvider,
   AdminReport,
+  AdminSettings,
   AdminUserDetail,
   AdminUserSummary,
   BookingListQuery,
+  SettingsAuditEntry,
+  UpdateSettingsInput,
   UserListQuery,
 } from "@/features/admin/types";
 
@@ -138,11 +140,15 @@ export const adminApi = {
     return http.patch<AdminCategory>(`/api/admin/categories/${id}`, { name }).then((res) => res.data);
   },
 
-  policy() {
-    return http.get<AdminPolicy>("/api/admin/policy").then((res) => res.data);
+  settings() {
+    return http.get<AdminSettings>("/api/admin/settings").then((res) => res.data);
   },
 
-  updatePolicy(input: Partial<AdminPolicy>) {
-    return http.patch<AdminPolicy>("/api/admin/policy", input).then((res) => res.data);
+  updateSettings(input: UpdateSettingsInput) {
+    return http.patch<AdminSettings>("/api/admin/settings", input).then((res) => res.data);
+  },
+
+  settingsAudit() {
+    return http.get<SettingsAuditEntry[]>("/api/admin/settings/audit").then((res) => res.data);
   },
 };

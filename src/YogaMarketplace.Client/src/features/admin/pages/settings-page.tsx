@@ -2,10 +2,11 @@ import { Tab, Tabs } from "@mui/material";
 import { useSearchParams } from "react-router-dom";
 import { AdminPage } from "@/features/admin/components/admin-page";
 import { AreaSettings } from "@/features/admin/components/area-settings";
+import { BannerSettings } from "@/features/admin/components/banner-settings";
 import { CategorySettings } from "@/features/admin/components/category-settings";
-import { PolicySettings } from "@/features/admin/components/policy-settings";
+import { FeeSettings } from "@/features/admin/components/fee-settings";
 
-const tabs = ["earnings", "areas", "catalog"] as const;
+const tabs = ["earnings", "areas", "banner", "catalog"] as const;
 type SettingsTab = (typeof tabs)[number];
 
 function readTab(value: string | null): SettingsTab {
@@ -20,7 +21,7 @@ export function SettingsPage() {
     <AdminPage
       kicker="Owner"
       title="Settings"
-      lead="Your take rate, the cities and neighbourhoods customers can pick, and the yoga label on browse."
+      lead="Fees and payouts, the neighbourhoods customers can pick, the home banner, and the yoga label on browse."
     >
       <Tabs
         value={tab}
@@ -37,13 +38,15 @@ export function SettingsPage() {
           "& .MuiTab-root": { fontFamily: "inherit", fontWeight: 600, textTransform: "none" },
         }}
       >
-        <Tab value="earnings" label="Earnings" />
-        <Tab value="areas" label="Cities" />
+        <Tab value="earnings" label="Fees" />
+        <Tab value="areas" label="Areas" />
+        <Tab value="banner" label="Banner" />
         <Tab value="catalog" label="Catalog" />
       </Tabs>
 
-      {tab === "earnings" ? <PolicySettings /> : null}
+      {tab === "earnings" ? <FeeSettings /> : null}
       {tab === "areas" ? <AreaSettings /> : null}
+      {tab === "banner" ? <BannerSettings /> : null}
       {tab === "catalog" ? <CategorySettings /> : null}
     </AdminPage>
   );

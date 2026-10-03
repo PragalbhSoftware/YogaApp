@@ -4,6 +4,22 @@ export type Area = {
   name: string;
 };
 
+export type PublicPolicy = {
+  currency: string;
+  commissionPercent: number;
+  convenienceFee: number;
+  cancelFreeWindowHours: number;
+  rescheduleFreeWindowHours: number;
+  lateCancelFeeType: "Percent" | "Flat";
+  lateCancelFeeValue: number;
+};
+
+export type SiteBanner = {
+  title: string | null;
+  subtitle: string | null;
+  offer: string | null;
+};
+
 export type ModeRate = {
   mode: string;
   rate: number;
