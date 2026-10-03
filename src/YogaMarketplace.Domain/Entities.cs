@@ -11,7 +11,7 @@ public class Category
 public class Area
 {
     public Guid Id { get; set; }
-    public string City { get; set; } = "Mumbai";
+    public string City { get; set; } = "";
     public string Name { get; set; } = "";
     public bool IsActive { get; set; } = true;
 }

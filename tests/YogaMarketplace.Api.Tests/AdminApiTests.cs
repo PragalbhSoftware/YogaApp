@@ -416,7 +416,12 @@ public class AdminApiTests : IClassFixture<YogaApiFactory>
             await db.SaveChangesAsync();
         }
 
-        var created = await PostAsync<AreaAdminBody>(admin.Client, "/api/admin/areas", new { name = "Colaba" });
+        var noCity = await admin.Client.PostAsJsonAsync("/api/admin/areas", new { name = "Colaba" });
+        Assert.Equal(HttpStatusCode.BadRequest, noCity.StatusCode);
+        var tooLong = await admin.Client.PostAsJsonAsync("/api/admin/areas", new { name = "Colaba", city = new string('a', 41) });
+        Assert.Equal(HttpStatusCode.BadRequest, tooLong.StatusCode);
+
+        var created = await PostAsync<AreaAdminBody>(admin.Client, "/api/admin/areas", new { name = "Colaba", city = "Mumbai" });
         Assert.Equal("Mumbai", created.City);
         Assert.True(created.IsActive);
         var publicAreas = await _factory.CreateClient().GetFromJsonAsync<List<AreaBody>>("/api/areas", Json);

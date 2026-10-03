@@ -32,7 +32,7 @@ internal static class ModelConfiguration
 
     private static void ConfigureArea(EntityTypeBuilder<Area> entity)
     {
-        entity.Property(a => a.City).HasMaxLength(40);
+        entity.Property(a => a.City).HasMaxLength(CatalogRules.CityMax);
         entity.Property(a => a.Name).HasMaxLength(80);
         entity.HasIndex(a => new { a.City, a.Name }).IsUnique();
     }
