@@ -18,6 +18,16 @@ export const adminCancelSchema = z.object({
     .max(300, "Keep the reason to 300 characters."),
 });
 
+export function userBlockSchema(reasonRequired: boolean) {
+  return z.object({
+    reason: z
+      .string()
+      .trim()
+      .max(300, "Keep the reason to 300 characters.")
+      .refine((value) => !reasonRequired || value.length >= 5, "Give a reason of at least 5 characters."),
+  });
+}
+
 export const areaSchema = z.object({
   name: nameSchema,
   city: z
@@ -60,6 +70,7 @@ export const policySchema = z.object({
 
 export type RejectFormValues = z.infer<typeof rejectSchema>;
 export type AdminCancelValues = z.infer<typeof adminCancelSchema>;
+export type UserBlockValues = z.infer<ReturnType<typeof userBlockSchema>>;
 export type AreaFormValues = z.infer<typeof areaSchema>;
 export type AreaEditValues = z.infer<typeof areaEditSchema>;
 export type RenameFormValues = z.infer<typeof renameSchema>;

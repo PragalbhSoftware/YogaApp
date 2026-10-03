@@ -57,6 +57,20 @@ export function useAdminUser(id: string | undefined) {
   });
 }
 
+export function useSetUserBlocked() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { id: string; blocked: boolean; reason?: string }) =>
+      input.blocked ? adminApi.blockUser(input.id, input.reason ?? "") : adminApi.unblockUser(input.id, input.reason),
+    onSuccess: (user) => {
+      queryClient.setQueryData(["admin-user", user.id], user);
+      void queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-providers"] });
+      void queryClient.invalidateQueries({ queryKey: ["instructors"] });
+    },
+  });
+}
+
 export function useAdminBookings(query: BookingListQuery) {
   return useQuery({
     queryKey: ["admin-bookings", query.status ?? "", query.from ?? "", query.to ?? ""],

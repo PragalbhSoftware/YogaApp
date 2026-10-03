@@ -51,6 +51,16 @@ export type AdminUserSummary = {
   role: string;
   createdAt: string;
   provider: AdminUserProvider | null;
+  isBlocked: boolean;
+};
+
+export type AdminUserBlockEvent = {
+  id: string;
+  action: "Blocked" | "Unblocked";
+  reason: string | null;
+  adminUserId: string;
+  adminName: string | null;
+  createdAt: string;
 };
 
 export type AdminUserDetail = {
@@ -62,6 +72,10 @@ export type AdminUserDetail = {
   role: string;
   createdAt: string;
   provider: AdminProvider | null;
+  isBlocked: boolean;
+  blockedAt: string | null;
+  blockedReason: string | null;
+  blockHistory: AdminUserBlockEvent[];
 };
 
 export type AdminBooking = {

@@ -62,6 +62,16 @@ export const adminApi = {
     return http.get<AdminUserDetail>(`/api/admin/users/${id}`).then((res) => res.data);
   },
 
+  blockUser(id: string, reason: string) {
+    return http.post<AdminUserDetail>(`/api/admin/users/${id}/block`, { reason }).then((res) => res.data);
+  },
+
+  unblockUser(id: string, reason?: string) {
+    return http
+      .post<AdminUserDetail>(`/api/admin/users/${id}/unblock`, { reason: reason || null })
+      .then((res) => res.data);
+  },
+
   bookings(query: BookingListQuery) {
     return http
       .get<AdminBooking[]>("/api/admin/bookings", {
