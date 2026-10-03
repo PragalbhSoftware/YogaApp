@@ -11,6 +11,7 @@ internal static class ModelConfiguration
         ConfigureCategory(modelBuilder.Entity<Category>());
         ConfigureArea(modelBuilder.Entity<Area>());
         ConfigureUser(modelBuilder.Entity<User>());
+        ConfigureUserBlockEvent(modelBuilder.Entity<UserBlockEvent>());
         ConfigureProvider(modelBuilder.Entity<Provider>());
         ConfigureService(modelBuilder.Entity<Service>());
         ConfigureSlot(modelBuilder.Entity<AvailabilitySlot>());
@@ -49,7 +50,19 @@ internal static class ModelConfiguration
         entity.Property(u => u.HomeCity).HasMaxLength(60);
         entity.Property(u => u.HomePin).HasMaxLength(6);
         entity.Property(u => u.HomeLandmark).HasMaxLength(160);
+        entity.Property(u => u.IsBlocked).HasDefaultValue(false).IsConcurrencyToken();
+        entity.Property(u => u.BlockedReason).HasMaxLength(UserBlocking.ReasonMax);
         entity.HasIndex(u => u.Phone).IsUnique();
+    }
+
+    private static void ConfigureUserBlockEvent(EntityTypeBuilder<UserBlockEvent> entity)
+    {
+        entity.Property(e => e.Action).HasConversion<string>().HasMaxLength(16);
+        entity.Property(e => e.Reason).HasMaxLength(UserBlocking.ReasonMax);
+        entity.HasIndex(e => new { e.UserId, e.CreatedAt });
+
+        entity.HasOne<User>().WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Restrict);
+        entity.HasOne<User>().WithMany().HasForeignKey(e => e.AdminUserId).OnDelete(DeleteBehavior.Restrict);
     }
 
     private static void ConfigureProvider(EntityTypeBuilder<Provider> entity)

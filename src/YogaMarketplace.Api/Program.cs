@@ -7,6 +7,7 @@ using Microsoft.IdentityModel.Tokens;
 using YogaMarketplace.Api;
 using YogaMarketplace.Api.Middleware;
 using YogaMarketplace.Api.Options;
+using YogaMarketplace.Api.Security;
 using YogaMarketplace.Infrastructure;
 using YogaMarketplace.Infrastructure.Persistence;
 
@@ -75,6 +76,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             NameClaimType = System.Security.Claims.ClaimTypes.NameIdentifier,
             ClockSkew = TimeSpan.FromMinutes(1)
         };
+        options.Events = new JwtBearerEvents { OnTokenValidated = ActiveUserTokenValidator.ValidateAsync };
     });
 builder.Services.AddAuthorization();
 

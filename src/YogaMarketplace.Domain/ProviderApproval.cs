@@ -1,12 +1,25 @@
+using System.Linq.Expressions;
+
 namespace YogaMarketplace.Domain;
 
 /// <summary>
-/// Admin verify and reject. Public browse only lists <see cref="ProviderStatus.Verified"/>.
-/// Existing bookings are left as they are.
+/// Admin verify and reject. Public browse only lists <see cref="ProviderStatus.Verified"/> providers
+/// whose user is not blocked. Existing bookings are left as they are.
 /// </summary>
 public static class ProviderApproval
 {
     public const int MaxReasonLength = 300;
+
+    /// <summary>Listed on public browse and bookable. Needs <see cref="Provider.User"/> in the query.</summary>
+    public static readonly Expression<Func<Provider, bool>> IsListed =
+        p => p.Status == ProviderStatus.Verified && !p.User!.IsBlocked;
+
+    /// <summary>Same rule as <see cref="IsListed"/> for a loaded provider. <see cref="Provider.User"/> must be loaded.</summary>
+    public static bool IsListedNow(Provider provider)
+    {
+        var user = provider.User ?? throw new InvalidOperationException("Provider user was not loaded.");
+        return provider.Status == ProviderStatus.Verified && !user.IsBlocked;
+    }
 
     public static void Verify(Provider provider)
     {

@@ -82,12 +82,12 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
             throw new DomainException("Slot is required.");
 
         var slot = await _db.AvailabilitySlots
-            .Include(s => s.Provider)
+            .Include(s => s.Provider!).ThenInclude(p => p.User)
             .SingleOrDefaultAsync(s => s.Id == request.SlotId, cancellationToken)
             ?? throw new DomainException("That slot is no longer available.", 404);
 
         var provider = slot.Provider ?? throw new DomainException("Instructor not found.", 404);
-        if (provider.Status != ProviderStatus.Verified)
+        if (!ProviderApproval.IsListedNow(provider))
             throw new DomainException("Instructor not found.", 404);
         if (slot.IsBlocked || !provider.Offers(slot.Mode))
             throw new DomainException("That slot is no longer available.", 409);
@@ -496,12 +496,12 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
                 throw new DomainException("This order was already paid.", 409);
 
             var slot = await _db.AvailabilitySlots
-                .Include(s => s.Provider)
+                .Include(s => s.Provider!).ThenInclude(p => p.User)
                 .SingleOrDefaultAsync(s => s.Id == checkout.SlotId, cancellationToken)
                 ?? throw new DomainException("That slot is no longer available.", 409);
 
             var provider = slot.Provider ?? throw new DomainException("Instructor not found.", 404);
-            if (provider.Status != ProviderStatus.Verified || slot.IsBlocked || !provider.Offers(slot.Mode))
+            if (!ProviderApproval.IsListedNow(provider) || slot.IsBlocked || !provider.Offers(slot.Mode))
                 throw new DomainException("That slot is no longer available.", 409);
             if (MumbaiClock.SessionStart(slot.Date, slot.EndTime) <= DateTimeOffset.UtcNow)
                 throw new DomainException("That slot has already ended.", 409);
