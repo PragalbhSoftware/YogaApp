@@ -246,8 +246,7 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
         var (booking, currency) = await LoadForInstructorAsync(bookingId, cancellationToken);
         var payment = RequireRefundablePayment(booking);
         BookingRules.Decline(booking);
-        await RefundCapturedPaymentAsync(booking, payment, payment.Amount, cancellationToken);
-        await _db.SaveChangesAsync(cancellationToken);
+        await RefundAndSaveAsync(booking, payment, payment.Amount, cancellationToken);
         _logger.LogInformation(
             "Instructor {ProviderId} declined booking {BookingId} and refunded payment {PaymentId}.",
             booking.ProviderId,
@@ -288,7 +287,6 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
 
         BookingRules.Cancel(booking, start, now);
         booking.LateCancelFee = fee > 0 ? fee : null;
-        await RefundCapturedPaymentAsync(booking, payment, payment.Amount - fee, cancellationToken);
 
         PayoutPending? payout = null;
         if (fee > 0)
@@ -296,7 +294,7 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
             payout = PayoutCalculator.ForLateCancel(booking, fee, policy.PlatformFeePercent);
             _db.PayoutsPending.Add(payout);
         }
-        await _db.SaveChangesAsync(cancellationToken);
+        await RefundAndSaveAsync(booking, payment, payment.Amount - fee, cancellationToken);
 
         _logger.LogInformation(
             "Customer {CustomerId} cancelled booking {BookingId}. Refunded {Refund} on payment {PaymentId}; late fee {LateFee}, payout {PayoutId}.",
@@ -314,7 +312,7 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
         RescheduleBookingRequest request,
         CancellationToken cancellationToken)
     {
-        // RescheduleFreeWindowHours is a TBD default and does not block a move onto another open slot.
+        // RescheduleFreeWindowHours is a TBD default. The cancel window is what blocks a move, because it decides the fee.
         var customer = await RequireCustomerAsync(CustomerChangeForbidden, cancellationToken);
         if (request.SlotId == Guid.Empty)
             throw new DomainException("Slot is required.");
@@ -331,7 +329,12 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
                 .SingleOrDefaultAsync(s => s.Id == request.SlotId, cancellationToken)
                 ?? throw new DomainException("That slot is no longer available.", 404);
 
+            var originalStart = SessionStartOf(booking);
             BookingRules.Reschedule(booking, newSlot);
+            var freeWindowHours = await _db.Policies.AsNoTracking()
+                .Select(p => p.CancelFreeWindowHours)
+                .SingleAsync(cancellationToken);
+            BookingRules.EnsureOutsideLateWindow(originalStart, DateTimeOffset.UtcNow, freeWindowHours);
             if (MumbaiClock.SessionStart(newSlot.Date, newSlot.EndTime) <= DateTimeOffset.UtcNow)
                 throw new DomainException("That slot has already ended.", 409);
             if (await SlotIsTakenAsync(newSlot.Id, cancellationToken, booking.Id))
@@ -661,12 +664,12 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
         return payment;
     }
 
-    private Task RefundCapturedPaymentAsync(
+    private Task RefundAndSaveAsync(
         Booking booking,
         Payment payment,
         decimal amount,
         CancellationToken cancellationToken) =>
-        PaymentRefunds.RefundAsync(_razorpay, booking, payment, amount, cancellationToken);
+        PaymentRefunds.RefundAndSaveAsync(_db, _razorpay, _logger, booking, payment, amount, cancellationToken);
 
     private static DateTimeOffset SessionStartOf(Booking booking)
     {

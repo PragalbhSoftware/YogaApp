@@ -62,8 +62,7 @@ public class AdminBookingService : IAdminBookingService
             throw new DomainException("This booking has no captured payment to refund.", 409);
 
         BookingRules.AdminCancel(booking, request.Reason, DateTimeOffset.UtcNow);
-        await PaymentRefunds.RefundAsync(_razorpay, booking, payment, payment.Amount, cancellationToken);
-        await _db.SaveChangesAsync(cancellationToken);
+        await PaymentRefunds.RefundAndSaveAsync(_db, _razorpay, _logger, booking, payment, payment.Amount, cancellationToken);
 
         _logger.LogInformation(
             "Admin {AdminId} force-cancelled booking {BookingId} and refunded {Amount} on payment {PaymentId}.",

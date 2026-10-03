@@ -107,7 +107,7 @@ internal static class ModelConfiguration
     private static void ConfigureBooking(EntityTypeBuilder<Booking> entity)
     {
         entity.Property(b => b.Mode).HasConversion<string>().HasMaxLength(16);
-        entity.Property(b => b.Status).HasConversion<string>().HasMaxLength(32);
+        entity.Property(b => b.Status).HasConversion<string>().HasMaxLength(32).IsConcurrencyToken();
         entity.Property(b => b.Amount).HasPrecision(10, 2);
         entity.Property(b => b.HomeAddress).HasMaxLength(300);
         entity.Property(b => b.Landmark).HasMaxLength(160);
@@ -134,7 +134,7 @@ internal static class ModelConfiguration
     {
         entity.Property(p => p.Amount).HasPrecision(10, 2);
         entity.Property(p => p.RefundedAmount).HasPrecision(10, 2);
-        entity.Property(p => p.Status).HasConversion<string>().HasMaxLength(24);
+        entity.Property(p => p.Status).HasConversion<string>().HasMaxLength(24).IsConcurrencyToken();
         entity.Property(p => p.Gateway).HasMaxLength(40);
         entity.Property(p => p.GatewayOrderId).HasMaxLength(80);
         entity.Property(p => p.GatewayPaymentId).HasMaxLength(80);
@@ -195,6 +195,7 @@ internal static class ModelConfiguration
         entity.Property(p => p.FeePercent).HasPrecision(5, 2);
         entity.Property(p => p.Status).HasConversion<string>().HasMaxLength(16);
         entity.HasIndex(p => p.BookingId).IsUnique();
+        entity.HasIndex(p => p.ExportBatchId);
 
         entity.HasOne(p => p.Booking)
             .WithOne(b => b.Payout)

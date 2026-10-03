@@ -8,7 +8,8 @@ namespace YogaMarketplace.Domain;
 /// Cancelling an Upcoming booking inside the policy's free window keeps <see cref="LateCancelFeeFor"/>;
 /// the rest is refunded and the kept fee becomes an instructor payout. PendingAccept cancels are always free.
 /// Admin force-cancel allows PendingAccept or Upcoming at any time, needs a reason, and always refunds in full.
-/// Reschedule keeps one Upcoming booking on another slot with the same instructor and mode. It is never charged.
+/// Reschedule keeps one Upcoming booking on another slot with the same instructor and mode. It is never charged,
+/// so it is refused inside the late-cancel window; otherwise moving a late booking would reset the fee.
 /// </summary>
 public static class BookingRules
 {
@@ -166,6 +167,12 @@ public static class BookingRules
 
         booking.SlotId = newSlot.Id;
         booking.UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    public static void EnsureOutsideLateWindow(DateTimeOffset sessionStart, DateTimeOffset now, int freeWindowHours)
+    {
+        if (!IsFreeWindow(sessionStart, now, freeWindowHours))
+            throw new DomainException("This session is too close to move. You can still cancel it.", 409);
     }
 
     public static bool IsFreeWindow(DateTimeOffset sessionStart, DateTimeOffset now, int freeWindowHours) =>

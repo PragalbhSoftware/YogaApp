@@ -188,6 +188,7 @@ public class PayoutPending
     public decimal FeeAmount { get; set; }
     public decimal NetAmount { get; set; }
     public PayoutStatus Status { get; set; } = PayoutStatus.Pending;
+    public Guid? ExportBatchId { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
 }
 
