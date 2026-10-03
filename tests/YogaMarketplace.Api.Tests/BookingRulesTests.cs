@@ -11,11 +11,11 @@ public class BookingRulesTests
         var service = ServiceFor(slot);
 
         var missing = Assert.Throws<DomainException>(() =>
-            BookingRules.CreateAfterPayment(Guid.NewGuid(), service, slot, 899m, "Bandra West", null, null, null));
+            BookingRules.CreateAfterPayment(Guid.NewGuid(), service, slot, 899m, Terms, "Bandra West", null, null, null));
         Assert.Contains("landmark", missing.Message, StringComparison.OrdinalIgnoreCase);
 
         var booking = BookingRules.CreateAfterPayment(
-            Guid.NewGuid(), service, slot, 899m, "14th Road, Bandra West", "Near the station", null, null);
+            Guid.NewGuid(), service, slot, 899m, Terms, "14th Road, Bandra West", "Near the station", null, null);
 
         Assert.Equal(BookingStatus.PendingAccept, booking.Status);
         Assert.Equal("14th Road, Bandra West", booking.HomeAddress);
@@ -28,17 +28,17 @@ public class BookingRulesTests
     {
         var studioSlot = Slot(SessionMode.Studio);
         var studio = BookingRules.CreateAfterPayment(
-            Guid.NewGuid(), ServiceFor(studioSlot), studioSlot, 749m, null, null, null, "Lotus Studio, Bandra West");
+            Guid.NewGuid(), ServiceFor(studioSlot), studioSlot, 749m, Terms, null, null, null, "Lotus Studio, Bandra West");
         Assert.Null(studio.HomeAddress);
         Assert.Equal("Lotus Studio, Bandra West", studio.StudioAddressSnapshot);
 
         var onlineSlot = Slot(SessionMode.Online);
         var online = BookingRules.CreateAfterPayment(
-            Guid.NewGuid(), ServiceFor(onlineSlot), onlineSlot, 599m, null, null, "https://meet.google.com/abc-defg-hij", null);
+            Guid.NewGuid(), ServiceFor(onlineSlot), onlineSlot, 599m, Terms, null, null, "https://meet.google.com/abc-defg-hij", null);
         Assert.Equal("https://meet.google.com/abc-defg-hij", online.MeetLinkSnapshot);
 
         Assert.Throws<DomainException>(() =>
-            BookingRules.CreateAfterPayment(Guid.NewGuid(), ServiceFor(onlineSlot), onlineSlot, 599m, null, null, null, null));
+            BookingRules.CreateAfterPayment(Guid.NewGuid(), ServiceFor(onlineSlot), onlineSlot, 599m, Terms, null, null, null, null));
     }
 
     [Fact]
@@ -112,13 +112,13 @@ public class BookingRulesTests
     {
         var upcoming = Sample(BookingStatus.Upcoming);
         Assert.Throws<DomainException>(() => ReviewRules.Create(upcoming, upcoming.CustomerId, 5, "Great"));
-        Assert.Throws<DomainException>(() => PayoutCalculator.ForCompletedBooking(upcoming, 15m));
+        Assert.Throws<DomainException>(() => PayoutCalculator.ForCompletedBooking(upcoming));
 
         BookingRules.Complete(upcoming);
         var review = ReviewRules.Create(upcoming, upcoming.CustomerId, 5, "Calm and clear");
         Assert.Equal(5, review.Rating);
 
-        var payout = PayoutCalculator.ForCompletedBooking(upcoming, 15m);
+        var payout = PayoutCalculator.ForCompletedBooking(upcoming);
         Assert.Equal(899m, payout.GrossAmount);
         Assert.Equal(134.85m, payout.FeeAmount);
         Assert.Equal(764.15m, payout.NetAmount);
@@ -127,7 +127,7 @@ public class BookingRulesTests
         var missed = Sample(BookingStatus.Upcoming);
         BookingRules.MarkNoShow(missed);
         Assert.Throws<DomainException>(() => ReviewRules.Create(missed, missed.CustomerId, 5, "Late"));
-        var noShowPayout = PayoutCalculator.ForCompletedBooking(missed, 15m);
+        var noShowPayout = PayoutCalculator.ForCompletedBooking(missed);
         Assert.Equal(899m, noShowPayout.GrossAmount);
         Assert.Equal(764.15m, noShowPayout.NetAmount);
     }
@@ -160,17 +160,104 @@ public class BookingRulesTests
     }
 
     [Fact]
+    public void Booking_copies_the_terms_it_was_created_with()
+    {
+        var slot = Slot(SessionMode.Online);
+        var terms = new BookingTerms(18m, 29m, 24, LateCancelFeeType.Flat, 200m);
+        var booking = BookingRules.CreateAfterPayment(
+            Guid.NewGuid(), ServiceFor(slot), slot, 599m, terms, null, null, "https://meet.google.com/abc-defg-hij", null);
+
+        Assert.Equal(18m, booking.CommissionPercent);
+        Assert.Equal(29m, booking.ConvenienceFee);
+        Assert.Equal(24, booking.CancelFreeWindowHours);
+        Assert.Equal(LateCancelFeeType.Flat, booking.LateCancelFeeType);
+        Assert.Equal(200m, booking.LateCancelFeeValue);
+    }
+
+    [Fact]
     public void Late_cancel_fee_applies_only_to_upcoming_inside_the_window()
     {
         var start = new DateTimeOffset(2026, 9, 24, 1, 30, 0, TimeSpan.Zero);
         var upcoming = Sample(BookingStatus.Upcoming);
-        Assert.Equal(0m, BookingRules.LateCancelFeeFor(upcoming, start, start.AddHours(-12), 12, 50m));
-        Assert.Equal(449.50m, BookingRules.LateCancelFeeFor(upcoming, start, start.AddHours(-11), 12, 50m));
-        Assert.Equal(0m, BookingRules.LateCancelFeeFor(upcoming, start, start.AddHours(-1), 12, 0m));
+        Assert.Equal(0m, BookingRules.LateCancelFeeFor(upcoming, start, start.AddHours(-12)));
+        Assert.Equal(449.50m, BookingRules.LateCancelFeeFor(upcoming, start, start.AddHours(-12).AddTicks(1)));
+        Assert.Equal(449.50m, BookingRules.LateCancelFeeFor(upcoming, start, start.AddHours(-11)));
 
         var pending = Sample(BookingStatus.PendingAccept);
-        Assert.Equal(0m, BookingRules.LateCancelFeeFor(pending, start, start.AddHours(-1), 12, 50m));
-        Assert.Equal(start.AddHours(-12), BookingRules.FreeCancelUntil(start, 12));
+        Assert.Equal(0m, BookingRules.LateCancelFeeFor(pending, start, start.AddHours(-1)));
+        Assert.Equal(start.AddHours(-12), BookingRules.FreeCancelUntil(upcoming, start));
+    }
+
+    [Fact]
+    public void Zero_hour_window_never_charges_before_the_session_starts()
+    {
+        var start = new DateTimeOffset(2026, 9, 24, 1, 30, 0, TimeSpan.Zero);
+        var booking = Sample(BookingStatus.Upcoming, window: 0);
+        Assert.False(BookingRules.IsLateCancel(booking, start, start.AddTicks(-1)));
+        Assert.Equal(0m, BookingRules.LateCancelFeeFor(booking, start, start.AddTicks(-1)));
+        Assert.Equal(start, BookingRules.FreeCancelUntil(booking, start));
+    }
+
+    [Theory]
+    [InlineData(LateCancelFeeType.Percent, 0, 0, 30, 899)]
+    [InlineData(LateCancelFeeType.Percent, 100, 899, 30, 0)]
+    [InlineData(LateCancelFeeType.Percent, 50, 449.50, 30, 449.50)]
+    [InlineData(LateCancelFeeType.Flat, 200, 200, 30, 699)]
+    [InlineData(LateCancelFeeType.Flat, 5000, 899, 30, 0)]
+    public void Late_cancel_keeps_the_fee_and_the_convenience_fee_and_never_refunds_below_zero(
+        LateCancelFeeType type, decimal value, decimal expectedFee, decimal expectedConvenienceKept, decimal expectedRefund)
+    {
+        var start = new DateTimeOffset(2026, 9, 24, 1, 30, 0, TimeSpan.Zero);
+        var booking = Sample(BookingStatus.Upcoming, feeType: type, feeValue: value, convenienceFee: 30m);
+        var paid = booking.Amount + booking.ConvenienceFee;
+
+        var settlement = BookingRules.SettleCustomerCancel(booking, paid, start, start.AddHours(-1));
+
+        Assert.Equal(expectedFee, settlement.LateCancelFee);
+        Assert.Equal(expectedConvenienceKept, settlement.ConvenienceFeeKept);
+        Assert.Equal(expectedRefund, settlement.Refund);
+        Assert.True(settlement.Refund >= 0);
+        Assert.Equal(paid, settlement.LateCancelFee + settlement.ConvenienceFeeKept + settlement.Refund);
+    }
+
+    [Fact]
+    public void Free_cancel_refunds_everything_including_the_convenience_fee()
+    {
+        var start = new DateTimeOffset(2026, 9, 24, 1, 30, 0, TimeSpan.Zero);
+        var booking = Sample(BookingStatus.Upcoming, convenienceFee: 30m);
+
+        var early = BookingRules.SettleCustomerCancel(booking, 929m, start, start.AddHours(-13));
+        Assert.Equal(new CancelSettlement(0m, 0m, 929m), early);
+
+        var pending = Sample(BookingStatus.PendingAccept, convenienceFee: 30m);
+        Assert.Equal(new CancelSettlement(0m, 0m, 929m), BookingRules.SettleCustomerCancel(pending, 929m, start, start.AddHours(-1)));
+    }
+
+    [Fact]
+    public void Old_bookings_without_a_convenience_fee_refund_against_what_was_paid()
+    {
+        var start = new DateTimeOffset(2026, 9, 24, 1, 30, 0, TimeSpan.Zero);
+        var booking = Sample(BookingStatus.Upcoming, feeType: LateCancelFeeType.Percent, feeValue: 100m, convenienceFee: 30m);
+
+        var settlement = BookingRules.SettleCustomerCancel(booking, 899m, start, start.AddHours(-1));
+
+        Assert.Equal(899m, settlement.LateCancelFee);
+        Assert.Equal(0m, settlement.ConvenienceFeeKept);
+        Assert.Equal(0m, settlement.Refund);
+    }
+
+    [Fact]
+    public void Payout_uses_the_commission_on_the_booking()
+    {
+        var booking = Sample(BookingStatus.Upcoming);
+        booking.CommissionPercent = 0m;
+        BookingRules.Complete(booking);
+        Assert.Equal(899m, PayoutCalculator.ForCompletedBooking(booking).NetAmount);
+
+        var full = Sample(BookingStatus.Upcoming);
+        full.CommissionPercent = 100m;
+        BookingRules.Complete(full);
+        Assert.Equal(0m, PayoutCalculator.ForCompletedBooking(full).NetAmount);
     }
 
     [Fact]
@@ -178,14 +265,14 @@ public class BookingRulesTests
     {
         var start = new DateTimeOffset(2026, 9, 24, 1, 30, 0, TimeSpan.Zero);
         var booking = Sample(BookingStatus.Upcoming);
-        Assert.Throws<DomainException>(() => PayoutCalculator.ForLateCancel(booking, 449.50m, 15m));
+        Assert.Throws<DomainException>(() => PayoutCalculator.ForLateCancel(booking, 449.50m));
 
         BookingRules.Cancel(booking, start, start.AddHours(-1));
         Assert.Equal(CancelledBy.Customer, booking.CancelledBy);
-        Assert.Throws<DomainException>(() => PayoutCalculator.ForLateCancel(booking, 0m, 15m));
-        Assert.Throws<DomainException>(() => PayoutCalculator.ForLateCancel(booking, 900m, 15m));
+        Assert.Throws<DomainException>(() => PayoutCalculator.ForLateCancel(booking, 0m));
+        Assert.Throws<DomainException>(() => PayoutCalculator.ForLateCancel(booking, 900m));
 
-        var payout = PayoutCalculator.ForLateCancel(booking, 449.50m, 15m);
+        var payout = PayoutCalculator.ForLateCancel(booking, 449.50m);
         Assert.Equal(449.50m, payout.GrossAmount);
         Assert.Equal(67.43m, payout.FeeAmount);
         Assert.Equal(382.07m, payout.NetAmount);
@@ -237,7 +324,14 @@ public class BookingRulesTests
         Assert.False(string.IsNullOrWhiteSpace(error));
     }
 
-    private static Booking Sample(BookingStatus status) => new()
+    private static readonly BookingTerms Terms = new(15m, 0m, 12, LateCancelFeeType.Percent, 50m);
+
+    private static Booking Sample(
+        BookingStatus status,
+        int window = 12,
+        LateCancelFeeType feeType = LateCancelFeeType.Percent,
+        decimal feeValue = 50m,
+        decimal convenienceFee = 0m) => new()
     {
         Id = Guid.NewGuid(),
         CustomerId = Guid.NewGuid(),
@@ -247,6 +341,11 @@ public class BookingRulesTests
         Mode = SessionMode.Home,
         Status = status,
         Amount = 899m,
+        CommissionPercent = 15m,
+        ConvenienceFee = convenienceFee,
+        CancelFreeWindowHours = window,
+        LateCancelFeeType = feeType,
+        LateCancelFeeValue = feeValue,
         CreatedAt = DateTimeOffset.UtcNow,
         UpdatedAt = DateTimeOffset.UtcNow
     };

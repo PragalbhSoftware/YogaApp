@@ -83,6 +83,26 @@ public enum PayoutStatus
     Paid
 }
 
+public enum LateCancelFeeType
+{
+    Percent,
+    Flat
+}
+
+public enum PayoutCycle
+{
+    Weekly,
+    Biweekly
+}
+
+public enum BackgroundJobStatus
+{
+    Pending,
+    Running,
+    Succeeded,
+    Failed
+}
+
 public static class PaymentGateways
 {
     public const string Razorpay = "razorpay";

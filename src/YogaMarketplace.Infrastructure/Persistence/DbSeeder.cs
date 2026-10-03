@@ -40,16 +40,19 @@ public class DbSeeder
             });
         }
 
-        if (!await _db.Policies.AnyAsync(cancellationToken))
+        if (!await _db.Settings.AnyAsync(cancellationToken))
         {
-            _db.Policies.Add(new MarketplacePolicy
+            _db.Settings.Add(new PlatformSettings
             {
                 Id = SeedIds.PolicyId,
                 Currency = "INR",
-                PlatformFeePercent = 15m,
+                CommissionPercent = 15m,
+                ConvenienceFee = 0m,
                 CancelFreeWindowHours = 12,
                 RescheduleFreeWindowHours = 12,
-                LateCancelFeePercent = 50m,
+                LateCancelFeeType = LateCancelFeeType.Percent,
+                LateCancelFeeValue = 50m,
+                PayoutCycle = PayoutCycle.Weekly,
                 PolicyNote = "Platform fee, cancel window, and reschedule window are TBD defaults for the Mumbai launch. Confirm with ops before taking live payments."
             });
         }

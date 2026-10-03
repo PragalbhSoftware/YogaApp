@@ -12,10 +12,12 @@ public interface IAdminReportService
 public class AdminReportService : IAdminReportService
 {
     private readonly YogaDbContext _db;
+    private readonly IPlatformSettingsService _settings;
 
-    public AdminReportService(YogaDbContext db)
+    public AdminReportService(YogaDbContext db, IPlatformSettingsService settings)
     {
         _db = db;
+        _settings = settings;
     }
 
     public async Task<AdminReportResponse> SummaryAsync(CancellationToken cancellationToken)
@@ -41,7 +43,7 @@ public class AdminReportService : IAdminReportService
         var payoutCount = await pending.CountAsync(cancellationToken);
         var gross = await SumMoneyAsync(pending.Select(p => p.GrossAmount), cancellationToken);
         var net = await SumMoneyAsync(pending.Select(p => p.NetAmount), cancellationToken);
-        var currency = await _db.Policies.AsNoTracking().Select(p => p.Currency).SingleAsync(cancellationToken);
+        var currency = (await _settings.GetAsync(cancellationToken)).Currency;
 
         return new AdminReportResponse(byStatus, gmv, currency, new PendingPayoutTotals(payoutCount, gross, net));
     }

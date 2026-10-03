@@ -42,7 +42,9 @@ public class AdminApiTests : IClassFixture<YogaApiFactory>
             "/api/admin/payments",
             "/api/admin/payouts",
             "/api/admin/reports/summary",
-            "/api/admin/areas"
+            "/api/admin/areas",
+            "/api/admin/settings",
+            "/api/admin/settings/audit"
         })
         {
             var customerResponse = await customer.GetAsync(path);
@@ -52,8 +54,10 @@ public class AdminApiTests : IClassFixture<YogaApiFactory>
             Assert.Contains("Admin access required", (await customerResponse.Content.ReadFromJsonAsync<ErrorBody>(Json))!.Error, StringComparison.Ordinal);
         }
 
-        var policy = await customer.PatchAsJsonAsync("/api/admin/policy", new { platformFeePercent = 10 });
-        Assert.Equal(HttpStatusCode.Forbidden, policy.StatusCode);
+        var settings = await customer.PatchAsJsonAsync("/api/admin/settings", new { version = 1, commissionPercent = 10 });
+        Assert.Equal(HttpStatusCode.Forbidden, settings.StatusCode);
+        var instructorSettings = await instructor.Client.PatchAsJsonAsync("/api/admin/settings", new { version = 1, commissionPercent = 10 });
+        Assert.Equal(HttpStatusCode.Forbidden, instructorSettings.StatusCode);
 
         var summary = await admin.Client.GetFromJsonAsync<ReportBody>("/api/admin/reports/summary", Json);
         Assert.Equal("INR", summary!.Currency);
@@ -429,6 +433,16 @@ public class AdminApiTests : IClassFixture<YogaApiFactory>
 
         var duplicate = await admin.Client.PostAsJsonAsync("/api/admin/areas", new { name = " colaba ", city = "mumbai" });
         Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
+        var newCity = await admin.Client.PostAsJsonAsync("/api/admin/areas", new { name = "Kothrud", city = "Pune" });
+        Assert.Equal(HttpStatusCode.BadRequest, newCity.StatusCode);
+        Assert.Contains("existing cities", (await newCity.Content.ReadFromJsonAsync<ErrorBody>(Json))!.Error, StringComparison.Ordinal);
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<YogaDbContext>();
+            db.Areas.Add(CatalogRules.CreateArea("Pune", "Baner"));
+            await db.SaveChangesAsync();
+        }
+
         var otherCity = await PostAsync<AreaAdminBody>(admin.Client, "/api/admin/areas", new { name = "Kothrud", city = "  pune " });
         Assert.Equal("Pune", otherCity.City);
         var sameNameOtherCity = await PostAsync<AreaAdminBody>(admin.Client, "/api/admin/areas", new { name = "Colaba", city = "Pune" });
@@ -460,16 +474,18 @@ public class AdminApiTests : IClassFixture<YogaApiFactory>
             var browse = await _factory.CreateClient().GetFromJsonAsync<List<ProviderBody>>("/api/providers?category=yoga", Json);
             Assert.Contains(browse!, provider => provider.DisplayName == "Ananya Desai");
 
-            var policy = await PatchAsync<PolicyBody>(admin.Client, "/api/admin/policy", new
+            var policy = await AdminSettingsClient.PatchAsync(admin.Client, version => new
             {
-                platformFeePercent = 20,
+                version,
+                commissionPercent = 20,
                 cancelFreeWindowHours = 24
             });
-            Assert.Equal(20m, policy.PlatformFeePercent);
+            Assert.Equal(20m, policy.CommissionPercent);
             Assert.Equal(24, policy.CancelFreeWindowHours);
             Assert.Equal(12, policy.RescheduleFreeWindowHours);
             var publicPolicy = await _factory.CreateClient().GetFromJsonAsync<PolicyBody>("/api/policy", Json);
-            Assert.Equal(20m, publicPolicy!.PlatformFeePercent);
+            Assert.Equal(20m, publicPolicy!.CommissionPercent);
+            Assert.Equal(24, publicPolicy.CancelFreeWindowHours);
 
             using var scope = _factory.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<YogaDbContext>();
@@ -483,12 +499,7 @@ public class AdminApiTests : IClassFixture<YogaApiFactory>
                 admin.Client,
                 $"/api/admin/categories/{SeedIds.YogaCategoryId}",
                 new { name = "Yoga" });
-            await PatchAsync<PolicyBody>(admin.Client, "/api/admin/policy", new
-            {
-                platformFeePercent = 15,
-                cancelFreeWindowHours = 12,
-                policyNote = "Platform fee, cancel window, and reschedule window are TBD defaults for the Mumbai launch. Confirm with ops before taking live payments."
-            });
+            await AdminSettingsClient.ResetFeesAsync(admin.Client);
         }
     }
 
@@ -609,9 +620,10 @@ public class AdminApiTests : IClassFixture<YogaApiFactory>
     private sealed record CategoryAdminBody(Guid Id, string Name, string Slug, bool IsActive);
     private sealed record PolicyBody(
         string Currency,
-        decimal PlatformFeePercent,
+        decimal CommissionPercent,
+        decimal ConvenienceFee,
         int CancelFreeWindowHours,
         int RescheduleFreeWindowHours,
-        decimal LateCancelFeePercent,
-        string PolicyNote);
+        string LateCancelFeeType,
+        decimal LateCancelFeeValue);
 }

@@ -28,7 +28,7 @@ public class CancellationAndPayoutTests : IClassFixture<YogaApiFactory>
     public async Task Late_cancel_refunds_the_rest_and_pays_the_instructor_the_kept_fee()
     {
         var admin = await SignInAsync(SeedIds.AdminPhone);
-        await SetCancelWindowAsync(admin, 48);
+        await AdminSettingsClient.SetCancelWindowAsync(admin, 48);
         try
         {
             var customer = await SignUpAsync("Pooja Rane", "Female");
@@ -45,7 +45,9 @@ public class CancellationAndPayoutTests : IClassFixture<YogaApiFactory>
             var quote = await customer.GetFromJsonAsync<QuoteBody>($"/api/bookings/{booked.Id}/cancel-quote", Json);
             Assert.Equal(374.50m, quote!.LateCancelFee);
             Assert.Equal(374.50m, quote.Refund);
-            Assert.Equal(50m, quote.LateCancelFeePercent);
+            Assert.Equal("Percent", quote.LateCancelFeeType);
+            Assert.Equal(50m, quote.LateCancelFeeValue);
+            Assert.Equal(0m, quote.ConvenienceFeeKept);
             Assert.NotNull(quote.FreeUntil);
             Assert.True(quote.FreeUntil < DateTimeOffset.UtcNow);
 
@@ -71,7 +73,7 @@ public class CancellationAndPayoutTests : IClassFixture<YogaApiFactory>
         }
         finally
         {
-            await SetCancelWindowAsync(admin, 12);
+            await AdminSettingsClient.SetCancelWindowAsync(admin, 12);
         }
     }
 
@@ -79,7 +81,7 @@ public class CancellationAndPayoutTests : IClassFixture<YogaApiFactory>
     public async Task Admin_force_cancel_always_refunds_in_full_and_needs_a_reason()
     {
         var admin = await SignInAsync(SeedIds.AdminPhone);
-        await SetCancelWindowAsync(admin, 48);
+        await AdminSettingsClient.SetCancelWindowAsync(admin, 48);
         try
         {
             var customer = await SignUpAsync("Sana Qureshi", "Female");
@@ -123,7 +125,7 @@ public class CancellationAndPayoutTests : IClassFixture<YogaApiFactory>
         }
         finally
         {
-            await SetCancelWindowAsync(admin, 12);
+            await AdminSettingsClient.SetCancelWindowAsync(admin, 12);
         }
     }
 
@@ -147,6 +149,12 @@ public class CancellationAndPayoutTests : IClassFixture<YogaApiFactory>
         Assert.Contains(payoutId.ToString(), await preview.Content.ReadAsStringAsync());
         Assert.Equal(PayoutStatus.Pending, await PayoutStatusAsync(payoutId));
 
+        var notDue = await admin.PostAsync("/api/admin/payouts/export", null);
+        Assert.Equal(HttpStatusCode.Conflict, notDue.StatusCode);
+        Assert.Contains("No payouts are due yet", await notDue.Content.ReadAsStringAsync());
+        Assert.Equal(PayoutStatus.Pending, await PayoutStatusAsync(payoutId));
+
+        await BackdatePayoutAsync(payoutId);
         var export = await admin.PostAsync("/api/admin/payouts/export", null);
         Assert.Equal(HttpStatusCode.OK, export.StatusCode);
         Assert.Equal("text/csv", export.Content.Headers.ContentType?.MediaType);
@@ -234,7 +242,7 @@ public class CancellationAndPayoutTests : IClassFixture<YogaApiFactory>
     public async Task Reschedule_inside_the_late_window_is_refused_so_the_fee_still_applies()
     {
         var admin = await SignInAsync(SeedIds.AdminPhone);
-        await SetCancelWindowAsync(admin, 48);
+        await AdminSettingsClient.SetCancelWindowAsync(admin, 48);
         try
         {
             var customer = await SignUpAsync("Gauri Patil", "Female");
@@ -254,7 +262,7 @@ public class CancellationAndPayoutTests : IClassFixture<YogaApiFactory>
         }
         finally
         {
-            await SetCancelWindowAsync(admin, 12);
+            await AdminSettingsClient.SetCancelWindowAsync(admin, 12);
         }
     }
 
@@ -269,6 +277,7 @@ public class CancellationAndPayoutTests : IClassFixture<YogaApiFactory>
         await PostAsync<BookingBody>(instructor, $"/api/bookings/{booked.Id}/accept", new { });
         await PostAsync<BookingBody>(instructor, $"/api/bookings/{booked.Id}/complete", new { });
         var payoutId = await PayoutIdAsync(booked.Id);
+        await BackdatePayoutAsync(payoutId);
 
         var exports = await Task.WhenAll(
             admin.PostAsync("/api/admin/payouts/export", null),
@@ -297,14 +306,14 @@ public class CancellationAndPayoutTests : IClassFixture<YogaApiFactory>
     public async Task Browse_filters_instructors_by_city()
     {
         var admin = await SignInAsync(SeedIds.AdminPhone);
-        var pune = await PostAsync<AreaBody>(admin, "/api/admin/areas", new { name = "Baner", city = "Pune" });
+        var puneAreaId = await AddAreaAsync("Pune", "Baner");
 
         var client = await SignUpAsync("Rohan Kale", "Male");
         var registered = await PostAsync<RegisterBody>(client, "/api/providers/register", new
         {
             displayName = "Rohan Kale",
             age = 30,
-            areaId = pune.Id,
+            areaId = puneAreaId,
             offersOnline = true,
             onlineRate = 500m,
             googleMeetLink = "https://meet.google.com/abc-defg-hij"
@@ -324,10 +333,24 @@ public class CancellationAndPayoutTests : IClassFixture<YogaApiFactory>
         Assert.DoesNotContain(inMumbai!, p => p.Id == me.Id);
     }
 
-    private async Task SetCancelWindowAsync(HttpClient admin, int hours)
+    /// <summary>Moves a payout into a closed payout cycle so the export picks it up.</summary>
+    private async Task BackdatePayoutAsync(Guid payoutId)
     {
-        var response = await admin.PatchAsJsonAsync("/api/admin/policy", new { cancelFreeWindowHours = hours });
-        Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<YogaDbContext>();
+        var payout = await db.PayoutsPending.SingleAsync(p => p.Id == payoutId);
+        payout.CreatedAt = DateTimeOffset.UtcNow.AddDays(-15);
+        await db.SaveChangesAsync();
+    }
+
+    private async Task<Guid> AddAreaAsync(string city, string name)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<YogaDbContext>();
+        var area = CatalogRules.CreateArea(city, name);
+        db.Areas.Add(area);
+        await db.SaveChangesAsync();
+        return area.Id;
     }
 
     private static Task<Guid> TomorrowSlotAsync(HttpClient instructor, string mode, string start) =>
@@ -449,7 +472,17 @@ public class CancellationAndPayoutTests : IClassFixture<YogaApiFactory>
     private sealed record AreaBody(Guid Id, string City, string Name);
     private sealed record SlotBody(Guid Id);
     private sealed record CheckoutBody(string OrderId);
-    private sealed record QuoteBody(decimal Amount, decimal LateCancelFee, decimal Refund, string Currency, decimal LateCancelFeePercent, DateTimeOffset? FreeUntil);
+    private sealed record QuoteBody(
+        decimal Amount,
+        decimal SessionAmount,
+        decimal ConvenienceFee,
+        decimal LateCancelFee,
+        decimal ConvenienceFeeKept,
+        decimal Refund,
+        string Currency,
+        string LateCancelFeeType,
+        decimal LateCancelFeeValue,
+        DateTimeOffset? FreeUntil);
     private sealed record BookingBody(
         Guid Id,
         string Status,

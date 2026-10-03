@@ -82,6 +82,8 @@ public record AdminBookingResponse(
     string Mode,
     string Status,
     decimal Amount,
+    decimal ConvenienceFee,
+    decimal CommissionPercent,
     string Currency,
     DateOnly Date,
     string Start,
@@ -160,14 +162,48 @@ public class PatchCategoryRequest
     public string? Name { get; set; }
 }
 
-public class PatchPolicyRequest
+/// <summary>Omitted fields stay as they are. <see cref="Version"/> must match the row the admin edited.</summary>
+public class UpdateSettingsRequest
 {
-    public decimal? PlatformFeePercent { get; set; }
+    public int? Version { get; set; }
+    public decimal? CommissionPercent { get; set; }
+    public decimal? ConvenienceFee { get; set; }
     public int? CancelFreeWindowHours { get; set; }
     public int? RescheduleFreeWindowHours { get; set; }
-    public decimal? LateCancelFeePercent { get; set; }
+    public string? LateCancelFeeType { get; set; }
+    public decimal? LateCancelFeeValue { get; set; }
+    public string? PayoutCycle { get; set; }
     public string? PolicyNote { get; set; }
+    public string? BannerTitle { get; set; }
+    public string? BannerSubtitle { get; set; }
+    public string? BannerOffer { get; set; }
 }
+
+public record AdminSettingsResponse(
+    int Version,
+    string Currency,
+    decimal CommissionPercent,
+    decimal ConvenienceFee,
+    int CancelFreeWindowHours,
+    int RescheduleFreeWindowHours,
+    string LateCancelFeeType,
+    decimal LateCancelFeeValue,
+    string PayoutCycle,
+    DateTimeOffset PayoutPeriodStart,
+    string PolicyNote,
+    string? BannerTitle,
+    string? BannerSubtitle,
+    string? BannerOffer,
+    DateTimeOffset? UpdatedAt);
+
+public record SettingsAuditResponse(
+    Guid Id,
+    DateTimeOffset ChangedAt,
+    Guid AdminUserId,
+    string? AdminName,
+    string Field,
+    string? OldValue,
+    string? NewValue);
 
 public record BookingStatusCount(string Status, int Count);
 

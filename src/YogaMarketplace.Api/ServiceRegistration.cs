@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Policy;
+using YogaMarketplace.Api.Jobs;
 using YogaMarketplace.Api.Options;
 using YogaMarketplace.Api.Security;
 using YogaMarketplace.Api.Services;
@@ -20,6 +21,12 @@ public static class ServiceRegistration
         services.Configure<RefreshTokenOptions>(configuration.GetSection(RefreshTokenOptions.Section));
         services.AddScoped<RefreshTokenService>();
         services.AddSingleton<RefreshCookie>();
+        services.Configure<JobsOptions>(configuration.GetSection(JobsOptions.Section));
+        services.AddScoped<BackgroundJobQueue>();
+        services.AddScoped<BackgroundJobRunner>();
+        services.AddHostedService<BackgroundJobHostedService>();
+        services.AddMemoryCache();
+        services.AddScoped<IPlatformSettingsService, PlatformSettingsService>();
         services.AddScoped<ProviderService>();
         services.AddScoped<CatalogService>();
         services.AddScoped<BookingService>();

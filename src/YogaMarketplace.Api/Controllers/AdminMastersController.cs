@@ -53,18 +53,4 @@ public class AdminMastersController : AdminControllerBase
             return BadRequest(new { error = "Invalid request." });
         return Ok(await _masters.UpdateCategoryAsync(id, request, cancellationToken));
     }
-
-    [HttpGet("policy")]
-    public async Task<ActionResult<PolicyResponse>> Policy(CancellationToken cancellationToken) =>
-        Ok(await _masters.GetPolicyAsync(cancellationToken));
-
-    [HttpPatch("policy")]
-    public async Task<ActionResult<PolicyResponse>> UpdatePolicy(
-        [FromBody] PatchPolicyRequest? request,
-        CancellationToken cancellationToken)
-    {
-        if (request is null)
-            return BadRequest(new { error = "Invalid request." });
-        return Ok(await _masters.UpdatePolicyAsync(request, cancellationToken));
-    }
 }

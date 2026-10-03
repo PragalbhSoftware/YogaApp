@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using YogaMarketplace.Domain;
 
 namespace YogaMarketplace.Infrastructure.Persistence;
@@ -21,7 +22,9 @@ internal static class ModelConfiguration
         ConfigurePayment(modelBuilder.Entity<Payment>(), sqlite);
         ConfigureReview(modelBuilder.Entity<Review>());
         ConfigurePayout(modelBuilder.Entity<PayoutPending>());
-        ConfigurePolicy(modelBuilder.Entity<MarketplacePolicy>());
+        ConfigureSettings(modelBuilder.Entity<PlatformSettings>());
+        ConfigureSettingsAudit(modelBuilder.Entity<SettingsAudit>());
+        ConfigureBackgroundJob(modelBuilder.Entity<BackgroundJob>(), sqlite);
         ConfigureOtp(modelBuilder.Entity<OtpChallenge>());
     }
 
@@ -141,6 +144,11 @@ internal static class ModelConfiguration
         entity.Property(b => b.CancelledBy).HasConversion<string>().HasMaxLength(16);
         entity.Property(b => b.CancelReason).HasMaxLength(BookingRules.CancelReasonMax);
         entity.Property(b => b.LateCancelFee).HasPrecision(10, 2);
+        entity.Property(b => b.CommissionPercent).HasPrecision(5, 2).HasDefaultValue(0m);
+        entity.Property(b => b.ConvenienceFee).HasPrecision(10, 2).HasDefaultValue(0m);
+        entity.Property(b => b.CancelFreeWindowHours).HasDefaultValue(0);
+        entity.Property(b => b.LateCancelFeeType).HasConversion<string>().HasMaxLength(16).HasDefaultValue(LateCancelFeeType.Percent);
+        entity.Property(b => b.LateCancelFeeValue).HasPrecision(10, 2).HasDefaultValue(0m);
         entity.HasIndex(b => new { b.ProviderId, b.Status });
         entity.HasIndex(b => b.CustomerId);
         entity.HasIndex(b => new { b.CustomerId, b.Status });
@@ -181,6 +189,7 @@ internal static class ModelConfiguration
         entity.Property(c => c.Mode).HasConversion<string>().HasMaxLength(16);
         entity.Property(c => c.Status).HasConversion<string>().HasMaxLength(16);
         entity.Property(c => c.Amount).HasPrecision(10, 2);
+        entity.Property(c => c.ConvenienceFee).HasPrecision(10, 2).HasDefaultValue(0m);
         entity.Property(c => c.Currency).HasMaxLength(8);
         entity.Property(c => c.HomeAddress).HasMaxLength(300);
         entity.Property(c => c.Landmark).HasMaxLength(160);
@@ -230,12 +239,45 @@ internal static class ModelConfiguration
         entity.HasOne<Provider>().WithMany().HasForeignKey(p => p.ProviderId).OnDelete(DeleteBehavior.Restrict);
     }
 
-    private static void ConfigurePolicy(EntityTypeBuilder<MarketplacePolicy> entity)
+    private static void ConfigureSettings(EntityTypeBuilder<PlatformSettings> entity)
     {
-        entity.Property(p => p.Currency).HasMaxLength(8);
-        entity.Property(p => p.PolicyNote).HasMaxLength(400);
-        entity.Property(p => p.PlatformFeePercent).HasPrecision(5, 2);
-        entity.Property(p => p.LateCancelFeePercent).HasPrecision(5, 2);
+        entity.ToTable("PlatformSettings");
+        entity.Property(s => s.Currency).HasMaxLength(8);
+        entity.Property(s => s.PolicyNote).HasMaxLength(PlatformSettingsRules.PolicyNoteMax);
+        entity.Property(s => s.CommissionPercent).HasPrecision(5, 2);
+        entity.Property(s => s.ConvenienceFee).HasPrecision(10, 2).HasDefaultValue(0m);
+        entity.Property(s => s.LateCancelFeeType).HasConversion<string>().HasMaxLength(16).HasDefaultValue(LateCancelFeeType.Percent);
+        entity.Property(s => s.LateCancelFeeValue).HasPrecision(10, 2);
+        entity.Property(s => s.PayoutCycle).HasConversion<string>().HasMaxLength(16).HasDefaultValue(PayoutCycle.Weekly);
+        entity.Property(s => s.BannerTitle).HasMaxLength(PlatformSettingsRules.BannerTitleMax);
+        entity.Property(s => s.BannerSubtitle).HasMaxLength(PlatformSettingsRules.BannerSubtitleMax);
+        entity.Property(s => s.BannerOffer).HasMaxLength(PlatformSettingsRules.BannerOfferMax);
+        entity.Property(s => s.Version).HasDefaultValue(1).IsConcurrencyToken();
+    }
+
+    private static void ConfigureSettingsAudit(EntityTypeBuilder<SettingsAudit> entity)
+    {
+        entity.Property(a => a.Field).HasMaxLength(40);
+        entity.Property(a => a.OldValue).HasMaxLength(PlatformSettingsRules.PolicyNoteMax);
+        entity.Property(a => a.NewValue).HasMaxLength(PlatformSettingsRules.PolicyNoteMax);
+        entity.HasIndex(a => a.ChangedAt);
+        entity.HasOne<User>().WithMany().HasForeignKey(a => a.AdminUserId).OnDelete(DeleteBehavior.Restrict);
+    }
+
+    private static void ConfigureBackgroundJob(EntityTypeBuilder<BackgroundJob> entity, bool sqlite)
+    {
+        entity.Property(j => j.Type).HasMaxLength(80);
+        entity.Property(j => j.Payload).HasMaxLength(4000);
+        entity.Property(j => j.Status).HasConversion<string>().HasMaxLength(16);
+        entity.Property(j => j.LastError).HasMaxLength(1000);
+        entity.Property(j => j.LockedBy).HasMaxLength(80);
+        entity.HasIndex(j => new { j.Status, j.RunAt });
+        if (sqlite)
+        {
+            // SQLite cannot compare DateTimeOffset text; the runner filters on these in SQL.
+            entity.Property(j => j.RunAt).HasConversion<DateTimeOffsetToBinaryConverter>();
+            entity.Property(j => j.LockedUntil).HasConversion<DateTimeOffsetToBinaryConverter>();
+        }
     }
 
     private static void ConfigureOtp(EntityTypeBuilder<OtpChallenge> entity)
