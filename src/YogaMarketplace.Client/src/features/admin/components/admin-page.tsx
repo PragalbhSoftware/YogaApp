@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { usePageTitle } from "@/hooks/use-page-title";
 
 type AdminPageProps = {
   kicker: string;
@@ -9,6 +10,7 @@ type AdminPageProps = {
 };
 
 export function AdminPage({ kicker, title, lead, note, children }: AdminPageProps) {
+  usePageTitle(`${title} · Admin`);
   return (
     <main className="mx-auto max-w-6xl space-y-6 px-4 py-8 sm:px-8">
       <header className="space-y-1">

@@ -7,6 +7,7 @@ import { HomeHero } from "@/features/marketplace/components/home-hero";
 import { InstructorList } from "@/features/marketplace/components/instructor-list";
 import { ModeFilter } from "@/features/marketplace/components/mode-filter";
 import { useInstructors } from "@/features/marketplace/hooks/use-instructors";
+import { usePageTitle } from "@/hooks/use-page-title";
 import { useAreaStore } from "@/stores/area-store";
 
 function readMode(value: string | null): SessionModeFilter {
@@ -34,6 +35,7 @@ export function HomePage() {
   const mode = readMode(searchParams.get("mode"));
   const pickingArea = Boolean(hydrated && (!city || !areaName || changingArea));
   const instructors = useInstructors(pickingArea ? null : city, pickingArea ? null : areaName, mode);
+  usePageTitle(city && !pickingArea ? `Instructors in ${city}` : null);
 
   if (!hydrated) return <PageLoader />;
 

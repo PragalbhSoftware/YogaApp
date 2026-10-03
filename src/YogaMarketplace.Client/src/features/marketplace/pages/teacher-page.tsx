@@ -9,6 +9,7 @@ import { InstructorAbout } from "@/features/marketplace/components/instructor-ab
 import { ModeRateList } from "@/features/marketplace/components/mode-rate-list";
 import { ReviewList } from "@/features/marketplace/components/review-list";
 import { useInstructor, useInstructorReviews } from "@/features/marketplace/hooks/use-instructors";
+import { usePageTitle } from "@/hooks/use-page-title";
 import { toUserMessage } from "@/services/http/api-error";
 import { initials } from "@/utils/initials";
 
@@ -16,6 +17,7 @@ export function TeacherPage() {
   const { id } = useParams();
   const instructor = useInstructor(id);
   const reviews = useInstructorReviews(id);
+  usePageTitle(instructor.data?.displayName ?? "Instructor");
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-6 sm:px-8">

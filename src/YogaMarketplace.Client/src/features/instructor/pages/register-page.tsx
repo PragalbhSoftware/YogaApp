@@ -1,5 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { usePageTitle } from "@/hooks/use-page-title";
 import { EmptyState } from "@/components/common/empty-state";
 import { ErrorState } from "@/components/common/error-state";
 import { PageLoader } from "@/components/common/page-loader";
@@ -13,6 +14,7 @@ import { toUserMessage } from "@/services/http/api-error";
 import { useAreaStore } from "@/stores/area-store";
 
 export function InstructorRegisterPage() {
+  usePageTitle("Teach with us");
   const navigate = useNavigate();
   const { user } = useAuth();
   const areas = useAreas();

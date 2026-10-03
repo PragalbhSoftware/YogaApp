@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { Button } from "@mui/material";
 import { ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
+import { usePageTitle } from "@/hooks/use-page-title";
 import { sessionModes, type SessionMode } from "@/constants/catalog";
 import { routes, teacherPath } from "@/constants/routes";
 import { EmptyState } from "@/components/common/empty-state";
@@ -36,6 +37,7 @@ function readMode(value: string | null, allowed: SessionMode[]): SessionMode {
 }
 
 export function BookPage() {
+  usePageTitle("Book a session");
   const navigate = useNavigate();
   const { providerId, slotId } = useParams();
   const [searchParams] = useSearchParams();

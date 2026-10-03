@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { Button, Dialog, DialogActions, DialogContent, DialogTitle, Typography } from "@mui/material";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
+import { usePageTitle } from "@/hooks/use-page-title";
 import { sessionModes, type SessionMode } from "@/constants/catalog";
 import { EmptyState } from "@/components/common/empty-state";
 import { ErrorState } from "@/components/common/error-state";
@@ -47,6 +48,7 @@ function readMode(value: string | null, allowed: SessionMode[]): SessionMode {
 }
 
 export function SchedulePage() {
+  usePageTitle("Schedule");
   const profile = useInstructorProfile();
   const allowed = profile.data ? offeredModes(profile.data) : [...sessionModes];
   const [searchParams, setSearchParams] = useSearchParams();
