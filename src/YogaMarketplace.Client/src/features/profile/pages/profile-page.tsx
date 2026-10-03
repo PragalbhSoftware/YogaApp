@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Button } from "@mui/material";
 import { toast } from "sonner";
 import { usePageTitle } from "@/hooks/use-page-title";
 import { ErrorState } from "@/components/common/error-state";
 import { AddressCardSkeleton } from "@/components/common/loading-skeleton";
 import { useAuth } from "@/features/auth/hooks/use-auth";
+import { useSignOut } from "@/features/auth/hooks/use-sign-out";
 import { HomeVisitForm } from "@/features/bookings/components/home-visit-form";
 import { toHomeVisitFormValues, type HomeVisitFormValues } from "@/features/bookings/schemas";
 import { VisitAddressCard } from "@/features/profile/components/visit-address-card";
@@ -17,8 +18,8 @@ import { toUserMessage } from "@/services/http/api-error";
 
 export function ProfilePage() {
   usePageTitle("Profile");
-  const { user, signOut } = useAuth();
-  const navigate = useNavigate();
+  const { user } = useAuth();
+  const signOut = useSignOut();
   const profile = useCustomerProfile();
   const saveAddress = useSaveVisitAddress();
   const saveAccount = useUpdateCustomerAccount();
@@ -42,10 +43,7 @@ export function ProfilePage() {
         name={user?.name}
         phone={user?.phone}
         role={user?.role}
-        onSignOut={() => {
-          signOut();
-          navigate(routes.login, { replace: true });
-        }}
+        onSignOut={signOut}
       />
 
       {profile.isSuccess ? (

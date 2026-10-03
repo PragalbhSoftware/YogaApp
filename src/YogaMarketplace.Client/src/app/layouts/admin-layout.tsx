@@ -1,10 +1,11 @@
 import { Suspense } from "react";
-import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { Button } from "@mui/material";
 import { BookOpen, LayoutDashboard, Receipt, Settings, ShieldCheck, Users } from "lucide-react";
 import { PageLoader } from "@/components/common/page-loader";
 import { routes } from "@/constants/routes";
 import { useAuth } from "@/features/auth/hooks/use-auth";
+import { useSignOut } from "@/features/auth/hooks/use-sign-out";
 import { displayName } from "@/features/admin/utils";
 import { cn } from "@/utils/cn";
 
@@ -24,14 +25,9 @@ function isNavActive(pathname: string, to: string, end: boolean) {
 
 export function AdminLayout() {
   const { pathname } = useLocation();
-  const { user, signOut } = useAuth();
-  const navigate = useNavigate();
+  const { user } = useAuth();
+  const onSignOut = useSignOut();
   const ownerName = displayName(user?.name, user?.phone ?? "");
-
-  function onSignOut() {
-    signOut();
-    navigate(routes.login, { replace: true });
-  }
 
   return (
     <div className="min-h-svh bg-brand-background lg:flex">

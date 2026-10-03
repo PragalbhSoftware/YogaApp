@@ -24,4 +24,8 @@ export const authApi = {
   me() {
     return http.get<User>("/api/auth/me").then((res) => res.data);
   },
+
+  logout() {
+    return http.post<void>("/api/auth/logout", undefined, { skipAuthRefresh: true }).then(() => undefined);
+  },
 };

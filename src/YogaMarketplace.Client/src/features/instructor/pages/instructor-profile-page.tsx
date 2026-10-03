@@ -1,4 +1,3 @@
-import { useNavigate } from "react-router-dom";
 import { Button, Card, CardContent, Chip, Typography } from "@mui/material";
 import { toast } from "sonner";
 import { usePageTitle } from "@/hooks/use-page-title";
@@ -6,6 +5,7 @@ import { PhoneText } from "@/components/common/phone-text";
 import { ErrorState } from "@/components/common/error-state";
 import { PageLoader } from "@/components/common/page-loader";
 import { useAuth } from "@/features/auth/hooks/use-auth";
+import { useSignOut } from "@/features/auth/hooks/use-sign-out";
 import { RegisterForm } from "@/features/instructor/components/register-form";
 import {
   useInstructorProfile,
@@ -13,16 +13,15 @@ import {
 } from "@/features/instructor/hooks/use-instructor-schedule";
 import { profileFormFromInstructor } from "@/features/instructor/schemas";
 import { useAreas } from "@/features/marketplace/hooks/use-areas";
-import { routes } from "@/constants/routes";
 import { toUserMessage } from "@/services/http/api-error";
 
 export function InstructorProfilePage() {
   usePageTitle("Instructor profile");
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
+  const signOut = useSignOut();
   const profile = useInstructorProfile();
   const areas = useAreas();
   const updateProfile = useUpdateInstructorProfile();
-  const navigate = useNavigate();
 
   return (
     <main className="mx-auto max-w-lg space-y-6 px-4 py-8 sm:px-8">
@@ -46,10 +45,7 @@ export function InstructorProfilePage() {
             <Button
               variant="outlined"
               fullWidth
-              onClick={() => {
-                signOut();
-                navigate(routes.login, { replace: true });
-              }}
+              onClick={signOut}
             >
               Sign out
             </Button>
