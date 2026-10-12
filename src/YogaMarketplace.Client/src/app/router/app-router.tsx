@@ -5,7 +5,7 @@ import { AdminLayout } from "@/app/layouts/admin-layout";
 import { AuthLayout } from "@/app/layouts/auth-layout";
 import { CustomerLayout } from "@/app/layouts/customer-layout";
 import { InstructorLayout } from "@/app/layouts/instructor-layout";
-import { RedirectIfSignedIn, RequireAuth, RequireRole } from "@/app/router/guards";
+import { AllowGuestOr, RedirectIfSignedIn, RequireAuth, RequireRole } from "@/app/router/guards";
 import { routes } from "@/constants/routes";
 
 const LoginPage = lazy(() =>
@@ -104,17 +104,21 @@ export function AppRouter() {
               <Route path={routes.login} element={<LoginPage />} />
             </Route>
           </Route>
-          <Route element={<RequireAuth />}>
-            <Route element={<RequireRole roles={["Customer"]} />}>
-              <Route element={<CustomerLayout />}>
-                <Route path={routes.home} element={<HomePage />} />
-                <Route path={routes.teacher} element={<TeacherPage />} />
-                <Route path={routes.book} element={<BookPage />} />
-                <Route path={routes.bookings} element={<BookingsPage />} />
-                <Route path={routes.profile} element={<ProfilePage />} />
-                <Route path={routes.instructorRegister} element={<InstructorRegisterPage />} />
+          <Route element={<AllowGuestOr roles={["Customer"]} />}>
+            <Route element={<CustomerLayout />}>
+              <Route path={routes.home} element={<HomePage />} />
+              <Route path={routes.teacher} element={<TeacherPage />} />
+              <Route element={<RequireAuth />}>
+                <Route element={<RequireRole roles={["Customer"]} />}>
+                  <Route path={routes.book} element={<BookPage />} />
+                  <Route path={routes.bookings} element={<BookingsPage />} />
+                  <Route path={routes.profile} element={<ProfilePage />} />
+                  <Route path={routes.instructorRegister} element={<InstructorRegisterPage />} />
+                </Route>
               </Route>
             </Route>
+          </Route>
+          <Route element={<RequireAuth />}>
             <Route element={<RequireRole roles={["Provider"]} />}>
               <Route element={<InstructorLayout />}>
                 <Route path={routes.instructor} element={<SchedulePage />} />

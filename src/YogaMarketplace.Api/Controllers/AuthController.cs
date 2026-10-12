@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using YogaMarketplace.Api.Security;
 using YogaMarketplace.Api.Services;
@@ -35,6 +36,7 @@ public class AuthController : ControllerBase
         _refreshCookie = refreshCookie;
     }
 
+    [EnableRateLimiting(RateLimitPolicies.Otp)]
     [HttpPost("otp/request")]
     public async Task<ActionResult<OtpResponse>> RequestOtp([FromBody] RequestOtpRequest? request, CancellationToken cancellationToken)
     {
@@ -44,6 +46,7 @@ public class AuthController : ControllerBase
         return Ok(new OtpResponse(result.ChallengeId, result.ExpiresAt, result.DevCode));
     }
 
+    [EnableRateLimiting(RateLimitPolicies.Otp)]
     [HttpPost("otp/resend")]
     public async Task<ActionResult<OtpResponse>> Resend([FromBody] ResendOtpRequest? request, CancellationToken cancellationToken)
     {
@@ -51,6 +54,7 @@ public class AuthController : ControllerBase
         return Ok(new OtpResponse(result.ChallengeId, result.ExpiresAt, result.DevCode));
     }
 
+    [EnableRateLimiting(RateLimitPolicies.Otp)]
     [HttpPost("otp/verify")]
     public async Task<ActionResult<VerifyResponse>> Verify([FromBody] VerifyOtpRequest? request, CancellationToken cancellationToken)
     {

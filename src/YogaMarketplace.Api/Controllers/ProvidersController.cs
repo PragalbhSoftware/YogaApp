@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using YogaMarketplace.Api.Security;
 using YogaMarketplace.Api.Services;
 
 namespace YogaMarketplace.Api.Controllers;
@@ -15,6 +17,7 @@ public class ProvidersController : ControllerBase
         _providers = providers;
     }
 
+    [EnableRateLimiting(RateLimitPolicies.Browse)]
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<ProviderSummary>>> Browse(
         [FromQuery] string? city,
@@ -121,16 +124,19 @@ public class ProvidersController : ControllerBase
         return NoContent();
     }
 
+    [EnableRateLimiting(RateLimitPolicies.Browse)]
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<ProviderDetail>> Get(Guid id, CancellationToken cancellationToken) =>
         Ok(await _providers.GetPublicAsync(id, cancellationToken));
 
+    [EnableRateLimiting(RateLimitPolicies.Browse)]
     [HttpGet("{id:guid}/reviews")]
     public async Task<ActionResult<IReadOnlyList<PublicReviewResponse>>> Reviews(
         Guid id,
         CancellationToken cancellationToken) =>
         Ok(await _providers.ListPublicReviewsAsync(id, cancellationToken));
 
+    [EnableRateLimiting(RateLimitPolicies.Browse)]
     [HttpGet("{id:guid}/slots")]
     public async Task<ActionResult<SlotListResponse>> Slots(
         Guid id,

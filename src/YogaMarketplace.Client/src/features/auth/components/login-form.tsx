@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { AccountStep } from "@/features/auth/components/account-step";
@@ -10,10 +10,11 @@ import { useRequestOtp, useResendOtp, useVerifyOtp } from "@/features/auth/hooks
 import { accountSchema, type AccountFormValues } from "@/features/auth/schemas";
 import type { OtpResponse } from "@/features/auth/types";
 import { toUserMessage } from "@/services/http/api-error";
-import { afterSignInPath } from "@/constants/routes";
+import { readSignInFrom, signInReturnPath } from "@/constants/routes";
 
 export function LoginForm() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { signIn } = useAuth();
   const [step, setStep] = useState<"account" | "otp">("account");
   const [otp, setOtp] = useState<OtpResponse | null>(null);
@@ -71,7 +72,7 @@ export function LoginForm() {
         onSuccess: (data) => {
           signIn(data.token, data.user);
           toast.success("Signed in.");
-          navigate(afterSignInPath(data.user.role), { replace: true });
+          navigate(signInReturnPath(data.user.role, readSignInFrom(location.state)), { replace: true });
         },
         onError: (err) => setError(toUserMessage(err)),
       },

@@ -52,6 +52,8 @@ builder.Services.AddSwaggerGen(options =>
 
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddAppServices(builder.Configuration);
+builder.Services.AddApiRateLimiting(builder.Configuration);
+builder.Services.AddTrustedProxies(builder.Configuration);
 var allowedOrigins = CorsSettings.AllowedOriginsFrom(builder.Configuration, builder.Environment.IsProduction());
 builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
     policy.WithOrigins(allowedOrigins)
@@ -90,11 +92,13 @@ if (builder.Environment.IsProduction() && razorpay.UseFakeGateway)
 
 var app = builder.Build();
 
+app.UseForwardedHeaders();
 app.UseMiddleware<DomainExceptionMiddleware>();
 app.UseSwagger();
 app.UseSwaggerUI();
 
 app.UseCors();
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
