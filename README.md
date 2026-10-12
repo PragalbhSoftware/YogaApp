@@ -279,14 +279,15 @@ Sessions: the access JWT is short-lived. On a `401` the client calls `/api/auth/
 | --- | --- | --- |
 | GET | `/providers?status=`, `/providers/{id}` | Approval queue and review record |
 | POST | `/providers/{id}/verify`, `/reject` | Verify, or reject with an optional reason (max 300) |
-| GET | `/users?q=&role=`, `/users/{id}` | Directory and detail, including block status and history |
+| POST | `/users/search` | `{ "q", "role", "page", "pageSize" }`. Name or phone go in the body so they never land in URLs, proxy logs or browser history. `q` max 100. |
+| GET | `/users/{id}` | Account detail, including block status and history |
 | POST | `/users/{id}/block` | `{ "reason" }` required (5–300). Signs the user out, blocks OTP sign-in, and hides a provider from browse and checkout. Existing bookings stay. Admins cannot be blocked. |
 | POST | `/users/{id}/unblock` | Optional `{ "reason" }` |
 | GET | `/bookings?status=&providerId=&from=&to=`, `/bookings/{id}` | Oversight |
 | POST | `/bookings/{id}/cancel` | `{ "reason" }`; full refund on the customer's behalf |
 | GET | `/payments?status=`, `/payouts?status=`, `/payouts/csv?status=` | Transactions |
 | POST | `/payouts/export`, `/payouts/{id}/paid` | Claim pending payouts from closed payout cycles into a CSV batch; mark one paid |
-| GET | `/reports/summary` | Booking counts, paid GMV, pending payouts |
+| GET | `/reports/summary` | Booking counts, paid GMV, pending payouts, platform fees kept on all payouts, pending instructors |
 | GET / POST / PATCH | `/areas`, `/areas/{id}` | `{ "name", "city" }`. The city must already exist (opening cities is not available yet). Duplicate name in a city is `409`. `isActive: false` hides the area and its providers from browse; existing bookings are untouched. |
 | GET / PATCH | `/categories`, `/categories/{id}` | Rename the label; the slug never changes |
 | GET / PATCH | `/settings` | Platform settings (see above). PATCH sends `version` plus only the fields to change; a stale version is `409`. |
@@ -300,7 +301,9 @@ Sessions: the access JWT is short-lived. On a `401` the client calls `/api/auth/
 | GET | `/pages` | All policy pages |
 | PUT | `/pages/{slug}` | `{ "title", "body", "version" }`; a stale version is `409` |
 
-Lists return at most 100 rows, newest first.
+The user, provider, certificate, booking, payment and payout lists are paged in the database. Add `page` (from 1) and `pageSize` (1–100, default 20); a missing or out-of-range value falls back to page 1 and 20 rows. They return `{ "items", "total", "page", "pageSize" }`, newest first except certificates (oldest first, as a queue).
+
+Every API response carries `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, a `Permissions-Policy`, and `Cache-Control: no-store` unless the endpoint sets its own (public photos do). Production adds HSTS and `Content-Security-Policy: default-src 'none'`. The stub OTP sender logs only the last four phone digits, and the code only in Development.
 
 ## Provider trust signals
 
@@ -429,6 +432,24 @@ VITE_API_BASE_URL=https://api.example.com npm run build   # or leave empty for s
 ```
 
 Upload `dist/` to any static host or CDN. Every unknown path must fall back to `index.html` so deep links like `/teachers/123` work on refresh: `try_files $uri /index.html;` in Nginx (see above), a rewrite rule on IIS, or the "single-page app" / 404-to-`index.html` option on static hosts. The SPA shows its own 404 page for routes it does not know.
+
+### SPA in Docker (Nginx)
+
+`src/YogaMarketplace.Client/Dockerfile` builds the bundle and serves it from unprivileged Nginx on port 8080. The config in `nginx/templates/` handles SPA routing, long caching for fingerprinted `/assets`, `no-cache` for the app shell, and the browser security headers (CSP allowing only Razorpay Checkout and YouTube no-cookie embeds, HSTS, `nosniff`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`).
+
+```bash
+cd src/YogaMarketplace.Client
+docker build -t yoga-web .                                   # same origin: Nginx proxies /api
+docker run -p 8080:8080 -e API_UPSTREAM=http://api:8080 yoga-web
+```
+
+| Variable | When | Meaning |
+| --- | --- | --- |
+| `VITE_API_BASE_URL` (build arg) | API on another origin | `docker build --build-arg VITE_API_BASE_URL=https://api.example.com .` |
+| `API_UPSTREAM` (runtime) | Same origin (default) | Where Nginx proxies `/api` and `/health`, e.g. `http://api:8080`. Nginx must resolve it at start-up. |
+| `API_ORIGIN` (runtime) | API on another origin | Added to the CSP `connect-src` and `img-src`, e.g. `https://api.example.com` |
+
+When Nginx proxies the API, add its container IP to `ForwardedHeaders__KnownProxies__0` (see the table above) so rate limits see the real client.
 
 ### Go-live checklist
 
