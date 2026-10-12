@@ -175,6 +175,13 @@ Business values live in one typed `PlatformSettings` row that admins edit under 
 | Free reschedule window (hours) | Reschedule is refused inside it. Kept in the API but hidden from the Settings page until reschedule rules are reviewed. |
 | Payout cycle (weekly / biweekly) | Which payouts `/payouts/export` may claim |
 | Banner title, subtitle, offer | Home hero text. Empty fields fall back to the built-in copy. |
+| Convenience fee on credit bookings (off) | When on, a credit booking pays the fee through Razorpay |
+| Instructor pay on credits (pack price ÷ sessions) | Or the instructor's normal session price; commission is taken from either |
+| Late cancel on credits (credit used, instructor gets the late-cancel share) | Or credit used and nothing paid, or credit returned |
+| Bookings stand after expiry (on) | Off means a credit can't book a session dated after its batch expires |
+| Pack refunds (on), reference session price, refund fee | Admin partial refund of unused credits |
+
+Credit rules sit on the **Packs** tab and apply to new purchases only: each purchase saves its own copy.
 
 - **Snapshots.** The commission, convenience fee, cancel window and late fee are locked when checkout starts (`POST /api/bookings/orders`) and copied to the booking at payment. Cancel-quote, refunds and payouts always use the booking's copy, so a settings change mid-checkout or later only affects new checkouts.
 - **Convenience fee.** The customer pays session price plus the fee. It is refunded on decline, admin cancel and free cancel, and kept on a late cancel. It is never paid out to the provider.
@@ -190,6 +197,7 @@ Business values live in one typed `PlatformSettings` row that admins edit under 
 - Handle a type by registering `IBackgroundJobHandler` (`services.AddScoped<IBackgroundJobHandler, MyHandler>()`).
 - A hosted service polls every `Jobs:PollSeconds`, claims due jobs with a conditional update (so two instances never run the same job), and runs each in its own scope.
 - A failure retries after 1, 2, 4… minutes (capped at 1 hour) until `MaxAttempts`, then the job is `Failed`. An unknown type fails at once. A job whose worker died is released when its lock expires.
+- `credits.expire` (`CreditExpiryJob`) runs at midnight India time. Startup queues the first run and each run queues the next. It writes one `Expire` ledger row per batch past its expiry with credits left; running it twice changes nothing (the database allows one `Expire` row per batch). Bookings already made stay.
 
 ## HTTP API
 
@@ -219,6 +227,7 @@ Sessions: the access JWT is short-lived. On a `401` the client calls `/api/auth/
 | GET | `/api/providers/{id}/reviews` | | Public reviews |
 | GET | `/api/media/photos/{id}` | | Profile photo of a listed provider |
 | GET | `/api/pages/{slug}` | | Policy page: `refund-policy`, `terms`, `privacy` |
+| GET | `/api/packs` | | Active session packs |
 
 ### Provider
 
@@ -232,7 +241,8 @@ Sessions: the access JWT is short-lived. On a `401` the client calls `/api/auth/
 | PUT | `/api/providers/me/intro-video` | `{ "url" }` YouTube link, or empty to remove |
 | POST / DELETE | `/api/providers/me/certificates`, `/certificates/{id}` | Upload (multipart `title`, `file`) or remove a certificate |
 | GET | `/api/providers/me/certificates/{id}/file` | Download own certificate (never cached) |
-| GET / PUT | `/api/providers/me/trial` | Trial offer on the main service: `{ "enabled", "price" }` |
+| GET | `/api/providers/me/services` | Own services (for the trial picker) |
+| GET / PUT | `/api/providers/me/trial` | Trial offer: `{ "serviceId", "enabled", "price" }` |
 | GET | `/api/providers/me/payouts?status=` | Own payouts |
 | GET / POST | `/api/providers/me/slots?mode=&from=&to=` | List or add slots for an offered mode |
 | PUT / DELETE | `/api/providers/me/slots/{id}` | Edit or remove a future slot without a booking |
@@ -244,7 +254,12 @@ Sessions: the access JWT is short-lived. On a `401` the client calls `/api/auth/
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET | `/api/bookings/quote?slotId=&trial=` | Server price for a slot: session amount, convenience fee and total. The book page shows this, never its own sum. |
+| GET | `/api/bookings/quote?slotId=&trial=` | Server price for a slot: session amount, convenience fee and total, plus a `credit` option (available or why not). The book page shows this, never its own sum. |
+| POST | `/api/bookings/credit` | Book with 1 credit when no fee is due. `409` if the last credit was just used; the client refetches the quote and switches to pay. With the fee on, use `/orders` with `useCredit: true`. |
+| POST | `/api/packs/{id}/orders` | Razorpay order for a pack. Blocked customers get `403`. |
+| POST | `/api/packs/confirm`, `/api/packs/local-confirm` | Verify the payment and add the credits (local-confirm is fake gateway only). Idempotent per payment. |
+| GET | `/api/packs/orders/{orderId}` | Purchase status; the Packs page polls it while confirming |
+| GET | `/api/credits/me` | Own credit batches, earliest expiry first |
 | GET | `/api/bookings/trial?providerId=` | Whether this customer can still book the provider's trial |
 | POST | `/api/bookings/orders` | Razorpay order for a slot (`trial: true` for the trial price). Home needs `homeAddress` and `landmark`. The server prices it: `amount` = `sessionAmount` + `convenienceFee`. A provider in an inactive area is refused. |
 | POST | `/api/bookings/confirm` | Verify the checkout signature and create the booking (`PendingAccept`). Idempotent per payment. |
@@ -279,6 +294,9 @@ Sessions: the access JWT is short-lived. On a `401` the client calls `/api/auth/
 | GET | `/certificates?status=` | Certificate queue (`Pending` by default, `Approved`, `Rejected` or `all`) |
 | GET | `/certificates/{id}/file` | View the private file |
 | POST | `/certificates/{id}/approve`, `/reject` | Approve, or reject with `{ "reason" }` |
+| GET / POST / PATCH | `/packs`, `/packs/{id}` | Session packs. PATCH sends `version`; `isActive: false` stops new sales. Packs are never deleted. |
+| GET | `/users/{id}/credits` | A customer's batches with the saved rules and `refundPreview` |
+| POST | `/credit-batches/{id}/refund` | Partial refund of unused credits through Razorpay on the pack payment |
 | GET | `/pages` | All policy pages |
 | PUT | `/pages/{slug}` | `{ "title", "body", "version" }`; a stale version is `409` |
 
@@ -297,6 +315,15 @@ Lists return at most 100 rows, newest first.
 A provider can offer one trial on their main service, free or at most their lowest regular rate. Each customer gets one trial per provider. A customer cancel or no-show uses it up; an instructor decline or admin cancel gives it back. Razorpay always takes at least ₹1, so a free trial still charges the convenience fee, and when that fee is ₹0 the trial price must be at least ₹1. If two trial payments race, the second is refunded in full.
 
 `Bookings.TrialConsumed` stores that rule. `BookingRules` updates it with every status change, so it is saved together with the status. A unique filtered index (`IX_Bookings_OneConsumedTrial` on `CustomerId, ProviderId WHERE TrialConsumed = 1`) means the database itself rejects a second active trial, even when two payments are captured at the same moment. Capture turns that rejection into the same full refund.
+
+## Credit packs
+
+A pack is N credits bought upfront. 1 credit books 1 session with any instructor in any mode, up to the pack's price cap; above the cap the customer pays normally. Trials can't use credits, and blocked customers can't buy or use them.
+
+- **Ledger.** Each purchase is a `CreditBatch` holding the pack details and the credit rules in force when it was bought. `CreditLedgerEntry` rows (purchase, use, return, expire, refund) move credits; a booking uses the batch that expires first.
+- **Frozen values.** A credit booking stores the credit value (pack price ÷ sessions) and the instructor's gross on the booking, and payouts use those values.
+- **Cancel and reschedule.** A free cancel, instructor decline or admin cancel returns the credit once. A late cancel follows the saved rule. Reschedule uses no extra credit. A credit returned to an expired batch can't be used.
+- **Refund.** Admin only: unused credits × reference session price − refund fee, capped at what's left of the amount paid and never negative. Upcoming bookings from the pack stay booked and their credits count as used.
 
 ## Policy pages
 
