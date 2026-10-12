@@ -93,6 +93,9 @@ var app = builder.Build();
 
 foreach (var warning in productionWarnings)
     app.Logger.LogWarning("{ProductionWarning}", warning);
+var otpDemo = OtpDemoMode.From(builder.Configuration.GetSection(OtpOptions.Section).Get<OtpOptions>() ?? new OtpOptions());
+if (otpDemo.StartupWarning() is string demoWarning)
+    app.Logger.LogWarning("{OtpDemoWarning}", demoWarning);
 
 app.UseForwardedHeaders();
 app.UseSecurityHeaders();

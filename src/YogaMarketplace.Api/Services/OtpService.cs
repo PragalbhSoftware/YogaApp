@@ -15,12 +15,14 @@ public class OtpService
     private readonly YogaDbContext _db;
     private readonly IOtpSender _sender;
     private readonly OtpOptions _options;
+    private readonly OtpDemoMode _demo;
 
     public OtpService(YogaDbContext db, IOtpSender sender, IOptions<OtpOptions> options)
     {
         _db = db;
         _sender = sender;
         _options = options.Value;
+        _demo = OtpDemoMode.From(_options);
         if (string.IsNullOrWhiteSpace(_options.Pepper) || _options.Pepper.Length < 8)
             throw new InvalidOperationException("Otp:Pepper must be at least 8 characters.");
     }
@@ -140,7 +142,7 @@ public class OtpService
         foreach (var challenge in open)
             challenge.ConsumedAt = now;
 
-        var code = NewCode();
+        var code = NewCode(phone);
         var created = new OtpChallenge
         {
             Id = Guid.NewGuid(),
@@ -170,8 +172,10 @@ public class OtpService
         return challenges.MaxBy(c => c.CreatedAt);
     }
 
-    private string NewCode()
+    private string NewCode(string phone)
     {
+        if (_demo.CodeFor(phone) is string demoCode)
+            return demoCode;
         if (_options.UseFixedCode && !string.IsNullOrWhiteSpace(_options.FixedCode))
             return _options.FixedCode.Trim();
         return RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6");

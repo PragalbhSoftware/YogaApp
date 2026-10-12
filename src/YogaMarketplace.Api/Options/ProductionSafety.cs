@@ -20,6 +20,7 @@ public static class ProductionSafety
         var otp = configuration.GetSection(OtpOptions.Section).Get<OtpOptions>() ?? new OtpOptions();
         if (otp.ExposeCode || otp.UseFixedCode)
             problems.Add("Otp:ExposeCode and Otp:UseFixedCode must be false in Production.");
+        problems.AddRange(OtpDemoMode.From(otp).ProductionProblems());
 
         var razorpay = configuration.GetSection(RazorpayOptions.Section).Get<RazorpayOptions>() ?? new RazorpayOptions();
         if (razorpay.UseFakeGateway)

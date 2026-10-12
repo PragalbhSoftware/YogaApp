@@ -33,4 +33,7 @@ public class OtpOptions
     public string Pepper { get; set; } = "";
     public int ExpiryMinutes { get; set; } = 5;
     public int MaxAttempts { get; set; } = 5;
+    /// <summary>Comma-separated phones that sign in with <see cref="DemoCode"/> (demo site). Empty turns demo mode off.</summary>
+    public string DemoPhones { get; set; } = "";
+    public string DemoCode { get; set; } = "";
 }
