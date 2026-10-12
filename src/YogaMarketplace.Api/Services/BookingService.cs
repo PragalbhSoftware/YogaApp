@@ -214,7 +214,7 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
     public async Task<BookingResponse> ConfirmLocalAsync(LocalConfirmRequest request, CancellationToken cancellationToken)
     {
         if (!_razorpay.SupportsLocalCapture)
-            throw new DomainException("Pay with Razorpay Checkout.", 400);
+            throw new DomainException("Not found.", 404);
 
         var orderId = Required(request.OrderId, "Order id is required.");
         var (paymentId, signature) = _razorpay.CreateLocalCapture(orderId);

@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using YogaMarketplace.Domain;
 using YogaMarketplace.Infrastructure.Persistence;
@@ -113,6 +114,20 @@ public class BookingPaymentTests : IClassFixture<YogaApiFactory>
         Assert.Equal(order.OrderId, booked.GatewayOrderId);
         Assert.StartsWith("pay_fake_", booked.GatewayPaymentId, StringComparison.Ordinal);
         Assert.Equal(1, await CountBookingsAsync(slot.Id));
+    }
+
+    [Fact]
+    public async Task Local_confirm_does_not_exist_with_the_real_gateway()
+    {
+        using var realGateway = _factory.WithWebHostBuilder(builder => builder.UseSetting("Razorpay:UseFakeGateway", "false"));
+        var client = realGateway.CreateClient();
+        var (token, _) = await SignUpAsync(client, "Meera Iyer", "Female");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.PostAsJsonAsync("/api/bookings/local-confirm", new { orderId = "order_any" });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Contains("\"Not found.\"", await response.Content.ReadAsStringAsync());
     }
 
     [Fact]

@@ -14,6 +14,25 @@ jobs:
           dotnet-version: 8.0.x
       - run: dotnet test YogaMarketplace.sln -c Release
 
+  migrations:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet tool restore
+      # Idempotent: safe to run against any database version, including one that is already current.
+      - run: >-
+          dotnet ef migrations script --idempotent
+          --project src/YogaMarketplace.Infrastructure
+          --startup-project src/YogaMarketplace.Infrastructure
+          -o artifacts/migrations.sql
+      - uses: actions/upload-artifact@v4
+        with:
+          name: migrations-sql
+          path: artifacts/migrations.sql
+
   client:
     runs-on: ubuntu-latest
     defaults:
