@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using YogaMarketplace.Domain;
 
 namespace YogaMarketplace.Infrastructure.Persistence;
@@ -36,6 +37,19 @@ public class YogaDbContext : DbContext
     public DbSet<CreditBatch> CreditBatches => Set<CreditBatch>();
     public DbSet<CreditLedgerEntry> CreditLedger => Set<CreditLedgerEntry>();
     public DbSet<CreditAccount> CreditAccounts => Set<CreditAccount>();
+
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        if (!_sqlite)
+            return;
+        // SQLite stores DateTimeOffset as text it cannot order or compare; tests run on SQLite, production on SQL Server.
+        configurationBuilder.Properties<DateTimeOffset>().HaveConversion<UtcTicksConverter>();
+        configurationBuilder.Properties<DateTimeOffset?>().HaveConversion<UtcTicksConverter>();
+    }
+
+    private sealed class UtcTicksConverter() : ValueConverter<DateTimeOffset, long>(
+        value => value.UtcTicks,
+        ticks => new DateTimeOffset(ticks, TimeSpan.Zero));
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

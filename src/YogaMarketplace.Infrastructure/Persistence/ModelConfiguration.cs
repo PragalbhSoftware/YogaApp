@@ -1,6 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using YogaMarketplace.Domain;
 
 namespace YogaMarketplace.Infrastructure.Persistence;
@@ -27,10 +26,10 @@ internal static class ModelConfiguration
         ConfigureSettings(modelBuilder.Entity<PlatformSettings>());
         ConfigureSettingsAudit(modelBuilder.Entity<SettingsAudit>());
         ConfigureContentPage(modelBuilder.Entity<ContentPage>());
-        ConfigureBackgroundJob(modelBuilder.Entity<BackgroundJob>(), sqlite);
+        ConfigureBackgroundJob(modelBuilder.Entity<BackgroundJob>());
         ConfigureOtp(modelBuilder.Entity<OtpChallenge>());
         ConfigureCreditPack(modelBuilder.Entity<CreditPack>());
-        ConfigureCreditBatch(modelBuilder.Entity<CreditBatch>(), sqlite);
+        ConfigureCreditBatch(modelBuilder.Entity<CreditBatch>());
         ConfigureCreditLedger(modelBuilder.Entity<CreditLedgerEntry>());
         ConfigureCreditAccount(modelBuilder.Entity<CreditAccount>());
     }
@@ -44,7 +43,7 @@ internal static class ModelConfiguration
         entity.HasIndex(p => p.IsActive);
     }
 
-    private static void ConfigureCreditBatch(EntityTypeBuilder<CreditBatch> entity, bool sqlite)
+    private static void ConfigureCreditBatch(EntityTypeBuilder<CreditBatch> entity)
     {
         entity.Property(b => b.PackName).HasMaxLength(CreditPackRules.NameMax);
         entity.Property(b => b.Price).HasPrecision(10, 2);
@@ -60,11 +59,6 @@ internal static class ModelConfiguration
         entity.HasIndex(b => b.CheckoutIntentId).IsUnique();
         entity.HasIndex(b => b.GatewayPaymentId).IsUnique();
         entity.HasIndex(b => new { b.CustomerId, b.ExpiresAt });
-        if (sqlite)
-        {
-            // SQLite cannot compare DateTimeOffset text; the expiry job filters on this in SQL.
-            entity.Property(b => b.ExpiresAt).HasConversion<DateTimeOffsetToBinaryConverter>();
-        }
 
         entity.HasOne<User>().WithMany().HasForeignKey(b => b.CustomerId).OnDelete(DeleteBehavior.Restrict);
         entity.HasOne<CreditPack>().WithMany().HasForeignKey(b => b.PackId).OnDelete(DeleteBehavior.Restrict);
@@ -393,7 +387,7 @@ internal static class ModelConfiguration
         entity.HasData(ContentPageDefaults.All());
     }
 
-    private static void ConfigureBackgroundJob(EntityTypeBuilder<BackgroundJob> entity, bool sqlite)
+    private static void ConfigureBackgroundJob(EntityTypeBuilder<BackgroundJob> entity)
     {
         entity.Property(j => j.Type).HasMaxLength(80);
         entity.Property(j => j.Payload).HasMaxLength(4000);
@@ -401,12 +395,6 @@ internal static class ModelConfiguration
         entity.Property(j => j.LastError).HasMaxLength(1000);
         entity.Property(j => j.LockedBy).HasMaxLength(80);
         entity.HasIndex(j => new { j.Status, j.RunAt });
-        if (sqlite)
-        {
-            // SQLite cannot compare DateTimeOffset text; the runner filters on these in SQL.
-            entity.Property(j => j.RunAt).HasConversion<DateTimeOffsetToBinaryConverter>();
-            entity.Property(j => j.LockedUntil).HasConversion<DateTimeOffsetToBinaryConverter>();
-        }
     }
 
     private static void ConfigureOtp(EntityTypeBuilder<OtpChallenge> entity)
