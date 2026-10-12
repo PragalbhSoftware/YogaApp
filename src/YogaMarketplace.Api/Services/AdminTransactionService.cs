@@ -59,26 +59,98 @@ public class AdminTransactionService : IAdminTransactionService
         AdminPageQuery? paging,
         CancellationToken cancellationToken)
     {
+        // ₹0 rows for bookings paid with a credit are not money movements, so they stay out of this list.
         var query = _db.Payments.AsNoTracking()
+            .Where(p => p.Gateway != PaymentGateways.Credit)
             .Include(p => p.Booking)
             .ThenInclude(b => b!.Provider)
             .Include(p => p.Booking)
             .ThenInclude(b => b!.Customer);
 
+        PaymentStatus? parsed = null;
         IQueryable<Payment> filtered;
         if (string.IsNullOrWhiteSpace(status))
             filtered = query.Where(p => Settled.Contains(p.Status));
         else
         {
-            var parsed = AdminQuery.ParseRequired<PaymentStatus>(status, SettledMessage);
-            if (!Settled.Contains(parsed))
+            parsed = AdminQuery.ParseRequired<PaymentStatus>(status, SettledMessage);
+            if (!Settled.Contains(parsed.Value))
                 throw new DomainException(SettledMessage);
             filtered = query.Where(p => p.Status == parsed);
         }
 
         var currency = await CurrencyAsync(cancellationToken);
-        var ordered = filtered.OrderByDescending(p => p.CreatedAt).ThenBy(p => p.Id);
-        return await AdminQuery.PageAsync(ordered, paging, p => ToPayment(p, currency), cancellationToken);
+        var packs = PackSalesWithStatus(_db.CreditBatches.AsNoTracking(), parsed);
+
+        // Booking payments and pack sales page together in SQL by date; the full rows load for this page only.
+        var ordered = filtered.Select(p => new { p.Id, p.CreatedAt, IsPack = false })
+            .Concat(packs.Select(b => new { b.Id, CreatedAt = b.PurchasedAt, IsPack = true }))
+            .OrderByDescending(row => row.CreatedAt)
+            .ThenBy(row => row.Id);
+        return await AdminQuery.PageAsync(
+            ordered,
+            paging,
+            async (rows, ct) =>
+            {
+                var paymentIds = rows.Where(r => !r.IsPack).Select(r => r.Id).ToArray();
+                var packIds = rows.Where(r => r.IsPack).Select(r => r.Id).ToArray();
+                var payments = await query.Where(p => paymentIds.Contains(p.Id)).ToDictionaryAsync(p => p.Id, ct);
+                var sales = await PackSaleRowsAsync(packIds, ct);
+                IReadOnlyList<AdminPaymentResponse> page = rows
+                    .Select(r => r.IsPack ? sales[r.Id] : ToPayment(payments[r.Id], currency))
+                    .ToList();
+                return page;
+            },
+            cancellationToken);
+    }
+
+    /// <summary>A pack sale's payment status comes from what was refunded; keep in step with <see cref="PackSaleStatus"/>.</summary>
+    private static IQueryable<CreditBatch> PackSalesWithStatus(IQueryable<CreditBatch> batches, PaymentStatus? status) => status switch
+    {
+        null => batches,
+        PaymentStatus.Paid => batches.Where(b => b.RefundedAmount <= 0m),
+        PaymentStatus.PartiallyRefunded => batches.Where(b => b.RefundedAmount > 0m && b.RefundedAmount < b.Price),
+        PaymentStatus.Refunded => batches.Where(b => b.RefundedAmount >= b.Price),
+        _ => batches.Where(_ => false)
+    };
+
+    private static PaymentStatus PackSaleStatus(CreditBatch batch)
+    {
+        if (batch.RefundedAmount <= 0m)
+            return PaymentStatus.Paid;
+        return batch.RefundedAmount >= batch.Price ? PaymentStatus.Refunded : PaymentStatus.PartiallyRefunded;
+    }
+
+    private async Task<Dictionary<Guid, AdminPaymentResponse>> PackSaleRowsAsync(Guid[] ids, CancellationToken cancellationToken)
+    {
+        if (ids.Length == 0)
+            return [];
+        var rows = await (
+            from batch in _db.CreditBatches.AsNoTracking()
+            join customer in _db.Users.AsNoTracking() on batch.CustomerId equals customer.Id
+            join checkout in _db.CheckoutIntents.AsNoTracking() on batch.CheckoutIntentId equals checkout.Id
+            where ids.Contains(batch.Id)
+            select new { Batch = batch, customer.Name, customer.Phone, checkout.GatewayOrderId, checkout.Gateway })
+            .ToListAsync(cancellationToken);
+        return rows.ToDictionary(row => row.Batch.Id, row => new AdminPaymentResponse(
+            row.Batch.Id,
+            null,
+            row.Batch.Price,
+            row.Batch.Currency,
+            PackSaleStatus(row.Batch).ToString(),
+            row.Gateway,
+            row.GatewayOrderId,
+            row.Batch.GatewayPaymentId,
+            row.Batch.PurchasedAt,
+            row.Batch.RefundedAt,
+            null,
+            null,
+            row.Batch.CustomerId,
+            row.Name,
+            row.Phone,
+            row.Batch.RefundedAmount,
+            AdminPaymentKind.Pack,
+            row.Batch.PackName));
     }
 
     public Task<PagedResponse<AdminPayoutResponse>> ListPayoutsAsync(

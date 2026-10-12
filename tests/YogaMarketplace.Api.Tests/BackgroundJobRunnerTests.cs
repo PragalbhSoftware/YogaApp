@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using YogaMarketplace.Api.Jobs;
 using YogaMarketplace.Domain;
 using YogaMarketplace.Infrastructure.Persistence;
@@ -139,18 +140,32 @@ public class BackgroundJobRunnerTests : IClassFixture<YogaApiFactory>
         for (var i = 0; i < 6; i++)
             jobs.Add(await EnqueueAsync(host, TestJobHandler.JobType, "ok:" + Guid.NewGuid()));
 
-        var processed = await Task.WhenAll(RunAsync(host, now), RunAsync(host, now));
-
-        Assert.Equal(jobs.Count, processed.Sum());
+        Assert.Equal(jobs.Count, await RunAsync(host, now, workers: 2));
         Assert.All(jobs, job => Assert.Equal(1, TestJobHandler.CallsFor(job.Payload!)));
     }
 
-    /// <summary>Starts the host up front so its startup time never pushes an enqueue past the test's clock.</summary>
+    [Fact]
+    public async Task Testing_host_does_not_queue_the_credit_expiry_job_at_startup()
+    {
+        await using var factory = new YogaApiFactory();
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<YogaDbContext>();
+
+        Assert.False(DatabaseStartup.ShouldScheduleRecurringJobs(scope.ServiceProvider.GetRequiredService<IHostEnvironment>()));
+        Assert.False(await db.BackgroundJobs.AnyAsync(j => j.Type == CreditExpiryJob.JobType));
+    }
+
+    /// <summary>
+    /// Starts the host up front so its startup time never pushes an enqueue past the test's clock, and queues the
+    /// credit expiry job the way production does so every test proves it only counts its own jobs.
+    /// </summary>
     private WebApplicationFactory<Program> WithTestHandler()
     {
         var host = _factory.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
             services.AddScoped<IBackgroundJobHandler, TestJobHandler>()));
-        _ = host.Services;
+        using var scope = host.Services.CreateScope();
+        scope.ServiceProvider.GetRequiredService<CreditExpiryJob>()
+            .EnsureScheduledAsync(DateTimeOffset.UtcNow, CancellationToken.None).GetAwaiter().GetResult();
         return host;
     }
 
@@ -171,11 +186,30 @@ public class BackgroundJobRunnerTests : IClassFixture<YogaApiFactory>
         return job;
     }
 
-    private static async Task<int> RunAsync(WebApplicationFactory<Program> host, DateTimeOffset now)
+    /// <summary>
+    /// Runs the given number of workers at once and returns how many of this class's jobs they picked up. Each pick-up
+    /// adds one attempt, so other job types (the credit expiry job) never change the count.
+    /// </summary>
+    private static async Task<int> RunAsync(WebApplicationFactory<Program> host, DateTimeOffset now, int workers = 1)
+    {
+        var before = await OwnAttemptsAsync(host);
+        await Task.WhenAll(Enumerable.Range(0, workers).Select(async _ =>
+        {
+            using var scope = host.Services.CreateScope();
+            await scope.ServiceProvider.GetRequiredService<BackgroundJobRunner>().RunDueAsync(now, CancellationToken.None);
+        }));
+        return await OwnAttemptsAsync(host) - before;
+    }
+
+    private static async Task<int> OwnAttemptsAsync(WebApplicationFactory<Program> host)
     {
         using var scope = host.Services.CreateScope();
-        return await scope.ServiceProvider.GetRequiredService<BackgroundJobRunner>().RunDueAsync(now, CancellationToken.None);
+        return await scope.ServiceProvider.GetRequiredService<YogaDbContext>().BackgroundJobs
+            .Where(j => j.Type.StartsWith(OwnTypePrefix))
+            .SumAsync(j => j.Attempts);
     }
+
+    private const string OwnTypePrefix = "test.";
 
     private static async Task<BackgroundJob> JobAsync(WebApplicationFactory<Program> host, Guid id)
     {

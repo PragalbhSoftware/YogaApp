@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { settingsConflictMessage, settingsSaveError } from "@/features/admin/utils";
+import { paymentTitle, settingsConflictMessage, settingsSaveError } from "@/features/admin/utils";
 import { ApiError } from "@/services/http/api-error";
+
+describe("paymentTitle", () => {
+  it("names the pack for a pack sale and the instructor for a booking", () => {
+    expect(paymentTitle({ kind: "Pack", providerName: null, packName: "8 sessions" })).toBe("8 sessions");
+    expect(paymentTitle({ kind: "Booking", providerName: "Ananya Rao", packName: null })).toBe("Ananya Rao");
+  });
+});
 
 describe("settingsSaveError", () => {
   it("tells the admin their edits were reloaded on a 409", () => {

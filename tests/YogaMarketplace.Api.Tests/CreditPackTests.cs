@@ -217,7 +217,8 @@ public class CreditPackTests : IClassFixture<YogaApiFactory>
         await SetExpiryAsync(batch.Id, DateTimeOffset.UtcNow.AddMinutes(-1));
         var quote = await GetAsync<CancelQuoteBody>(customer, $"/api/bookings/{booking.Id}/cancel-quote");
         Assert.True(quote.PaidWithCredit);
-        Assert.True(quote.CreditReturned);
+        Assert.False(quote.CreditReturned);
+        Assert.Equal(CreditNotReturned.PackExpired, quote.CreditNotReturnedReason);
         await PostOkAsync(customer, $"/api/bookings/{booking.Id}/cancel");
 
         Assert.Equal(0, await RemainingAsync(batch.Id));
@@ -329,9 +330,60 @@ public class CreditPackTests : IClassFixture<YogaApiFactory>
         Assert.Equal(799m, refunded.RefundedAmount);
         Assert.Equal(BookingStatus.Upcoming, await QueryAsync(db => db.Bookings.Where(b => b.Id == booking.Id).Select(b => b.Status).SingleAsync()));
 
+        var quote = await GetAsync<CancelQuoteBody>(customer, $"/api/bookings/{booking.Id}/cancel-quote");
+        Assert.True(quote.PaidWithCredit);
+        Assert.False(quote.CreditReturned);
+        Assert.Equal(CreditNotReturned.PackRefunded, quote.CreditNotReturnedReason);
+
         await PostOkAsync(customer, $"/api/bookings/{booking.Id}/cancel");
         Assert.Equal(0, await RemainingAsync(batch.Id));
         Assert.Equal(0, (await CreditsAsync(customer)).Total);
+    }
+
+    [Fact]
+    public async Task Reports_count_credit_bookings_apart_and_add_net_pack_sales_to_revenue()
+    {
+        var (admin, instructor) = await StaffAsync();
+        var pack = await CreatePackAsync(admin, sessions: 2, price: 1200m);
+        var (customer, customerId) = await SignUpAsync();
+        var before = await GetAsync<SummaryBody>(admin, "/api/admin/reports/summary");
+
+        var batch = (await BuyAsync(customer, pack.Id)).Batch!;
+        var creditBooking = await BookWithCreditAsync(customer, await SlotAsync(instructor, "Studio"));
+        var paidBooking = await PayAsync(customer, await SlotAsync(instructor, "Studio"));
+        var paid = await QueryAsync(db => db.Payments.Where(p => p.BookingId == paidBooking.Id).Select(p => p.Amount).SingleAsync());
+        var refunded = await PostAsync<AdminBatchBody>(admin, $"/api/admin/credit-batches/{batch.Id}/refund", new { });
+        var after = await GetAsync<SummaryBody>(admin, "/api/admin/reports/summary");
+
+        Assert.Equal(before.GmvPaid + paid, after.GmvPaid);
+        Assert.Equal(before.PaidBookings + 1, after.PaidBookings);
+        Assert.Equal(before.CreditBookings + 1, after.CreditBookings);
+        Assert.Equal(before.PackSales + 1200m - refunded.RefundedAmount, after.PackSales);
+        Assert.Equal(after.GmvPaid + after.PackSales, after.Revenue);
+
+        var firstPage = await GetAsync<PaymentPageBody>(admin, "/api/admin/payments?pageSize=100");
+        var payments = firstPage.Items;
+        Assert.True(firstPage.Total >= payments.Count);
+        Assert.DoesNotContain(payments, p => p.BookingId == creditBooking.Id);
+        Assert.Contains(payments, p => p.BookingId == paidBooking.Id && p.Kind == "Booking");
+        var packRow = Assert.Single(payments, p => p.Id == batch.Id);
+        Assert.Equal("Pack", packRow.Kind);
+        Assert.Equal(1200m, packRow.Amount);
+        Assert.Equal(refunded.RefundedAmount, packRow.RefundedAmount);
+        Assert.Equal("PartiallyRefunded", packRow.Status);
+        Assert.Equal(customerId, packRow.CustomerId);
+        Assert.Null(packRow.ProviderId);
+
+        var paidOnly = await GetAsync<PaymentPageBody>(admin, "/api/admin/payments?status=Paid&pageSize=100");
+        Assert.DoesNotContain(paidOnly.Items, p => p.Id == batch.Id);
+        var partlyRefunded = await GetAsync<PaymentPageBody>(admin, "/api/admin/payments?status=PartiallyRefunded&pageSize=100");
+        Assert.Contains(partlyRefunded.Items, p => p.Id == batch.Id);
+
+        var onePerPage = await GetAsync<PaymentPageBody>(admin, "/api/admin/payments?pageSize=1&page=1");
+        var secondPage = await GetAsync<PaymentPageBody>(admin, "/api/admin/payments?pageSize=1&page=2");
+        Assert.Equal(firstPage.Total, onePerPage.Total);
+        Assert.Equal(payments[0].Id, Assert.Single(onePerPage.Items).Id);
+        Assert.Equal(payments[1].Id, Assert.Single(secondPage.Items).Id);
     }
 
     [Fact]
@@ -425,6 +477,7 @@ public class CreditPackTests : IClassFixture<YogaApiFactory>
 
             var quote = await GetAsync<CancelQuoteBody>(customer, $"/api/bookings/{booking.Id}/cancel-quote");
             Assert.False(quote.CreditReturned);
+            Assert.Equal(CreditNotReturned.LateCancel, quote.CreditNotReturnedReason);
             Assert.Equal(0m, quote.Refund);
             await PostOkAsync(customer, $"/api/bookings/{booking.Id}/cancel");
 
@@ -752,8 +805,12 @@ public class CreditPackTests : IClassFixture<YogaApiFactory>
     private sealed record CreditBody(bool Available, string? Reason, decimal ConvenienceFee, decimal Total, Guid? BatchId);
     private sealed record QuoteBody(decimal Total, CreditBody Credit);
     private sealed record BookingBody(Guid Id, decimal Amount, bool PaidWithCredit);
-    private sealed record CancelQuoteBody(decimal Refund, bool PaidWithCredit, bool CreditReturned);
+    private sealed record CancelQuoteBody(decimal Refund, bool PaidWithCredit, bool CreditReturned, string? CreditNotReturnedReason);
     private sealed record WebhookBody(bool Booked, Guid? CreditBatchId);
+    private sealed record SummaryBody(decimal GmvPaid, decimal PackSales, decimal Revenue, int PaidBookings, int CreditBookings);
+    private sealed record PaymentPageBody(List<PaymentRowBody> Items, int Total);
+    private sealed record PaymentRowBody(
+        Guid Id, Guid? BookingId, decimal Amount, string Status, Guid? ProviderId, Guid CustomerId, decimal RefundedAmount, string Kind);
     private sealed record AdminPackBody(Guid Id, int Version, bool IsActive, int Sold);
     private sealed record PackBody(Guid Id);
     private sealed record AdminBatchBody(

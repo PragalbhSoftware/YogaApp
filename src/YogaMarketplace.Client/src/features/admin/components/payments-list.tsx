@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { PhoneText } from "@/components/common/phone-text";
 import { PriceText } from "@/components/common/price-text";
-import { adminBookingPath } from "@/constants/routes";
+import { adminBookingPath, adminUserPath } from "@/constants/routes";
 import { AdminTable, RowCard, type AdminColumn } from "@/features/admin/components/admin-table";
 import { FilterChips } from "@/features/admin/components/filter-chips";
 import { PagedList } from "@/features/admin/components/paged-list";
@@ -10,8 +10,13 @@ import { StatusPill } from "@/features/admin/components/status-pill";
 import { useAdminPayments } from "@/features/admin/hooks/use-admin";
 import { ADMIN_PAGE_SIZE, useListParams } from "@/features/admin/hooks/use-list-params";
 import { paymentStatuses, type AdminPayment } from "@/features/admin/types";
-import { displayName, formatAdminWhen } from "@/features/admin/utils";
+import { displayName, formatAdminWhen, paymentTitle } from "@/features/admin/utils";
 import { paymentStatusLabel } from "@/features/bookings/utils/status";
+
+/** A booking payment opens the booking; a pack sale opens the customer, where their packs are listed. */
+function paymentPath(payment: AdminPayment) {
+  return payment.bookingId ? adminBookingPath(payment.bookingId) : adminUserPath(payment.customerId);
+}
 
 const filters = [
   { value: null, label: "All" },
@@ -29,7 +34,7 @@ export function PaymentsList() {
       <PagedList
         query={payments}
         noun="payments"
-        empty={{ title: "No payments in this list", description: "Paid bookings appear here after checkout." }}
+        empty={{ title: "No payments in this list", description: "Paid bookings and pack sales appear here after checkout." }}
         onPageChange={setPage}
       >
         {(items, stale) => <PaymentsTable payments={items} stale={stale} />}
@@ -47,13 +52,13 @@ function PaymentsTable({ payments, stale }: { payments: AdminPayment[]; stale: b
         cell: ({ row }) => (
           <Link
             className="font-medium whitespace-nowrap text-brand-text hover:text-brand-primary hover:underline"
-            to={adminBookingPath(row.original.bookingId)}
+            to={paymentPath(row.original)}
           >
             {formatAdminWhen(row.original.createdAt)}
           </Link>
         ),
       },
-      { id: "instructor", header: "Instructor", cell: ({ row }) => row.original.providerName },
+      { id: "for", header: "For", cell: ({ row }) => <PaymentTitle payment={row.original} /> },
       {
         id: "customer",
         header: "Customer",
@@ -95,8 +100,8 @@ function PaymentsTable({ payments, stale }: { payments: AdminPayment[]; stale: b
       renderCard={(payment) => (
         <RowCard
           title={
-            <Link className="hover:text-brand-primary" to={adminBookingPath(payment.bookingId)}>
-              {payment.providerName}
+            <Link className="hover:text-brand-primary" to={paymentPath(payment)}>
+              <PaymentTitle payment={payment} />
             </Link>
           }
           status={<StatusPill status={payment.status} label={paymentStatusLabel(payment.status)} />}
@@ -111,6 +116,17 @@ function PaymentsTable({ payments, stale }: { payments: AdminPayment[]; stale: b
         </RowCard>
       )}
     />
+  );
+}
+
+function PaymentTitle({ payment }: { payment: AdminPayment }) {
+  return (
+    <span className="inline-flex flex-wrap items-center gap-2">
+      {paymentTitle(payment)}
+      {payment.kind === "Pack" ? (
+        <span className="rounded-full bg-brand-background px-2.5 py-0.5 text-xs font-semibold text-brand-primary">Pack</span>
+      ) : null}
+    </span>
   );
 }
 

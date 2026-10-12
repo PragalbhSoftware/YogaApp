@@ -104,8 +104,10 @@ export type CancelQuote = {
   lateCancelFeeValue: number;
   freeUntil: string | null;
   paidWithCredit: boolean;
-  /** For a credit booking: whether cancelling now gives the credit back. */
+  /** For a credit booking: whether cancelling now gives a usable credit back. */
   creditReturned: boolean;
+  /** For a credit booking that won't get its credit back: why. */
+  creditNotReturnedReason?: "LateCancel" | "PackRefunded" | "PackExpired" | null;
 };
 
 export type CreateOrderInput = {

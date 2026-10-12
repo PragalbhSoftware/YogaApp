@@ -14,7 +14,7 @@ export function TransactionsPage() {
     <AdminPage
       kicker="Money"
       title="Transactions"
-      lead="Customer payments stay here. When a session is completed, marked no-show, or cancelled late, a payout appears so you can send the instructor their share and keep your take."
+      lead="Customer payments and pack sales stay here. When a session is completed, marked no-show, or cancelled late, a payout appears so you can send the instructor their share and keep your take."
     >
       <Tabs
         value={tab}

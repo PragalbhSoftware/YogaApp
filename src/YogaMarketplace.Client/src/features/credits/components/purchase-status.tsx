@@ -25,6 +25,20 @@ export function PurchaseStatus({ stage, batch, onFindInstructor, onDismiss }: Pu
     );
   }
 
+  if (stage === "slow") {
+    return (
+      <section className="rounded-3xl border border-brand-secondary bg-brand-surface p-5" role="status">
+        <h2 className="font-heading text-lg font-medium">Still confirming</h2>
+        <p className="mt-1 text-sm text-brand-muted">
+          Don’t pay again. Check your credits in a few minutes.
+        </p>
+        <Button variant="text" sx={{ mt: 1, px: 0 }} onClick={onDismiss}>
+          Close
+        </Button>
+      </section>
+    );
+  }
+
   if (stage === "refunded") {
     return (
       <section className="rounded-3xl border border-red-200 bg-brand-surface p-5" role="alert">

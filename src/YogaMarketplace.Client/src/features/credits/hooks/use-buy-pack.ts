@@ -16,13 +16,19 @@ import {
   usePackOrderStatus,
 } from "@/features/credits/hooks/use-credits";
 import type { Pack, PackOrderStatus } from "@/features/credits/types";
-import { purchaseStage } from "@/features/credits/utils/purchase-stage";
+import {
+  clearPendingPackOrder,
+  readPendingPackOrder,
+  savePendingPackOrder,
+} from "@/features/credits/utils/pending-pack-order";
+import { packConfirmTimeoutMs, purchaseStage } from "@/features/credits/utils/purchase-stage";
 import { isRetryable, toUserMessage } from "@/services/http/api-error";
 import { useAuthStore } from "@/stores/auth-store";
 
 /**
  * Buys a pack: opens a server order, takes payment in Razorpay, then waits for the server to capture it. A confirm
- * that fails on the network keeps polling, because the Razorpay webhook may still capture the payment.
+ * that fails on the network keeps polling, because the Razorpay webhook may still capture the payment. Polling stops
+ * after a couple of minutes, and a refresh resumes it for the same paid order.
  */
 export function useBuyPack() {
   const queryClient = useQueryClient();
@@ -30,17 +36,33 @@ export function useBuyPack() {
   const createOrder = useCreatePackOrder();
   const confirm = useConfirmPackPayment();
   const confirmLocal = useConfirmLocalPackPayment();
+  const userId = user?.id;
   const [buyingId, setBuyingId] = useState<string | null>(null);
-  const [orderId, setOrderId] = useState<string | null>(null);
+  const [orderId, setOrderId] = useState<string | null>(() => readPendingPackOrder(userId));
+  const [timedOut, setTimedOut] = useState(false);
   const [confirmed, setConfirmed] = useState<PackOrderStatus | null>(null);
   const known = confirmed?.orderId === orderId ? confirmed : null;
-  const poll = usePackOrderStatus(orderId && known?.status !== "Completed" && known?.status !== "Refunded" ? orderId : null);
+  const settled = known?.status === "Completed" || known?.status === "Refunded";
+  const poll = usePackOrderStatus(orderId && !timedOut && !settled ? orderId : null);
   const status = known && known.status !== "Open" ? known : (poll.data ?? known);
-  const stage = purchaseStage(orderId, status);
+  const stage = purchaseStage(orderId, status, timedOut);
+
+  useEffect(() => {
+    if (stage !== "confirming") return;
+    const timer = window.setTimeout(() => setTimedOut(true), packConfirmTimeoutMs);
+    return () => window.clearTimeout(timer);
+  }, [stage, orderId]);
 
   useEffect(() => {
     if (stage === "done") invalidateCredits(queryClient);
+    if (stage === "done" || stage === "refunded") clearPendingPackOrder();
   }, [stage, queryClient]);
+
+  function track(id: string) {
+    setTimedOut(false);
+    setOrderId(id);
+    if (userId) savePendingPackOrder(id, userId);
+  }
 
   async function buy(pack: Pack) {
     setBuyingId(pack.id);
@@ -48,6 +70,7 @@ export function useBuyPack() {
       const order = await createOrder.mutateAsync(pack.id);
       if (order.localCapture || isFakeOrder(order.orderId)) {
         const result = await confirmLocal.mutateAsync(order.orderId);
+        setTimedOut(false);
         setOrderId(order.orderId);
         setConfirmed(result);
         return;
@@ -62,7 +85,7 @@ export function useBuyPack() {
         customerName: user?.name,
         customerPhone: digitsOnly(user?.phone ?? ""),
       });
-      setOrderId(paid.orderId);
+      track(paid.orderId);
       try {
         setConfirmed(await confirm.mutateAsync(paid));
       } catch (error) {
@@ -89,7 +112,10 @@ export function useBuyPack() {
   function reset() {
     setOrderId(null);
     setConfirmed(null);
+    setTimedOut(false);
+    clearPendingPackOrder();
   }
 
-  return { buy, reset, buyingId, stage, batch: status?.batch ?? null, busy: buyingId !== null || stage === "confirming" };
+  const waiting = stage === "confirming" || stage === "slow";
+  return { buy, reset, buyingId, stage, batch: status?.batch ?? null, busy: buyingId !== null || waiting };
 }

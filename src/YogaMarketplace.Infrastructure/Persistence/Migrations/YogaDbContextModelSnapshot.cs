@@ -271,8 +271,6 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ProviderId", "Status");
 
-                    b.HasIndex("CustomerId", "ProviderId", "IsTrial");
-
                     b.ToTable("Bookings");
                 });
 

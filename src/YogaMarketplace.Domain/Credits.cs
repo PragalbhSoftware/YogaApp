@@ -198,6 +198,19 @@ public static class CreditRules
         };
     }
 
+    /// <summary>
+    /// Why a cancel won't give a usable credit back, or null if it will. A refunded or expired batch takes a returned
+    /// credit as zero, the same as the ledger does when the cancel goes through.
+    /// </summary>
+    public static string? NoCreditBackReason(CreditBatch batch, CreditCancelSettlement settlement, DateTimeOffset now)
+    {
+        if (batch.RefundedAt is not null)
+            return CreditNotReturned.PackRefunded;
+        if (batch.ExpiresAt <= now)
+            return CreditNotReturned.PackExpired;
+        return settlement.ReturnCredit ? null : CreditNotReturned.LateCancel;
+    }
+
     public static void EnsureRefundable(CreditBatch batch, DateTimeOffset now)
     {
         if (!batch.RefundsEnabled)
@@ -214,3 +227,10 @@ public static class CreditRules
 public sealed record CreditChoice(CreditBatch? Batch, CreditUnavailable? Reason);
 
 public sealed record CreditCancelSettlement(bool ReturnCredit, decimal InstructorShare, decimal FeeRefund);
+
+public static class CreditNotReturned
+{
+    public const string LateCancel = "LateCancel";
+    public const string PackRefunded = "PackRefunded";
+    public const string PackExpired = "PackExpired";
+}
