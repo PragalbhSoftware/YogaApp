@@ -11,6 +11,7 @@ import { ErrorState } from "@/components/common/error-state";
 import { AddressCardSkeleton } from "@/components/common/loading-skeleton";
 import { PageLoader } from "@/components/common/page-loader";
 import { BookSummary } from "@/features/bookings/components/book-summary";
+import { BookingSteps } from "@/features/bookings/components/booking-steps";
 import { HomeVisitForm } from "@/features/bookings/components/home-visit-form";
 import { PaymentChoice } from "@/features/bookings/components/payment-choice";
 import { TrialChoice } from "@/features/bookings/components/trial-choice";
@@ -157,7 +158,12 @@ export function BookPage() {
   if (!instructor.data || !slot) {
     return (
       <main className="mx-auto max-w-lg px-4 py-8">
-        <Button component={Link} to={teacherPath(providerId)} variant="text" startIcon={<ArrowLeft className="size-4" />}>
+        <Button
+          component={Link}
+          to={teacherPath(providerId)}
+          variant="text"
+          startIcon={<ArrowLeft className="size-4" />}
+        >
           Back to instructor
         </Button>
         <div className="mt-6">
@@ -178,8 +184,20 @@ export function BookPage() {
     );
   }
 
+  const payButton = (
+    <Button
+      variant="contained"
+      fullWidth
+      disabled={busy}
+      onClick={() => void pay()}
+      sx={{ minHeight: 48, borderRadius: "14px" }}
+    >
+      {busy ? busyLabel : payLabel}
+    </Button>
+  );
+
   return (
-    <main className="mx-auto max-w-lg space-y-6 px-4 py-6 sm:px-8">
+    <main className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-8">
       <Button
         component={Link}
         to={`${teacherPath(providerId)}?mode=${mode}`}
@@ -198,62 +216,69 @@ export function BookPage() {
         </p>
       </header>
 
-      {trialAvailable && instructor.data.trial ? (
-        <TrialChoice
-          trialPrice={instructor.data.trial.price}
-          useTrial={bookTrial}
-          disabled={busy}
-          onChange={setTrialChoice}
-        />
-      ) : null}
-      {offersTrial && trialStatus.data?.used ? (
-        <p className="text-sm text-brand-muted">You’ve already had your trial class with {instructor.data.displayName}.</p>
-      ) : null}
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-8">
+        <aside aria-label="Order summary" className="space-y-4 lg:sticky lg:top-20 lg:order-last">
+          <BookSummary
+            instructor={instructor.data}
+            slot={slot}
+            quote={quote.data}
+            quoteLoading={quote.isLoading || trialStatus.isLoading}
+            withCredit={method === "credit"}
+          />
+          {quote.isError ? (
+            <ErrorState message={toUserMessage(quote.error)} onRetry={() => void quote.refetch()} />
+          ) : null}
+          {mode === "Home" ? (
+            <p className="hidden text-sm text-brand-muted lg:block">Confirm the visit address to pay.</p>
+          ) : (
+            <div className="hidden lg:block">{payButton}</div>
+          )}
+        </aside>
 
-      <BookSummary
-        instructor={instructor.data}
-        slot={slot}
-        quote={quote.data}
-        quoteLoading={quote.isLoading || trialStatus.isLoading}
-        withCredit={method === "credit"}
-      />
-      {quote.isError ? (
-        <ErrorState message={toUserMessage(quote.error)} onRetry={() => void quote.refetch()} />
-      ) : null}
+        <div className="space-y-6">
+          {trialAvailable && instructor.data.trial ? (
+            <TrialChoice
+              trialPrice={instructor.data.trial.price}
+              useTrial={bookTrial}
+              disabled={busy}
+              onChange={setTrialChoice}
+            />
+          ) : null}
+          {offersTrial && trialStatus.data?.used ? (
+            <p className="text-sm text-brand-muted">
+              You’ve already had your trial class with {instructor.data.displayName}.
+            </p>
+          ) : null}
 
-      {quote.data && showCreditChoice(quote.data.credit) ? (
-        <PaymentChoice quote={quote.data} method={method} disabled={busy} onChange={setPayChoice} />
-      ) : null}
-      {!bookTrial ? <CreditsPanel /> : null}
+          {quote.data && showCreditChoice(quote.data.credit) ? (
+            <PaymentChoice quote={quote.data} method={method} disabled={busy} onChange={setPayChoice} />
+          ) : null}
+          {!bookTrial ? <CreditsPanel /> : null}
 
-      {mode === "Home" ? (
-        <HomeCheckout
-          profileLoading={profile.isLoading}
-          profileError={profile.isError}
-          profileMessage={profile.error ? toUserMessage(profile.error) : ""}
-          onRetryProfile={() => void profile.refetch()}
-          savedAddress={savedAddress}
-          changingAddress={changingAddress}
-          busy={busy}
-          payLabel={payLabel}
-          busyLabel={busyLabel}
-          onChangeAddress={() => setChangingAddress(true)}
-          onCancelChange={() => setChangingAddress(false)}
-          onPayWithSaved={() => void payWithSaved()}
-          onSaveChangedAddress={(home, form) => void saveChangedAddress(home, form)}
-          onSubmitAddress={(home, form) => void payAfterAddress(home, form)}
-        />
-      ) : (
-        <Button
-          variant="contained"
-          fullWidth
-          disabled={busy}
-          onClick={() => void pay()}
-          sx={{ minHeight: 48, borderRadius: "14px" }}
-        >
-          {busy ? busyLabel : payLabel}
-        </Button>
-      )}
+          {mode === "Home" ? (
+            <HomeCheckout
+              profileLoading={profile.isLoading}
+              profileError={profile.isError}
+              profileMessage={profile.error ? toUserMessage(profile.error) : ""}
+              onRetryProfile={() => void profile.refetch()}
+              savedAddress={savedAddress}
+              changingAddress={changingAddress}
+              busy={busy}
+              payLabel={payLabel}
+              busyLabel={busyLabel}
+              onChangeAddress={() => setChangingAddress(true)}
+              onCancelChange={() => setChangingAddress(false)}
+              onPayWithSaved={() => void payWithSaved()}
+              onSaveChangedAddress={(home, form) => void saveChangedAddress(home, form)}
+              onSubmitAddress={(home, form) => void payAfterAddress(home, form)}
+            />
+          ) : (
+            <div className="lg:hidden">{payButton}</div>
+          )}
+
+          <BookingSteps instructorName={instructor.data.displayName} />
+        </div>
+      </div>
     </main>
   );
 }

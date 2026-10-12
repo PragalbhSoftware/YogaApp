@@ -1,6 +1,6 @@
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Button } from "@mui/material";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, CalendarDays } from "lucide-react";
 import { routes } from "@/constants/routes";
 import { EmptyState } from "@/components/common/empty-state";
 import { ErrorState } from "@/components/common/error-state";
@@ -20,6 +20,8 @@ import { areaClosedDescription, areaClosedTitle } from "@/features/marketplace/u
 import { usePageTitle } from "@/hooks/use-page-title";
 import { ApiError, toUserMessage } from "@/services/http/api-error";
 
+const BOOKING_ID = "book";
+
 function isNotFound(error: unknown) {
   return error instanceof ApiError && error.status === 404;
 }
@@ -32,7 +34,7 @@ export function TeacherPage() {
   usePageTitle(instructor.data?.displayName ?? "Instructor");
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-6 sm:px-8">
+    <main className="mx-auto max-w-5xl px-4 py-6 sm:px-8">
       <Button
         component={Link}
         to={routes.home}
@@ -61,13 +63,9 @@ export function TeacherPage() {
       ) : null}
       {instructor.data ? (
         <article className="space-y-6">
-          <header className="flex gap-4 rounded-3xl bg-brand-surface p-5 shadow-[0_8px_24px_rgba(37,49,39,0.06)]">
-            <InstructorAvatar
-              name={instructor.data.displayName}
-              photoUrl={instructor.data.photoUrls[0]}
-              size="lg"
-            />
-            <div className="space-y-1">
+          <header className="flex flex-wrap items-center gap-4 rounded-3xl bg-brand-surface p-5 shadow-[0_8px_24px_rgba(37,49,39,0.06)]">
+            <InstructorAvatar name={instructor.data.displayName} photoUrl={instructor.data.photoUrls[0]} size="lg" />
+            <div className="min-w-0 flex-1 space-y-1">
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="font-heading text-2xl font-medium">{instructor.data.displayName}</h1>
                 {instructor.data.isVerified ? <VerifiedBadge /> : null}
@@ -80,40 +78,56 @@ export function TeacherPage() {
                 </p>
               ) : null}
             </div>
+            {instructor.data.areaOpen ? (
+              <Button
+                component="a"
+                href={`#${BOOKING_ID}`}
+                variant="contained"
+                startIcon={<CalendarDays className="size-4" aria-hidden="true" />}
+                sx={{ minHeight: 44, borderRadius: "14px", width: { xs: "100%", sm: "auto" }, display: { lg: "none" } }}
+              >
+                See open times
+              </Button>
+            ) : null}
           </header>
 
-          <InstructorGallery name={instructor.data.displayName} photoUrls={instructor.data.photoUrls} />
+          <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_24rem] lg:gap-8">
+            <div className="space-y-6">
+              <InstructorGallery name={instructor.data.displayName} photoUrls={instructor.data.photoUrls} />
+              <InstructorAbout instructor={instructor.data} />
+              <IntroVideo name={instructor.data.displayName} videoId={instructor.data.introVideoId} />
+              <InstructorCredentials certificates={instructor.data.certificates} />
+              <ReviewList
+                reviews={reviews.data}
+                isLoading={reviews.isLoading}
+                isError={reviews.isError}
+                error={reviews.error}
+                onRetry={() => void reviews.refetch()}
+              />
+            </div>
 
-          <InstructorAbout instructor={instructor.data} />
-
-          <IntroVideo name={instructor.data.displayName} videoId={instructor.data.introVideoId} />
-
-          <InstructorCredentials certificates={instructor.data.certificates} />
-
-          <ModeRateList modes={instructor.data.modes ?? []} heading="Session fees" />
-
-          <ReviewList
-            reviews={reviews.data}
-            isLoading={reviews.isLoading}
-            isError={reviews.isError}
-            error={reviews.error}
-            onRetry={() => void reviews.refetch()}
-          />
-
-          {instructor.data.areaOpen && instructor.data.trial ? (
-            <TrialOfferNote name={instructor.data.displayName} trial={instructor.data.trial} />
-          ) : null}
-
-          {instructor.data.areaOpen ? (
-            <AvailabilitySection instructorId={instructor.data.id} modes={instructor.data.modes ?? []} />
-          ) : (
-            <EmptyState
-              title={areaClosedTitle}
-              description={areaClosedDescription}
-              actionLabel="Browse instructors"
-              onAction={() => navigate(routes.home)}
-            />
-          )}
+            <aside
+              id={BOOKING_ID}
+              aria-label="Book a session"
+              className="scroll-mt-6 space-y-5 rounded-3xl border border-brand-border bg-brand-surface p-5 lg:sticky lg:top-20 lg:max-h-[calc(100svh-6rem)] lg:overflow-y-auto"
+            >
+              <h2 className="font-heading text-xl font-medium">Book a session</h2>
+              <ModeRateList modes={instructor.data.modes ?? []} heading="Session fees" />
+              {instructor.data.areaOpen && instructor.data.trial ? (
+                <TrialOfferNote name={instructor.data.displayName} trial={instructor.data.trial} />
+              ) : null}
+              {instructor.data.areaOpen ? (
+                <AvailabilitySection instructorId={instructor.data.id} modes={instructor.data.modes ?? []} />
+              ) : (
+                <EmptyState
+                  title={areaClosedTitle}
+                  description={areaClosedDescription}
+                  actionLabel="Browse instructors"
+                  onAction={() => navigate(routes.home)}
+                />
+              )}
+            </aside>
+          </div>
         </article>
       ) : null}
     </main>
