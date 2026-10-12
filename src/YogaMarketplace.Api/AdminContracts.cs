@@ -1,5 +1,21 @@
 namespace YogaMarketplace.Api;
 
+/// <summary>Page is 1-based. A missing or out-of-range value falls back to the first page and the default size.</summary>
+public class AdminPageQuery
+{
+    public int? Page { get; set; }
+    public int? PageSize { get; set; }
+}
+
+public record PagedResponse<T>(IReadOnlyList<T> Items, int Total, int Page, int PageSize);
+
+/// <summary>Sent in the body so names and phone numbers stay out of URLs, logs and browser history.</summary>
+public class AdminUserSearchRequest : AdminPageQuery
+{
+    public string? Q { get; set; }
+    public string? Role { get; set; }
+}
+
 public record AdminProviderResponse(
     Guid Id,
     Guid UserId,
@@ -304,8 +320,11 @@ public record BookingStatusCount(string Status, int Count);
 
 public record PendingPayoutTotals(int Count, decimal Gross, decimal Net);
 
+/// <summary><c>PlatformFees</c> is the fee kept on every payout so far, whatever its status.</summary>
 public record AdminReportResponse(
     IReadOnlyList<BookingStatusCount> BookingsByStatus,
     decimal GmvPaid,
     string Currency,
-    PendingPayoutTotals PendingPayouts);
+    PendingPayoutTotals PendingPayouts,
+    decimal PlatformFees,
+    int PendingInstructors);

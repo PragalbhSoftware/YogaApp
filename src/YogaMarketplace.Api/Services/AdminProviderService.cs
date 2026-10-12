@@ -6,7 +6,7 @@ namespace YogaMarketplace.Api.Services;
 
 public interface IAdminProviderService
 {
-    Task<IReadOnlyList<AdminProviderResponse>> ListAsync(string? status, CancellationToken cancellationToken);
+    Task<PagedResponse<AdminProviderResponse>> ListAsync(string? status, AdminPageQuery? paging, CancellationToken cancellationToken);
 
     Task<AdminProviderResponse> GetAsync(Guid id, CancellationToken cancellationToken);
 
@@ -24,7 +24,10 @@ public class AdminProviderService : IAdminProviderService
         _db = db;
     }
 
-    public async Task<IReadOnlyList<AdminProviderResponse>> ListAsync(string? status, CancellationToken cancellationToken)
+    public Task<PagedResponse<AdminProviderResponse>> ListAsync(
+        string? status,
+        AdminPageQuery? paging,
+        CancellationToken cancellationToken)
     {
         var query = Providers();
         if (string.IsNullOrWhiteSpace(status) || status.Trim().Equals("pending", StringComparison.OrdinalIgnoreCase))
@@ -35,12 +38,8 @@ public class AdminProviderService : IAdminProviderService
             query = query.Where(p => p.Status == parsed);
         }
 
-        var providers = await query.ToListAsync(cancellationToken);
-        return providers
-            .OrderByDescending(p => p.CreatedAt)
-            .Take(AdminQuery.PageSize)
-            .Select(ToResponse)
-            .ToList();
+        var ordered = query.OrderByDescending(p => p.CreatedAt).ThenBy(p => p.Id);
+        return AdminQuery.PageAsync(ordered, paging, ToResponse, cancellationToken);
     }
 
     public async Task<AdminProviderResponse> GetAsync(Guid id, CancellationToken cancellationToken)

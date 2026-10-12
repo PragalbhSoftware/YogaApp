@@ -8,11 +8,12 @@ namespace YogaMarketplace.Api.Services;
 
 public interface IAdminBookingService
 {
-    Task<IReadOnlyList<AdminBookingResponse>> ListAsync(
+    Task<PagedResponse<AdminBookingResponse>> ListAsync(
         string? status,
         Guid? providerId,
         DateOnly? from,
         DateOnly? to,
+        AdminPageQuery? paging,
         CancellationToken cancellationToken);
 
     Task<AdminBookingResponse> GetAsync(Guid id, CancellationToken cancellationToken);
@@ -86,11 +87,12 @@ public class AdminBookingService : IAdminBookingService
         return ToResponse(booking, await CurrencyAsync(cancellationToken));
     }
 
-    public async Task<IReadOnlyList<AdminBookingResponse>> ListAsync(
+    public async Task<PagedResponse<AdminBookingResponse>> ListAsync(
         string? status,
         Guid? providerId,
         DateOnly? from,
         DateOnly? to,
+        AdminPageQuery? paging,
         CancellationToken cancellationToken)
     {
         if (from is DateOnly start && to is DateOnly end && end < start)
@@ -108,12 +110,8 @@ public class AdminBookingService : IAdminBookingService
             query = query.Where(b => b.Slot!.Date <= toDate);
 
         var currency = await CurrencyAsync(cancellationToken);
-        var bookings = await query.ToListAsync(cancellationToken);
-        return bookings
-            .OrderByDescending(b => b.CreatedAt)
-            .Take(AdminQuery.PageSize)
-            .Select(b => ToResponse(b, currency))
-            .ToList();
+        var ordered = query.OrderByDescending(b => b.CreatedAt).ThenBy(b => b.Id);
+        return await AdminQuery.PageAsync(ordered, paging, b => ToResponse(b, currency), cancellationToken);
     }
 
     public async Task<AdminBookingResponse> GetAsync(Guid id, CancellationToken cancellationToken)

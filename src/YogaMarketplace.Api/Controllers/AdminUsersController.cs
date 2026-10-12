@@ -13,12 +13,11 @@ public class AdminUsersController : AdminControllerBase
         _users = users;
     }
 
-    [HttpGet]
-    public async Task<ActionResult<IReadOnlyList<AdminUserSummary>>> List(
-        [FromQuery] string? q,
-        [FromQuery] string? role,
+    [HttpPost("search")]
+    public async Task<ActionResult<PagedResponse<AdminUserSummary>>> Search(
+        [FromBody] AdminUserSearchRequest? request,
         CancellationToken cancellationToken) =>
-        Ok(await _users.ListAsync(q, role, cancellationToken));
+        Ok(await _users.SearchAsync(request ?? new AdminUserSearchRequest(), cancellationToken));
 
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<AdminUserDetail>> Get(Guid id, CancellationToken cancellationToken) =>

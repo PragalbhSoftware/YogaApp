@@ -7,7 +7,7 @@ namespace YogaMarketplace.Api.Services;
 
 public interface IAdminCertificateService
 {
-    Task<IReadOnlyList<AdminCertificateResponse>> ListAsync(string? status, CancellationToken cancellationToken);
+    Task<PagedResponse<AdminCertificateResponse>> ListAsync(string? status, AdminPageQuery? paging, CancellationToken cancellationToken);
 
     Task<StoredFile> OpenFileAsync(Guid id, CancellationToken cancellationToken);
 
@@ -29,7 +29,10 @@ public class AdminCertificateService : IAdminCertificateService
         _media = media;
     }
 
-    public async Task<IReadOnlyList<AdminCertificateResponse>> ListAsync(string? status, CancellationToken cancellationToken)
+    public Task<PagedResponse<AdminCertificateResponse>> ListAsync(
+        string? status,
+        AdminPageQuery? paging,
+        CancellationToken cancellationToken)
     {
         var query = _db.ProviderCertificates.AsNoTracking().Include(c => c.Provider);
         IQueryable<ProviderCertificate> filtered = query;
@@ -41,12 +44,8 @@ public class AdminCertificateService : IAdminCertificateService
             filtered = query.Where(c => c.Status == parsed);
         }
 
-        var certificates = await filtered.ToListAsync(cancellationToken);
-        return certificates
-            .OrderBy(c => c.CreatedAt)
-            .Take(AdminQuery.PageSize)
-            .Select(ToResponse)
-            .ToList();
+        var ordered = filtered.OrderBy(c => c.CreatedAt).ThenBy(c => c.Id);
+        return AdminQuery.PageAsync(ordered, paging, ToResponse, cancellationToken);
     }
 
     public async Task<StoredFile> OpenFileAsync(Guid id, CancellationToken cancellationToken)

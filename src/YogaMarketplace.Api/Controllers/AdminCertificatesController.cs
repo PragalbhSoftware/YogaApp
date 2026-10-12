@@ -14,10 +14,11 @@ public class AdminCertificatesController : AdminControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<IReadOnlyList<AdminCertificateResponse>>> List(
+    public async Task<ActionResult<PagedResponse<AdminCertificateResponse>>> List(
         [FromQuery] string? status,
+        [FromQuery] AdminPageQuery paging,
         CancellationToken cancellationToken) =>
-        Ok(await _certificates.ListAsync(status, cancellationToken));
+        Ok(await _certificates.ListAsync(status, paging, cancellationToken));
 
     [HttpGet("{id:guid}/file")]
     public async Task<IActionResult> CertificateFile(Guid id, CancellationToken cancellationToken) =>

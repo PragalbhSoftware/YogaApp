@@ -14,10 +14,11 @@ public class AdminProvidersController : AdminControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<IReadOnlyList<AdminProviderResponse>>> List(
+    public async Task<ActionResult<PagedResponse<AdminProviderResponse>>> List(
         [FromQuery] string? status,
+        [FromQuery] AdminPageQuery paging,
         CancellationToken cancellationToken) =>
-        Ok(await _providers.ListAsync(status, cancellationToken));
+        Ok(await _providers.ListAsync(status, paging, cancellationToken));
 
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<AdminProviderResponse>> Get(Guid id, CancellationToken cancellationToken) =>

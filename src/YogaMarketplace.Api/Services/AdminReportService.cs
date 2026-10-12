@@ -43,9 +43,18 @@ public class AdminReportService : IAdminReportService
         var payoutCount = await pending.CountAsync(cancellationToken);
         var gross = await SumMoneyAsync(pending.Select(p => p.GrossAmount), cancellationToken);
         var net = await SumMoneyAsync(pending.Select(p => p.NetAmount), cancellationToken);
+        var platformFees = await SumMoneyAsync(_db.PayoutsPending.AsNoTracking().Select(p => p.FeeAmount), cancellationToken);
+        var pendingInstructors = await _db.Providers.AsNoTracking()
+            .CountAsync(p => p.Status == ProviderStatus.Pending, cancellationToken);
         var currency = (await _settings.GetAsync(cancellationToken)).Currency;
 
-        return new AdminReportResponse(byStatus, gmv, currency, new PendingPayoutTotals(payoutCount, gross, net));
+        return new AdminReportResponse(
+            byStatus,
+            gmv,
+            currency,
+            new PendingPayoutTotals(payoutCount, gross, net),
+            platformFees,
+            pendingInstructors);
     }
 
     // SQLite cannot SUM decimal. Both providers can SUM a real, and two decimal places cover INR.

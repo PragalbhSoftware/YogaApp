@@ -14,13 +14,14 @@ public class AdminBookingsController : AdminControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<IReadOnlyList<AdminBookingResponse>>> List(
+    public async Task<ActionResult<PagedResponse<AdminBookingResponse>>> List(
         [FromQuery] string? status,
         [FromQuery] Guid? providerId,
         [FromQuery] DateOnly? from,
         [FromQuery] DateOnly? to,
+        [FromQuery] AdminPageQuery paging,
         CancellationToken cancellationToken) =>
-        Ok(await _bookings.ListAsync(status, providerId, from, to, cancellationToken));
+        Ok(await _bookings.ListAsync(status, providerId, from, to, paging, cancellationToken));
 
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<AdminBookingResponse>> Get(Guid id, CancellationToken cancellationToken) =>

@@ -14,16 +14,18 @@ public class AdminTransactionsController : AdminControllerBase
     }
 
     [HttpGet("payments")]
-    public async Task<ActionResult<IReadOnlyList<AdminPaymentResponse>>> Payments(
+    public async Task<ActionResult<PagedResponse<AdminPaymentResponse>>> Payments(
         [FromQuery] string? status,
+        [FromQuery] AdminPageQuery paging,
         CancellationToken cancellationToken) =>
-        Ok(await _transactions.ListPaymentsAsync(status, cancellationToken));
+        Ok(await _transactions.ListPaymentsAsync(status, paging, cancellationToken));
 
     [HttpGet("payouts")]
-    public async Task<ActionResult<IReadOnlyList<AdminPayoutResponse>>> Payouts(
+    public async Task<ActionResult<PagedResponse<AdminPayoutResponse>>> Payouts(
         [FromQuery] string? status,
+        [FromQuery] AdminPageQuery paging,
         CancellationToken cancellationToken) =>
-        Ok(await _transactions.ListPayoutsAsync(status, cancellationToken));
+        Ok(await _transactions.ListPayoutsAsync(status, paging, cancellationToken));
 
     [HttpGet("payouts/csv")]
     public async Task<IActionResult> PayoutsCsv([FromQuery] string? status, CancellationToken cancellationToken)

@@ -36,8 +36,8 @@ public class UserBlockingApiTests : IClassFixture<YogaApiFactory>
         var missing = await admin.PostAsJsonAsync($"/api/admin/users/{Guid.NewGuid()}/block", new { reason = "Nobody here" });
         Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
 
-        var admins = await admin.GetFromJsonAsync<List<UserBody>>("/api/admin/users?role=Admin", Json);
-        var adminUser = Assert.Single(admins!, user => user.Phone == SeedIds.AdminPhone);
+        var admins = await PostAsync<UserPageBody>(admin, "/api/admin/users/search", new { role = "Admin" });
+        var adminUser = Assert.Single(admins.Items, user => user.Phone == SeedIds.AdminPhone);
         var blockAdmin = await admin.PostAsJsonAsync($"/api/admin/users/{adminUser.Id}/block", new { reason = "Should fail" });
         Assert.Equal(HttpStatusCode.BadRequest, blockAdmin.StatusCode);
 
@@ -76,8 +76,8 @@ public class UserBlockingApiTests : IClassFixture<YogaApiFactory>
         var verify = await anonymous.PostAsJsonAsync("/api/auth/otp/verify", new { phone, code = "123456" });
         Assert.Equal(HttpStatusCode.Forbidden, verify.StatusCode);
 
-        var listed = await admin.GetFromJsonAsync<List<UserBody>>($"/api/admin/users?q={phone[3..]}", Json);
-        Assert.Contains(listed!, user => user.Id == me.Id && user.IsBlocked);
+        var listed = await PostAsync<UserPageBody>(admin, "/api/admin/users/search", new { q = phone[3..] });
+        Assert.Contains(listed.Items, user => user.Id == me.Id && user.IsBlocked);
 
         var unblocked = await PostAsync<UserDetailBody>(admin, $"/api/admin/users/{me.Id}/unblock", new { reason = "Appeal accepted" });
         Assert.False(unblocked.IsBlocked);
@@ -194,6 +194,7 @@ public class UserBlockingApiTests : IClassFixture<YogaApiFactory>
     private sealed record RegisterProviderBody(Guid Id, string Status);
     private sealed record RegisterBody(RegisterProviderBody Provider, string Token);
     private sealed record UserBody(Guid Id, string Phone, string Role, bool IsBlocked);
+    private sealed record UserPageBody(List<UserBody> Items, int Total);
     private sealed record BlockEventBody(string Action, string? Reason, string? AdminName, DateTimeOffset CreatedAt);
     private sealed record UserDetailBody(
         Guid Id,

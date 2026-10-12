@@ -9,9 +9,9 @@ namespace YogaMarketplace.Api.Services;
 
 public interface IAdminTransactionService
 {
-    Task<IReadOnlyList<AdminPaymentResponse>> ListPaymentsAsync(string? status, CancellationToken cancellationToken);
+    Task<PagedResponse<AdminPaymentResponse>> ListPaymentsAsync(string? status, AdminPageQuery? paging, CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<AdminPayoutResponse>> ListPayoutsAsync(string? status, CancellationToken cancellationToken);
+    Task<PagedResponse<AdminPayoutResponse>> ListPayoutsAsync(string? status, AdminPageQuery? paging, CancellationToken cancellationToken);
 
     Task<AdminPayoutResponse> MarkPaidAsync(Guid id, CancellationToken cancellationToken);
 
@@ -54,8 +54,9 @@ public class AdminTransactionService : IAdminTransactionService
         _logger = logger;
     }
 
-    public async Task<IReadOnlyList<AdminPaymentResponse>> ListPaymentsAsync(
+    public async Task<PagedResponse<AdminPaymentResponse>> ListPaymentsAsync(
         string? status,
+        AdminPageQuery? paging,
         CancellationToken cancellationToken)
     {
         var query = _db.Payments.AsNoTracking()
@@ -76,25 +77,33 @@ public class AdminTransactionService : IAdminTransactionService
         }
 
         var currency = await CurrencyAsync(cancellationToken);
-        var payments = await filtered.ToListAsync(cancellationToken);
-        return payments
-            .OrderByDescending(p => p.CreatedAt)
-            .Take(AdminQuery.PageSize)
-            .Select(p => ToPayment(p, currency))
-            .ToList();
+        var ordered = filtered.OrderByDescending(p => p.CreatedAt).ThenBy(p => p.Id);
+        return await AdminQuery.PageAsync(ordered, paging, p => ToPayment(p, currency), cancellationToken);
     }
 
-    public async Task<IReadOnlyList<AdminPayoutResponse>> ListPayoutsAsync(
+    public Task<PagedResponse<AdminPayoutResponse>> ListPayoutsAsync(
         string? status,
+        AdminPageQuery? paging,
         CancellationToken cancellationToken)
     {
         var parsed = ParsePayoutStatus(status);
-        var rows = await PayoutRowsAsync(parsed, cancellationToken);
-        return rows
-            .OrderByDescending(row => row.Payout.CreatedAt)
-            .Take(AdminQuery.PageSize)
-            .Select(row => ToPayout(row.Payout, row.Provider.DisplayName))
-            .ToList();
+        var ordered = _db.PayoutsPending.AsNoTracking()
+            .Include(p => p.Booking)
+            .Where(p => p.Status == parsed)
+            .OrderByDescending(p => p.CreatedAt)
+            .ThenBy(p => p.Id);
+        return AdminQuery.PageAsync<PayoutPending, AdminPayoutResponse>(ordered, paging, WithProviderNamesAsync, cancellationToken);
+    }
+
+    private async Task<IReadOnlyList<AdminPayoutResponse>> WithProviderNamesAsync(
+        IReadOnlyList<PayoutPending> payouts,
+        CancellationToken cancellationToken)
+    {
+        var providerIds = payouts.Select(p => p.ProviderId).Distinct().ToArray();
+        var names = await _db.Providers.AsNoTracking()
+            .Where(p => providerIds.Contains(p.Id))
+            .ToDictionaryAsync(p => p.Id, p => p.DisplayName, cancellationToken);
+        return payouts.Select(p => ToPayout(p, names[p.ProviderId])).ToList();
     }
 
     public async Task<AdminPayoutResponse> MarkPaidAsync(Guid id, CancellationToken cancellationToken)

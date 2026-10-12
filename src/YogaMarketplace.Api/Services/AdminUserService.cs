@@ -7,7 +7,7 @@ namespace YogaMarketplace.Api.Services;
 
 public interface IAdminUserService
 {
-    Task<IReadOnlyList<AdminUserSummary>> ListAsync(string? query, string? role, CancellationToken cancellationToken);
+    Task<PagedResponse<AdminUserSummary>> SearchAsync(AdminUserSearchRequest request, CancellationToken cancellationToken);
 
     Task<AdminUserDetail> GetAsync(Guid id, CancellationToken cancellationToken);
 
@@ -18,6 +18,8 @@ public interface IAdminUserService
 
 public class AdminUserService : IAdminUserService
 {
+    private const int MaxSearchLength = 100;
+
     private readonly YogaDbContext _db;
     private readonly ICurrentUser _current;
     private readonly ILogger<AdminUserService> _logger;
@@ -35,20 +37,22 @@ public class AdminUserService : IAdminUserService
         _refreshTokens = refreshTokens;
     }
 
-    public async Task<IReadOnlyList<AdminUserSummary>> ListAsync(
-        string? query,
-        string? role,
+    public Task<PagedResponse<AdminUserSummary>> SearchAsync(
+        AdminUserSearchRequest request,
         CancellationToken cancellationToken)
     {
         var users = Users();
-        if (string.IsNullOrWhiteSpace(role))
+        if (string.IsNullOrWhiteSpace(request.Role))
             users = users.Where(u => u.Role == UserRole.Customer || u.Role == UserRole.Provider);
         else
         {
-            var parsed = AdminQuery.ParseRequired<UserRole>(role, "Unknown role.");
+            var parsed = AdminQuery.ParseRequired<UserRole>(request.Role, "Unknown role.");
             users = users.Where(u => u.Role == parsed);
         }
 
+        var query = request.Q;
+        if (query is { Length: > MaxSearchLength })
+            throw new DomainException($"Search with {MaxSearchLength} characters or fewer.");
         if (!string.IsNullOrWhiteSpace(query))
         {
             var term = query.Trim().ToLower();
@@ -65,13 +69,8 @@ public class AdminUserService : IAdminUserService
                     || u.Phone.ToLower().Contains(term));
         }
 
-        var rows = await users
-            .OrderBy(u => u.Name)
-            .ThenBy(u => u.Phone)
-            .Take(AdminQuery.PageSize)
-            .ToListAsync(cancellationToken);
-
-        return rows.Select(ToSummary).ToList();
+        var ordered = users.OrderBy(u => u.Name).ThenBy(u => u.Phone).ThenBy(u => u.Id);
+        return AdminQuery.PageAsync(ordered, request, ToSummary, cancellationToken);
     }
 
     public async Task<AdminUserDetail> GetAsync(Guid id, CancellationToken cancellationToken)

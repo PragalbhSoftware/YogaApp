@@ -76,8 +76,8 @@ public class ProviderTrustTests : IClassFixture<YogaApiFactory>
             Assert.Equal(HttpStatusCode.OK, own.StatusCode);
             Assert.True(own.Headers.CacheControl!.NoStore);
 
-            var pending = await admin.GetFromJsonAsync<List<AdminCertificateBody>>("/api/admin/certificates", Json);
-            Assert.Contains(pending!, c => c.Id == certificate.Id && c.ProviderName.Length > 0);
+            var pending = await admin.GetFromJsonAsync<CertificatePageBody>("/api/admin/certificates?pageSize=100", Json);
+            Assert.Contains(pending!.Items, c => c.Id == certificate.Id && c.ProviderName.Length > 0);
             Assert.Equal(HttpStatusCode.OK, (await admin.GetAsync($"/api/admin/certificates/{certificate.Id}/file")).StatusCode);
 
             var noReason = await admin.PostAsJsonAsync($"/api/admin/certificates/{certificate.Id}/reject", new { reason = " " });
@@ -186,6 +186,7 @@ public class ProviderTrustTests : IClassFixture<YogaApiFactory>
     private sealed record CertificateBody(Guid Id, string Title, string Status);
     private sealed record MediaBody(string? IntroVideoId, bool IsVerified);
     private sealed record AdminCertificateBody(Guid Id, string ProviderName, string Title, string Status);
+    private sealed record CertificatePageBody(List<AdminCertificateBody> Items, int Total);
     private sealed record SummaryBody(Guid Id, string? PhotoUrl, bool IsVerified);
     private sealed record DetailBody(List<string> PhotoUrls, string? IntroVideoId, List<string> Certificates, bool IsVerified);
 }

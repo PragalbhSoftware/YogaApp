@@ -37,7 +37,7 @@ public class AdminApiTests : IClassFixture<YogaApiFactory>
         foreach (var path in new[]
         {
             "/api/admin/providers",
-            "/api/admin/users",
+            $"/api/admin/users/{Guid.NewGuid()}",
             "/api/admin/bookings",
             "/api/admin/payments",
             "/api/admin/payouts",
@@ -53,6 +53,9 @@ public class AdminApiTests : IClassFixture<YogaApiFactory>
             Assert.Equal(HttpStatusCode.Forbidden, instructorResponse.StatusCode);
             Assert.Contains("Admin access required", (await customerResponse.Content.ReadFromJsonAsync<ErrorBody>(Json))!.Error, StringComparison.Ordinal);
         }
+
+        var search = await customer.PostAsJsonAsync("/api/admin/users/search", new { q = "a" });
+        Assert.Equal(HttpStatusCode.Forbidden, search.StatusCode);
 
         var settings = await customer.PatchAsJsonAsync("/api/admin/settings", new { version = 1, commissionPercent = 10 });
         Assert.Equal(HttpStatusCode.Forbidden, settings.StatusCode);
@@ -89,7 +92,7 @@ public class AdminApiTests : IClassFixture<YogaApiFactory>
         Assert.DoesNotContain(publicBefore!, provider => provider.Id == created.Provider.Id);
 
         var admin = await SignInAsync(SeedIds.AdminPhone);
-        var pending = await admin.Client.GetFromJsonAsync<List<ProviderAdminBody>>("/api/admin/providers", Json);
+        var pending = await ItemsAsync<ProviderAdminBody>(admin.Client, "/api/admin/providers");
         Assert.Contains(pending!, provider => provider.Id == created.Provider.Id && provider.Status == "Pending");
         Assert.Contains(pending!, provider => provider.Phone == phone);
 
@@ -155,22 +158,27 @@ public class AdminApiTests : IClassFixture<YogaApiFactory>
         var me = await customer.GetFromJsonAsync<UserBody>("/api/auth/me", Json);
 
         var admin = await SignInAsync(SeedIds.AdminPhone);
-        var byName = await admin.Client.GetFromJsonAsync<List<UserBody>>("/api/admin/users?q=sana%20qureshi", Json);
-        var match = Assert.Single(byName!, user => user.Phone == phone);
+        var byName = await SearchUsersAsync(admin.Client, "sana qureshi");
+        var match = Assert.Single(byName, user => user.Phone == phone);
         Assert.Equal("Customer", match.Role);
         Assert.Null(match.Provider);
 
-        var byPhone = await admin.Client.GetFromJsonAsync<List<UserBody>>($"/api/admin/users?q={phone[3..]}", Json);
-        Assert.Contains(byPhone!, user => user.Id == me!.Id);
+        var byPhone = await SearchUsersAsync(admin.Client, phone[3..]);
+        Assert.Contains(byPhone, user => user.Id == me!.Id);
 
-        var instructors = await admin.Client.GetFromJsonAsync<List<UserBody>>("/api/admin/users?q=Ananya&role=Provider", Json);
-        var ananya = Assert.Single(instructors!, user => user.Provider is not null && user.Provider.DisplayName == "Ananya Desai");
+        var instructors = await SearchUsersAsync(admin.Client, "Ananya", "Provider");
+        var ananya = Assert.Single(instructors, user => user.Provider is not null && user.Provider.DisplayName == "Ananya Desai");
         Assert.Equal("Verified", ananya.Provider!.Status);
 
-        var customersOnly = await admin.Client.GetFromJsonAsync<List<UserBody>>("/api/admin/users", Json);
-        Assert.DoesNotContain(customersOnly!, user => user.Role == "Admin");
-        var admins = await admin.Client.GetFromJsonAsync<List<UserBody>>("/api/admin/users?role=Admin", Json);
-        Assert.Contains(admins!, user => user.Phone == SeedIds.AdminPhone && user.Role == "Admin");
+        var customersOnly = await SearchUsersAsync(admin.Client);
+        Assert.DoesNotContain(customersOnly, user => user.Role == "Admin");
+        var admins = await SearchUsersAsync(admin.Client, role: "Admin");
+        Assert.Contains(admins, user => user.Phone == SeedIds.AdminPhone && user.Role == "Admin");
+
+        var tooLong = await admin.Client.PostAsJsonAsync("/api/admin/users/search", new { q = new string('a', 101) });
+        Assert.Equal(HttpStatusCode.BadRequest, tooLong.StatusCode);
+        var oldQueryString = await admin.Client.GetAsync($"/api/admin/users?q={phone[3..]}");
+        Assert.False(oldQueryString.IsSuccessStatusCode);
 
         var detailJson = await admin.Client.GetStringAsync($"/api/admin/users/{ananya.Id}");
         Assert.Contains("Ananya Desai", detailJson, StringComparison.Ordinal);
@@ -258,11 +266,11 @@ public class AdminApiTests : IClassFixture<YogaApiFactory>
             await db.SaveChangesAsync();
         }
 
-        var onDate = await admin.Client.GetFromJsonAsync<List<BookingBody>>(
-            $"/api/admin/bookings?providerId={SeedIds.AnanyaProviderId}&from={sessionDate:yyyy-MM-dd}&to={sessionDate:yyyy-MM-dd}&status=PendingAccept",
-            Json);
-        Assert.Contains(onDate!, booking => booking.Id == pendingId);
-        Assert.DoesNotContain(onDate!, booking => booking.Id == declinedId || booking.Id == completedId || booking.Id == unsettledId);
+        var onDate = await ItemsAsync<BookingBody>(
+            admin.Client,
+            $"/api/admin/bookings?providerId={SeedIds.AnanyaProviderId}&from={sessionDate:yyyy-MM-dd}&to={sessionDate:yyyy-MM-dd}&status=PendingAccept");
+        Assert.Contains(onDate, booking => booking.Id == pendingId);
+        Assert.DoesNotContain(onDate, booking => booking.Id == declinedId || booking.Id == completedId || booking.Id == unsettledId);
 
         var detail = await admin.Client.GetFromJsonAsync<BookingBody>($"/api/admin/bookings/{completedId}", Json);
         Assert.Equal("Completed", detail!.Status);
@@ -279,20 +287,20 @@ public class AdminApiTests : IClassFixture<YogaApiFactory>
         Assert.Equal(HttpStatusCode.BadRequest, unknown.StatusCode);
         Assert.Contains("status", (await unknown.Content.ReadFromJsonAsync<ErrorBody>(Json))!.Error, StringComparison.OrdinalIgnoreCase);
 
-        var payments = await admin.Client.GetFromJsonAsync<List<PaymentBody>>("/api/admin/payments", Json);
-        Assert.Contains(payments!, payment => payment.BookingId == pendingId && payment.Status == "Paid");
-        Assert.Contains(payments!, payment => payment.BookingId == declinedId && payment.Status == "Refunded");
-        Assert.Contains(payments!, payment => payment.Id == failedPaymentId && payment.Status == "Failed");
-        Assert.DoesNotContain(payments!, payment => payment.Id == pendingPaymentId);
+        var payments = await ItemsAsync<PaymentBody>(admin.Client, "/api/admin/payments");
+        Assert.Contains(payments, payment => payment.BookingId == pendingId && payment.Status == "Paid");
+        Assert.Contains(payments, payment => payment.BookingId == declinedId && payment.Status == "Refunded");
+        Assert.Contains(payments, payment => payment.Id == failedPaymentId && payment.Status == "Failed");
+        Assert.DoesNotContain(payments, payment => payment.Id == pendingPaymentId);
 
-        var failedOnly = await admin.Client.GetFromJsonAsync<List<PaymentBody>>("/api/admin/payments?status=Failed", Json);
-        Assert.Contains(failedOnly!, payment => payment.Id == failedPaymentId);
-        Assert.DoesNotContain(failedOnly!, payment => payment.BookingId == pendingId);
+        var failedOnly = await ItemsAsync<PaymentBody>(admin.Client, "/api/admin/payments?status=Failed");
+        Assert.Contains(failedOnly, payment => payment.Id == failedPaymentId);
+        Assert.DoesNotContain(failedOnly, payment => payment.BookingId == pendingId);
         var pendingStatus = await admin.Client.GetAsync("/api/admin/payments?status=Pending");
         Assert.Equal(HttpStatusCode.BadRequest, pendingStatus.StatusCode);
 
-        var payouts = await admin.Client.GetFromJsonAsync<List<PayoutBody>>("/api/admin/payouts", Json);
-        var listedPayout = Assert.Single(payouts!, payout => payout.Id == payoutId);
+        var payouts = await ItemsAsync<PayoutBody>(admin.Client, "/api/admin/payouts");
+        var listedPayout = Assert.Single(payouts, payout => payout.Id == payoutId);
         Assert.Equal("Pending", listedPayout.Status);
         Assert.Equal(85m, listedPayout.NetAmount);
         Assert.Equal("Ananya Desai", listedPayout.ProviderName);
@@ -302,10 +310,52 @@ public class AdminApiTests : IClassFixture<YogaApiFactory>
         Assert.Equal(before.PendingPayouts.Count + 1, after.PendingPayouts.Count);
         Assert.Equal(before.PendingPayouts.Gross + 100m, after.PendingPayouts.Gross);
         Assert.Equal(before.PendingPayouts.Net + 85m, after.PendingPayouts.Net);
+        Assert.Equal(before.PlatformFees + 15m, after.PlatformFees);
         Assert.Equal(Count(before, "PendingAccept") + 2, Count(after, "PendingAccept"));
         Assert.Equal(Count(before, "Declined") + 1, Count(after, "Declined"));
         Assert.Equal(Count(before, "Completed") + 1, Count(after, "Completed"));
         Assert.Equal(Count(before, "Upcoming") + 1, Count(after, "Upcoming"));
+    }
+
+    [Fact]
+    public async Task Admin_lists_page_in_the_database_with_a_total_and_no_overlap()
+    {
+        var admin = await SignInAsync(SeedIds.AdminPhone);
+        var marker = "Pager" + Guid.NewGuid().ToString("N")[..8];
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<YogaDbContext>();
+            for (var i = 0; i < 5; i++)
+            {
+                db.Users.Add(new User
+                {
+                    Id = Guid.NewGuid(),
+                    Phone = NewPhone(),
+                    Name = $"{marker} {i}",
+                    Role = UserRole.Customer,
+                    CreatedAt = DateTimeOffset.UtcNow
+                });
+            }
+            await db.SaveChangesAsync();
+        }
+
+        var first = await PostAsync<PageBody<UserBody>>(admin.Client, "/api/admin/users/search", new { q = marker, page = 1, pageSize = 2 });
+        var third = await PostAsync<PageBody<UserBody>>(admin.Client, "/api/admin/users/search", new { q = marker, page = 3, pageSize = 2 });
+        var beyond = await PostAsync<PageBody<UserBody>>(admin.Client, "/api/admin/users/search", new { q = marker, page = 9, pageSize = 2 });
+        Assert.Equal(5, first.Total);
+        Assert.Equal(2, first.PageSize);
+        Assert.Equal(new[] { $"{marker} 0", $"{marker} 1" }, first.Items.Select(u => u.Name).ToArray());
+        Assert.Equal($"{marker} 4", Assert.Single(third.Items).Name);
+        Assert.Empty(beyond.Items);
+        Assert.Equal(5, beyond.Total);
+
+        var oversized = await PostAsync<PageBody<UserBody>>(admin.Client, "/api/admin/users/search", new { q = marker, page = 0, pageSize = 5000 });
+        Assert.Equal(1, oversized.Page);
+        Assert.Equal(20, oversized.PageSize);
+
+        var bookings = await admin.Client.GetFromJsonAsync<PageBody<BookingBody>>("/api/admin/bookings?page=1&pageSize=1", Json);
+        Assert.True(bookings!.Items.Count <= 1);
+        Assert.True(bookings.Total >= bookings.Items.Count);
     }
 
     [Fact]
@@ -367,10 +417,10 @@ public class AdminApiTests : IClassFixture<YogaApiFactory>
         Assert.Equal(170m, marked.NetAmount);
         Assert.Equal("Ananya Desai", marked.ProviderName);
 
-        var pending = await admin.Client.GetFromJsonAsync<List<PayoutBody>>("/api/admin/payouts?status=Pending", Json);
-        Assert.DoesNotContain(pending!, payout => payout.Id == payoutId);
-        var settled = await admin.Client.GetFromJsonAsync<List<PayoutBody>>("/api/admin/payouts?status=Paid", Json);
-        Assert.Contains(settled!, payout => payout.Id == payoutId && payout.Status == "Paid");
+        var pending = await ItemsAsync<PayoutBody>(admin.Client, "/api/admin/payouts?status=Pending");
+        Assert.DoesNotContain(pending, payout => payout.Id == payoutId);
+        var settled = await ItemsAsync<PayoutBody>(admin.Client, "/api/admin/payouts?status=Paid");
+        Assert.Contains(settled, payout => payout.Id == payoutId && payout.Status == "Paid");
 
         var after = await admin.Client.GetFromJsonAsync<ReportBody>("/api/admin/reports/summary", Json);
         Assert.Equal(before!.PendingPayouts.Count - 1, after!.PendingPayouts.Count);
@@ -583,8 +633,20 @@ public class AdminApiTests : IClassFixture<YogaApiFactory>
         return JsonSerializer.Deserialize<T>(payload, Json)!;
     }
 
+    /// <summary>Reads the largest page so rows added by other tests in this class never push ours off it.</summary>
+    private static async Task<List<T>> ItemsAsync<T>(HttpClient client, string url)
+    {
+        var separator = url.Contains('?') ? '&' : '?';
+        var page = await client.GetFromJsonAsync<PageBody<T>>($"{url}{separator}pageSize=100", Json);
+        return page!.Items;
+    }
+
+    private static async Task<List<UserBody>> SearchUsersAsync(HttpClient client, string? q = null, string? role = null) =>
+        (await PostAsync<PageBody<UserBody>>(client, "/api/admin/users/search", new { q, role, pageSize = 100 })).Items;
+
     private static string NewPhone() => "+9198" + Random.Shared.Next(10000000, 99999999).ToString();
 
+    private sealed record PageBody<T>(List<T> Items, int Total, int Page, int PageSize);
     private sealed record ErrorBody(string Error);
     private sealed record OtpBody(Guid ChallengeId, DateTimeOffset ExpiresAt, string? DevCode);
     private sealed record UserAuthBody(Guid Id, string? Name, string Phone, string? Gender, string Role);
@@ -614,7 +676,13 @@ public class AdminApiTests : IClassFixture<YogaApiFactory>
     private sealed record PayoutBody(Guid Id, string ProviderName, decimal NetAmount, string Status);
     private sealed record StatusCount(string Status, int Count);
     private sealed record PayoutTotals(int Count, decimal Gross, decimal Net);
-    private sealed record ReportBody(List<StatusCount> BookingsByStatus, decimal GmvPaid, string Currency, PayoutTotals PendingPayouts);
+    private sealed record ReportBody(
+        List<StatusCount> BookingsByStatus,
+        decimal GmvPaid,
+        string Currency,
+        PayoutTotals PendingPayouts,
+        decimal PlatformFees,
+        int PendingInstructors);
     private sealed record AreaAdminBody(Guid Id, string City, string Name, bool IsActive);
     private sealed record CategoryBody(Guid Id, string Name, string Slug);
     private sealed record CategoryAdminBody(Guid Id, string Name, string Slug, bool IsActive);
