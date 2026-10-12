@@ -15,6 +15,8 @@ internal static class ModelConfiguration
         ConfigureUserBlockEvent(modelBuilder.Entity<UserBlockEvent>());
         ConfigureRefreshToken(modelBuilder.Entity<RefreshToken>());
         ConfigureProvider(modelBuilder.Entity<Provider>());
+        ConfigureProviderPhoto(modelBuilder.Entity<ProviderPhoto>());
+        ConfigureProviderCertificate(modelBuilder.Entity<ProviderCertificate>());
         ConfigureService(modelBuilder.Entity<Service>());
         ConfigureSlot(modelBuilder.Entity<AvailabilitySlot>());
         ConfigureBooking(modelBuilder.Entity<Booking>());
@@ -80,6 +82,27 @@ internal static class ModelConfiguration
         entity.HasOne(t => t.User).WithMany().HasForeignKey(t => t.UserId).OnDelete(DeleteBehavior.Cascade);
     }
 
+    private static void ConfigureProviderPhoto(EntityTypeBuilder<ProviderPhoto> entity)
+    {
+        entity.Property(p => p.StorageKey).HasMaxLength(200);
+        entity.Property(p => p.ContentType).HasMaxLength(40);
+        entity.HasIndex(p => new { p.ProviderId, p.SortOrder });
+        entity.HasOne<Provider>().WithMany(p => p.Photos).HasForeignKey(p => p.ProviderId).OnDelete(DeleteBehavior.Cascade);
+    }
+
+    private static void ConfigureProviderCertificate(EntityTypeBuilder<ProviderCertificate> entity)
+    {
+        entity.Property(c => c.Title).HasMaxLength(ProviderMediaRules.CertificateTitleMax);
+        entity.Property(c => c.StorageKey).HasMaxLength(200);
+        entity.Property(c => c.ContentType).HasMaxLength(40);
+        entity.Property(c => c.Status).HasConversion<string>().HasMaxLength(16);
+        entity.Property(c => c.RejectionReason).HasMaxLength(ProviderMediaRules.ReasonMax);
+        entity.HasIndex(c => new { c.ProviderId, c.Status });
+        entity.HasIndex(c => new { c.Status, c.CreatedAt });
+        entity.HasOne(c => c.Provider).WithMany(p => p.Certificates).HasForeignKey(c => c.ProviderId).OnDelete(DeleteBehavior.Cascade);
+        entity.HasOne<User>().WithMany().HasForeignKey(c => c.ReviewedByUserId).OnDelete(DeleteBehavior.Restrict);
+    }
+
     private static void ConfigureProvider(EntityTypeBuilder<Provider> entity)
     {
         entity.Property(p => p.DisplayName).HasMaxLength(80);
@@ -87,6 +110,7 @@ internal static class ModelConfiguration
         entity.Property(p => p.StudioAddress).HasMaxLength(300);
         entity.Property(p => p.GoogleMeetLink).HasMaxLength(300);
         entity.Property(p => p.RejectionReason).HasMaxLength(300);
+        entity.Property(p => p.IntroVideoId).HasMaxLength(ProviderMediaRules.YouTubeIdLength);
         entity.Property(p => p.Status).HasConversion<string>().HasMaxLength(16);
         entity.Property(p => p.HomeRate).HasPrecision(10, 2);
         entity.Property(p => p.StudioRate).HasPrecision(10, 2);

@@ -29,6 +29,23 @@ public class RejectProviderRequest
     public string? Reason { get; set; }
 }
 
+public record AdminCertificateResponse(
+    Guid Id,
+    Guid ProviderId,
+    string ProviderName,
+    string Title,
+    string ContentType,
+    long SizeBytes,
+    string Status,
+    string? RejectionReason,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? ReviewedAt);
+
+public class RejectCertificateRequest
+{
+    public string? Reason { get; set; }
+}
+
 public record AdminUserProvider(Guid Id, string DisplayName, string Status, string Area);
 
 public record AdminUserSummary(

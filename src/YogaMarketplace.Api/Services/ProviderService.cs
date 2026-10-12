@@ -529,6 +529,9 @@ public class ProviderService
         _db.Providers.AsNoTracking()
             .Include(p => p.Area)
             .Include(p => p.Services).ThenInclude(s => s.Category)
+            .Include(p => p.Photos)
+            .Include(p => p.Certificates)
+            .AsSplitQuery()
             .Where(ProviderApproval.IsListed);
 
     private async Task RequireListedAsync(Guid providerId, CancellationToken cancellationToken)
@@ -564,8 +567,13 @@ public class ProviderService
             provider.Status.ToString(),
             ModesOf(provider),
             rating.Count == 0 ? null : rating.Average,
-            rating.Count);
+            rating.Count,
+            OrderedPhotos(provider).Select(p => ProviderMediaService.PhotoUrl(p.Id)).FirstOrDefault(),
+            ProviderMediaRules.IsVerified(provider.Certificates));
     }
+
+    private static IEnumerable<ProviderPhoto> OrderedPhotos(Provider provider) =>
+        provider.Photos.OrderBy(p => p.SortOrder).ThenBy(p => p.CreatedAt);
 
     private static ProviderDetail ToDetail(Provider provider, IReadOnlyDictionary<Guid, (decimal Average, int Count)> ratings)
     {
@@ -582,7 +590,15 @@ public class ProviderService
             provider.StudioAddress,
             rating.Count == 0 ? null : rating.Average,
             rating.Count,
-            provider.Area.IsActive);
+            provider.Area.IsActive,
+            OrderedPhotos(provider).Select(p => ProviderMediaService.PhotoUrl(p.Id)).ToList(),
+            provider.IntroVideoId,
+            provider.Certificates
+                .Where(c => c.Status == CertificateStatus.Approved)
+                .OrderBy(c => c.ReviewedAt)
+                .Select(c => c.Title)
+                .ToList(),
+            ProviderMediaRules.IsVerified(provider.Certificates));
     }
 
     private static ProviderSelf ToSelf(Provider provider, User user, string areaName) => new(

@@ -652,6 +652,10 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                         .HasPrecision(10, 2)
                         .HasColumnType("decimal(10,2)");
 
+                    b.Property<string>("IntroVideoId")
+                        .HasMaxLength(11)
+                        .HasColumnType("nvarchar(11)");
+
                     b.Property<bool>("OffersHome")
                         .HasColumnType("bit");
 
@@ -698,6 +702,97 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                     b.HasIndex("Status", "AreaId");
 
                     b.ToTable("Providers");
+                });
+
+            modelBuilder.Entity("YogaMarketplace.Domain.ProviderCertificate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("ProviderId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("RejectionReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<DateTimeOffset?>("ReviewedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("ReviewedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReviewedByUserId");
+
+                    b.HasIndex("ProviderId", "Status");
+
+                    b.HasIndex("Status", "CreatedAt");
+
+                    b.ToTable("ProviderCertificates");
+                });
+
+            modelBuilder.Entity("YogaMarketplace.Domain.ProviderPhoto", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("ProviderId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProviderId", "SortOrder");
+
+                    b.ToTable("ProviderPhotos");
                 });
 
             modelBuilder.Entity("YogaMarketplace.Domain.RefreshToken", b =>
@@ -1077,6 +1172,31 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("YogaMarketplace.Domain.ProviderCertificate", b =>
+                {
+                    b.HasOne("YogaMarketplace.Domain.Provider", "Provider")
+                        .WithMany("Certificates")
+                        .HasForeignKey("ProviderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("YogaMarketplace.Domain.User", null)
+                        .WithMany()
+                        .HasForeignKey("ReviewedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Provider");
+                });
+
+            modelBuilder.Entity("YogaMarketplace.Domain.ProviderPhoto", b =>
+                {
+                    b.HasOne("YogaMarketplace.Domain.Provider", null)
+                        .WithMany("Photos")
+                        .HasForeignKey("ProviderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("YogaMarketplace.Domain.RefreshToken", b =>
                 {
                     b.HasOne("YogaMarketplace.Domain.User", "User")
@@ -1165,6 +1285,10 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("YogaMarketplace.Domain.Provider", b =>
                 {
+                    b.Navigation("Certificates");
+
+                    b.Navigation("Photos");
+
                     b.Navigation("Services");
 
                     b.Navigation("Slots");

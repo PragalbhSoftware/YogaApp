@@ -103,6 +103,13 @@ public enum BackgroundJobStatus
     Failed
 }
 
+public enum CertificateStatus
+{
+    Pending,
+    Approved,
+    Rejected
+}
+
 public static class PaymentGateways
 {
     public const string Razorpay = "razorpay";

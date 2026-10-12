@@ -88,7 +88,9 @@ public record ProviderSummary(
     string Status,
     IReadOnlyList<ModeRate> Modes,
     decimal? RatingAverage,
-    int ReviewCount);
+    int ReviewCount,
+    string? PhotoUrl,
+    bool IsVerified);
 
 public record ProviderDetail(
     Guid Id,
@@ -102,7 +104,31 @@ public record ProviderDetail(
     string? StudioAddress,
     decimal? RatingAverage,
     int ReviewCount,
-    bool AreaOpen);
+    bool AreaOpen,
+    IReadOnlyList<string> PhotoUrls,
+    string? IntroVideoId,
+    IReadOnlyList<string> Certificates,
+    bool IsVerified);
+
+public record ProviderPhotoResponse(Guid Id, string Url, int SortOrder);
+
+public record ProviderCertificateResponse(
+    Guid Id,
+    string Title,
+    string ContentType,
+    long SizeBytes,
+    string Status,
+    string? RejectionReason,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? ReviewedAt);
+
+public record ProviderMediaResponse(
+    IReadOnlyList<ProviderPhotoResponse> Photos,
+    string? IntroVideoId,
+    IReadOnlyList<ProviderCertificateResponse> Certificates,
+    bool IsVerified);
+
+public record IntroVideoRequest(string? Url);
 
 public record ProviderSelf(
     Guid Id,

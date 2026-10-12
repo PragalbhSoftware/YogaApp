@@ -21,6 +21,8 @@ public class YogaDbContext : DbContext
     public DbSet<Service> Services => Set<Service>();
     public DbSet<AvailabilitySlot> AvailabilitySlots => Set<AvailabilitySlot>();
     public DbSet<Booking> Bookings => Set<Booking>();
+    public DbSet<ProviderPhoto> ProviderPhotos => Set<ProviderPhoto>();
+    public DbSet<ProviderCertificate> ProviderCertificates => Set<ProviderCertificate>();
     public DbSet<CheckoutIntent> CheckoutIntents => Set<CheckoutIntent>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<Review> Reviews => Set<Review>();

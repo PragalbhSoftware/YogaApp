@@ -85,10 +85,14 @@ public class Provider
     public string? StudioAddress { get; set; }
     public string? GoogleMeetLink { get; set; }
     public string? RejectionReason { get; set; }
+    /// <summary>YouTube video id only (11 characters). Shown through youtube-nocookie.com embeds.</summary>
+    public string? IntroVideoId { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? ReviewedAt { get; set; }
     public List<Service> Services { get; set; } = new();
     public List<AvailabilitySlot> Slots { get; set; } = new();
+    public List<ProviderPhoto> Photos { get; set; } = new();
+    public List<ProviderCertificate> Certificates { get; set; } = new();
 
     public bool Offers(SessionMode mode) => mode switch
     {
