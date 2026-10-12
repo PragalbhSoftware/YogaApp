@@ -15,9 +15,10 @@ const signedInNav = [
 
 const guestNav = [
   { to: routes.home, label: "Home", icon: Home },
-  { to: routes.bookings, label: "Bookings", icon: CalendarDays },
   { to: routes.login, label: "Sign in", icon: LogIn },
 ];
+
+const mobileColumns: Record<number, string> = { 2: "grid-cols-2", 3: "grid-cols-3" };
 
 function isNavActive(pathname: string, to: string) {
   if (to === routes.home) {
@@ -77,7 +78,7 @@ export function CustomerLayout() {
         aria-label="Customer"
         className="fixed inset-x-0 bottom-0 z-20 border-t border-brand-border bg-brand-surface/95 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur md:hidden"
       >
-        <div className="mx-auto grid max-w-md grid-cols-3">
+        <div className={cn("mx-auto grid max-w-md", mobileColumns[navItems.length])}>
           {navItems.map((item) => {
             const Icon = item.icon;
             const active = isNavActive(pathname, item.to);

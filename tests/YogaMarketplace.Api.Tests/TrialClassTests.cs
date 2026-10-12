@@ -2,7 +2,10 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using YogaMarketplace.Domain;
 using YogaMarketplace.Infrastructure.Persistence;
@@ -58,6 +61,9 @@ public class TrialClassTests : IClassFixture<YogaApiFactory>
             var cancel = await customer.PostAsJsonAsync($"/api/bookings/{booking.Id}/cancel", new { });
             Assert.True(cancel.IsSuccessStatusCode, await cancel.Content.ReadAsStringAsync());
             Assert.True((await TrialStatusAsync(customer)).Used);
+            Assert.True(await QueryAsync(db => db.Bookings.Where(b => b.Id == booking.Id).Select(b => b.TrialConsumed).SingleAsync()));
+            await AssertConflictAsync(
+                await customer.PostAsJsonAsync("/api/bookings/orders", new { slotId = second, trial = true }), TrialRules.AlreadyUsedMessage);
         }
         finally
         {
@@ -82,10 +88,22 @@ public class TrialClassTests : IClassFixture<YogaApiFactory>
             Assert.True(decline.IsSuccessStatusCode, await decline.Content.ReadAsStringAsync());
             Assert.False((await TrialStatusAsync(customer)).Used);
 
-            var cancelled = await BookAsync(customer, await TomorrowSlotAsync(instructor, "03:00"), trial: true);
-            var adminCancel = await admin.PostAsJsonAsync($"/api/admin/bookings/{cancelled.Id}/cancel", new { reason = "Instructor unwell" });
+            var rebookedAfterDecline = await BookAsync(customer, await TomorrowSlotAsync(instructor, "03:00"), trial: true);
+            Assert.True(rebookedAfterDecline.IsTrial);
+            var adminCancel = await admin.PostAsJsonAsync(
+                $"/api/admin/bookings/{rebookedAfterDecline.Id}/cancel", new { reason = "Instructor unwell" });
             Assert.True(adminCancel.IsSuccessStatusCode, await adminCancel.Content.ReadAsStringAsync());
             Assert.False((await TrialStatusAsync(customer)).Used);
+
+            var rebookedAfterAdminCancel = await BookAsync(customer, await TomorrowSlotAsync(instructor, "06:20"), trial: true);
+            Assert.True(rebookedAfterAdminCancel.IsTrial);
+            Assert.Equal(
+                [rebookedAfterAdminCancel.Id],
+                await QueryAsync(db => db.Bookings
+                    .Where(b => b.ProviderId == SeedIds.AnanyaProviderId && b.TrialConsumed
+                        && (b.Id == declined.Id || b.Id == rebookedAfterDecline.Id || b.Id == rebookedAfterAdminCancel.Id))
+                    .Select(b => b.Id)
+                    .ToListAsync()));
         }
         finally
         {
@@ -115,6 +133,67 @@ public class TrialClassTests : IClassFixture<YogaApiFactory>
 
             var replay = await customer.PostAsJsonAsync("/api/bookings/local-confirm", new { orderId = second.OrderId });
             await AssertConflictAsync(replay, "refunded");
+            Assert.Equal(1, await QueryAsync(db => db.Bookings.CountAsync(b => b.IsTrial && b.Customer!.Phone == phone)));
+        }
+        finally
+        {
+            await PutAsync<TrialBody>(instructor, "/api/providers/me/trial", new { enabled = false });
+        }
+    }
+
+    [Fact]
+    public async Task Double_clicked_trial_payments_book_once_and_refund_the_other()
+    {
+        var (_, instructor) = await StaffAsync();
+        await PutAsync<TrialBody>(instructor, "/api/providers/me/trial", new { enabled = true, price = 99m });
+        try
+        {
+            var (customer, phone) = await SignUpWithPhoneAsync();
+            var first = await PostAsync<OrderBody>(customer, "/api/bookings/orders",
+                new { slotId = await TomorrowSlotAsync(instructor, "07:00"), trial = true });
+            var second = await PostAsync<OrderBody>(customer, "/api/bookings/orders",
+                new { slotId = await TomorrowSlotAsync(instructor, "07:40"), trial = true });
+
+            var responses = await Task.WhenAll(
+                customer.PostAsJsonAsync("/api/bookings/local-confirm", new { orderId = first.OrderId }),
+                customer.PostAsJsonAsync("/api/bookings/local-confirm", new { orderId = second.OrderId }));
+
+            Assert.Single(responses, r => r.IsSuccessStatusCode);
+            await AssertConflictAsync(Assert.Single(responses, r => !r.IsSuccessStatusCode), "refunded");
+            Assert.Equal(1, await QueryAsync(db => db.Bookings.CountAsync(b => b.TrialConsumed && b.Customer!.Phone == phone)));
+            Assert.Equal(1, await QueryAsync(db => db.CheckoutIntents.CountAsync(c =>
+                (c.GatewayOrderId == first.OrderId || c.GatewayOrderId == second.OrderId) && c.Status == CheckoutStatus.Refunded)));
+        }
+        finally
+        {
+            await PutAsync<TrialBody>(instructor, "/api/providers/me/trial", new { enabled = false });
+        }
+    }
+
+    [Fact]
+    public async Task A_second_trial_that_slips_past_the_check_hits_the_unique_index_and_is_refunded()
+    {
+        var staleCheck = new StaleTrialCheckInterceptor();
+        using var racing = _factory.WithWebHostBuilder(builder =>
+            builder.ConfigureTestServices(services => services.AddSingleton<IInterceptor>(staleCheck)));
+        var instructor = await SignInAsync(racing, SeedIds.AnanyaPhone);
+        await PutAsync<TrialBody>(instructor, "/api/providers/me/trial", new { enabled = true, price = 99m });
+        try
+        {
+            var (customer, phone) = await SignUpWithPhoneAsync(racing);
+            var first = await PostAsync<OrderBody>(customer, "/api/bookings/orders",
+                new { slotId = await TomorrowSlotAsync(instructor, "08:20"), trial = true });
+            var second = await PostAsync<OrderBody>(customer, "/api/bookings/orders",
+                new { slotId = await TomorrowSlotAsync(instructor, "09:00"), trial = true });
+            await PostAsync<BookingBody>(customer, "/api/bookings/local-confirm", new { orderId = first.OrderId });
+
+            staleCheck.Arm();
+            var duplicate = await customer.PostAsJsonAsync("/api/bookings/local-confirm", new { orderId = second.OrderId });
+
+            Assert.True(staleCheck.Used);
+            await AssertConflictAsync(duplicate, "refunded");
+            Assert.Equal(CheckoutStatus.Refunded, await QueryAsync(db =>
+                db.CheckoutIntents.Where(c => c.GatewayOrderId == second.OrderId).Select(c => c.Status).SingleAsync()));
             Assert.Equal(1, await QueryAsync(db => db.Bookings.CountAsync(b => b.IsTrial && b.Customer!.Phone == phone)));
         }
         finally
@@ -190,9 +269,11 @@ public class TrialClassTests : IClassFixture<YogaApiFactory>
 
     private async Task<HttpClient> SignUpAsync() => (await SignUpWithPhoneAsync()).Client;
 
-    private async Task<(HttpClient Client, string Phone)> SignUpWithPhoneAsync()
+    private Task<(HttpClient Client, string Phone)> SignUpWithPhoneAsync() => SignUpWithPhoneAsync(_factory);
+
+    private static async Task<(HttpClient Client, string Phone)> SignUpWithPhoneAsync(WebApplicationFactory<Program> factory)
     {
-        var client = _factory.CreateClient();
+        var client = factory.CreateClient();
         var phone = "+9192" + Random.Shared.Next(10000000, 99999999);
         var otp = await PostAsync<OtpBody>(client, "/api/auth/otp/request", new { phone, name = "Kavya Iyer", gender = "Female", isNewUser = true });
         var auth = await PostAsync<AuthBody>(client, "/api/auth/otp/verify", new { phone, code = otp.DevCode });
@@ -200,9 +281,11 @@ public class TrialClassTests : IClassFixture<YogaApiFactory>
         return (client, phone);
     }
 
-    private async Task<HttpClient> SignInAsync(string phone)
+    private Task<HttpClient> SignInAsync(string phone) => SignInAsync(_factory, phone);
+
+    private static async Task<HttpClient> SignInAsync(WebApplicationFactory<Program> factory, string phone)
     {
-        var client = _factory.CreateClient();
+        var client = factory.CreateClient();
         var otp = await PostAsync<OtpBody>(client, "/api/auth/otp/request", new { phone, isNewUser = false });
         var auth = await PostAsync<AuthBody>(client, "/api/auth/otp/verify", new { phone, code = otp.DevCode });
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth.Token);

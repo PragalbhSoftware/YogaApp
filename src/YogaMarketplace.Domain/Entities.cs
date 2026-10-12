@@ -161,6 +161,8 @@ public class Booking
     public BookingStatus Status { get; set; }
     public decimal Amount { get; set; }
     public bool IsTrial { get; set; }
+    /// <summary>Stored result of <see cref="TrialRules.Consumes"/>; a unique filtered index allows one per customer and instructor.</summary>
+    public bool TrialConsumed { get; set; }
     public string? HomeAddress { get; set; }
     public string? Landmark { get; set; }
     public string? MeetLinkSnapshot { get; set; }

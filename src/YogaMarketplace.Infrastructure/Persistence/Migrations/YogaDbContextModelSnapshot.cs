@@ -235,6 +235,11 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                         .HasMaxLength(300)
                         .HasColumnType("nvarchar(300)");
 
+                    b.Property<bool>("TrialConsumed")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("datetimeoffset");
 
@@ -247,6 +252,11 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                     b.HasIndex("SlotId")
                         .IsUnique()
                         .HasFilter("Status IN ('PendingAccept', 'Upcoming', 'Completed', 'NoShow')");
+
+                    b.HasIndex("CustomerId", "ProviderId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Bookings_OneConsumedTrial")
+                        .HasFilter("TrialConsumed = 1");
 
                     b.HasIndex("CustomerId", "Status");
 
