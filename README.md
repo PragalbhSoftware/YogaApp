@@ -117,6 +117,7 @@ server {
   location /api/ {
     proxy_pass http://api:8080;
     proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
   }
 
@@ -295,6 +296,8 @@ Lists return at most 100 rows, newest first.
 
 A provider can offer one trial on their main service, free or at most their lowest regular rate. Each customer gets one trial per provider. A customer cancel or no-show uses it up; an instructor decline or admin cancel gives it back. Razorpay always takes at least ₹1, so a free trial still charges the convenience fee, and when that fee is ₹0 the trial price must be at least ₹1. If two trial payments race, the second is refunded in full.
 
+`Bookings.TrialConsumed` stores that rule. `BookingRules` updates it with every status change, so it is saved together with the status. A unique filtered index (`IX_Bookings_OneConsumedTrial` on `CustomerId, ProviderId WHERE TrialConsumed = 1`) means the database itself rejects a second active trial, even when two payments are captured at the same moment. Capture turns that rejection into the same full refund.
+
 ## Policy pages
 
 Refund policy, Terms and Privacy are rows in `ContentPages`, seeded with starter text and edited under **Settings → Pages**. The body is plain text with three rules: a blank line starts a new paragraph, `## ` starts a heading, `- ` starts a bullet. The SPA renders it as text (no HTML), and saving needs the `version` you edited.
@@ -332,6 +335,30 @@ Use the host's secret store or environment variables. Never put live values in `
 | `RefreshToken__CookieSameSite` | Leave `Strict` for same-site; `None` only for a cross-site API (HTTPS required) |
 
 `Database:AutoMigrate`, `Seed:DemoData`, `Otp:ExposeCode`, `Otp:UseFixedCode` and `Razorpay:UseFakeGateway` are already `false` in `appsettings.Production.json`.
+
+### Host setup: uploads and proxies
+
+**Persistent storage for uploads.** Photos and certificates are written to `Storage__RootPath`. The default (`App_Data/uploads` next to the app) is wiped by most redeploys and is lost when a container is replaced, so point it at storage that outlives the app:
+
+| Host | Set `Storage__RootPath` to |
+| --- | --- |
+| VPS / IIS | A folder outside the publish folder, e.g. `/var/lib/yoga-marketplace/uploads` or `D:\YogaMarketplace\uploads`. Give the app's user (or IIS app pool identity) read and write access only. |
+| Docker | A mounted volume, e.g. `-v yoga-uploads:/data/uploads` with `Storage__RootPath=/data/uploads` |
+| Azure App Service (Linux) | A folder under `/home`, which persists and is shared across instances, e.g. `/home/data/uploads` |
+| Several instances | One shared disk (NFS, Azure Files) mounted at the same path on every instance |
+
+Never put it under the web root or a static file share; certificates must only be reachable through the API. Include it in backups (below).
+
+**Trusted proxies, so rate limits are per visitor.** Behind a reverse proxy, every request arrives from the proxy's IP. Until that proxy is trusted, all visitors share one rate-limit bucket and one busy visitor can lock everyone out. List the IP of the hop directly in front of the API:
+
+| Setup | Setting |
+| --- | --- |
+| Nginx or IIS ARR on the same machine | `ForwardedHeaders__KnownProxies__0=127.0.0.1` (add `__1=::1` if it connects over IPv6) |
+| Nginx in another container or VM | That proxy's private IP, e.g. `ForwardedHeaders__KnownProxies__0=10.0.0.4` |
+| A load balancer with changing IPs (Azure, AWS) | Its subnet, e.g. `ForwardedHeaders__KnownNetworks__0=10.0.0.0/24` |
+| No proxy (the API faces the internet directly) | Leave both empty |
+
+The proxy must set `X-Forwarded-For` and `X-Forwarded-Proto`, as the Nginx example above does. Only one hop is read. If a CDN sits in front of your proxy, have the proxy pass the CDN's real-client header (for example Cloudflare's `CF-Connecting-IP`) as `X-Forwarded-For`. Never trust a public range. To check: from two different networks, make enough browse requests to hit the limit on one; the other should still get `200`.
 
 ### Build and run the API
 
