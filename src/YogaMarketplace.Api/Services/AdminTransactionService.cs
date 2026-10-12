@@ -58,30 +58,75 @@ public class AdminTransactionService : IAdminTransactionService
         string? status,
         CancellationToken cancellationToken)
     {
+        // ₹0 rows for bookings paid with a credit are not money movements, so they stay out of this list.
         var query = _db.Payments.AsNoTracking()
+            .Where(p => p.Gateway != PaymentGateways.Credit)
             .Include(p => p.Booking)
             .ThenInclude(b => b!.Provider)
             .Include(p => p.Booking)
             .ThenInclude(b => b!.Customer);
 
+        PaymentStatus? parsed = null;
         IQueryable<Payment> filtered;
         if (string.IsNullOrWhiteSpace(status))
             filtered = query.Where(p => Settled.Contains(p.Status));
         else
         {
-            var parsed = AdminQuery.ParseRequired<PaymentStatus>(status, SettledMessage);
-            if (!Settled.Contains(parsed))
+            parsed = AdminQuery.ParseRequired<PaymentStatus>(status, SettledMessage);
+            if (!Settled.Contains(parsed.Value))
                 throw new DomainException(SettledMessage);
             filtered = query.Where(p => p.Status == parsed);
         }
 
         var currency = await CurrencyAsync(cancellationToken);
-        var payments = await filtered.ToListAsync(cancellationToken);
+        var payments = (await filtered.ToListAsync(cancellationToken)).Select(p => ToPayment(p, currency));
+        var packs = await PackSalesAsync(parsed, cancellationToken);
         return payments
+            .Concat(packs)
             .OrderByDescending(p => p.CreatedAt)
             .Take(AdminQuery.PageSize)
-            .Select(p => ToPayment(p, currency))
             .ToList();
+    }
+
+    /// <summary>Pack purchases as payment rows, with a status worked out from what was refunded.</summary>
+    private async Task<IEnumerable<AdminPaymentResponse>> PackSalesAsync(PaymentStatus? status, CancellationToken cancellationToken)
+    {
+        if (status == PaymentStatus.Failed)
+            return [];
+        var rows = await (
+            from batch in _db.CreditBatches.AsNoTracking()
+            join customer in _db.Users.AsNoTracking() on batch.CustomerId equals customer.Id
+            join checkout in _db.CheckoutIntents.AsNoTracking() on batch.CheckoutIntentId equals checkout.Id
+            select new { Batch = batch, customer.Name, customer.Phone, checkout.GatewayOrderId, checkout.Gateway })
+            .ToListAsync(cancellationToken);
+        return rows
+            .Select(row => new AdminPaymentResponse(
+                row.Batch.Id,
+                null,
+                row.Batch.Price,
+                row.Batch.Currency,
+                PackSaleStatus(row.Batch).ToString(),
+                row.Gateway,
+                row.GatewayOrderId,
+                row.Batch.GatewayPaymentId,
+                row.Batch.PurchasedAt,
+                row.Batch.RefundedAt,
+                null,
+                null,
+                row.Batch.CustomerId,
+                row.Name,
+                row.Phone,
+                row.Batch.RefundedAmount,
+                AdminPaymentKind.Pack,
+                row.Batch.PackName))
+            .Where(row => status is null || row.Status == status.ToString());
+    }
+
+    private static PaymentStatus PackSaleStatus(CreditBatch batch)
+    {
+        if (batch.RefundedAmount <= 0m)
+            return PaymentStatus.Paid;
+        return batch.RefundedAmount >= batch.Price ? PaymentStatus.Refunded : PaymentStatus.PartiallyRefunded;
     }
 
     public async Task<IReadOnlyList<AdminPayoutResponse>> ListPayoutsAsync(

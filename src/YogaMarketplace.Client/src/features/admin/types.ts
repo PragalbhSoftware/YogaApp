@@ -134,9 +134,11 @@ export type AdminBooking = {
   creditValue: number | null;
 };
 
+/** A booking payment, or a pack sale (no booking or provider; `packName` instead). */
 export type AdminPayment = {
   id: string;
-  bookingId: string;
+  kind: "Booking" | "Pack";
+  bookingId: string | null;
   amount: number;
   currency: string;
   status: string;
@@ -145,8 +147,9 @@ export type AdminPayment = {
   gatewayPaymentId: string | null;
   createdAt: string;
   updatedAt: string | null;
-  providerId: string;
-  providerName: string;
+  providerId: string | null;
+  providerName: string | null;
+  packName: string | null;
   customerId: string;
   customerName: string | null;
   customerPhone: string;
@@ -304,9 +307,16 @@ export type SettingsAuditEntry = {
 
 export type AdminReport = {
   bookingsByStatus: { status: string; count: number }[];
+  /** Money paid for bookings, net of refunds. Bookings made with a credit never count. */
   gmvPaid: number;
   currency: string;
   pendingPayouts: { count: number; gross: number; net: number };
+  /** Pack payments net of pack refunds. */
+  packSales: number;
+  /** Bookings plus packs, as calculated by the server. */
+  revenue: number;
+  paidBookings: number;
+  creditBookings: number;
 };
 
 export type BookingListQuery = {

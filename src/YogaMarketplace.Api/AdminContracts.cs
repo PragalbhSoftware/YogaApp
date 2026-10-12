@@ -136,9 +136,13 @@ public class AdminCancelBookingRequest
     public string? Reason { get; set; }
 }
 
+/// <summary>
+/// A booking payment or a pack sale. <see cref="Kind"/> is "Booking" or "Pack". A pack row has no booking or provider
+/// and carries <see cref="PackName"/> instead.
+/// </summary>
 public record AdminPaymentResponse(
     Guid Id,
-    Guid BookingId,
+    Guid? BookingId,
     decimal Amount,
     string Currency,
     string Status,
@@ -147,12 +151,20 @@ public record AdminPaymentResponse(
     string? GatewayPaymentId,
     DateTimeOffset CreatedAt,
     DateTimeOffset? UpdatedAt,
-    Guid ProviderId,
-    string ProviderName,
+    Guid? ProviderId,
+    string? ProviderName,
     Guid CustomerId,
     string? CustomerName,
     string CustomerPhone,
-    decimal RefundedAmount);
+    decimal RefundedAmount,
+    string Kind = AdminPaymentKind.Booking,
+    string? PackName = null);
+
+public static class AdminPaymentKind
+{
+    public const string Booking = "Booking";
+    public const string Pack = "Pack";
+}
 
 public record AdminPayoutResponse(
     Guid Id,
@@ -304,8 +316,17 @@ public record BookingStatusCount(string Status, int Count);
 
 public record PendingPayoutTotals(int Count, decimal Gross, decimal Net);
 
+/// <summary>
+/// <see cref="GmvPaid"/> is money customers paid for bookings, net of refunds; ₹0 credit payment rows never count.
+/// <see cref="PackSales"/> is pack payments net of pack refunds, and <see cref="Revenue"/> is the two together.
+/// <see cref="PaidBookings"/> counts bookings paid with money; <see cref="CreditBookings"/> counts bookings made with a credit.
+/// </summary>
 public record AdminReportResponse(
     IReadOnlyList<BookingStatusCount> BookingsByStatus,
     decimal GmvPaid,
     string Currency,
-    PendingPayoutTotals PendingPayouts);
+    PendingPayoutTotals PendingPayouts,
+    decimal PackSales,
+    decimal Revenue,
+    int PaidBookings,
+    int CreditBookings);

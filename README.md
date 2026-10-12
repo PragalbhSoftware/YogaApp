@@ -267,7 +267,7 @@ Sessions: the access JWT is short-lived. On a `401` the client calls `/api/auth/
 | GET / PATCH | `/api/profile` | Own account details |
 | PUT | `/api/profile/visit-address` | Default home-visit address |
 | GET | `/api/bookings/me` | Own bookings |
-| GET | `/api/bookings/{id}/cancel-quote` | Refund preview from the booking's own terms: `amount` paid, `lateCancelFee`, `convenienceFeeKept`, `refund` (never negative) |
+| GET | `/api/bookings/{id}/cancel-quote` | Refund preview from the booking's own terms: `amount` paid, `lateCancelFee`, `convenienceFeeKept`, `refund` (never negative). For a credit booking, `creditReturned` and, when false, `creditNotReturnedReason` (`LateCancel`, `PackRefunded` or `PackExpired`) |
 | POST | `/api/bookings/{id}/cancel` | Cancel with full or partial refund per the booking's terms |
 | POST | `/api/bookings/{id}/reschedule` | `{ "slotId" }`, same provider and mode |
 | POST | `/api/bookings/{id}/reviews` | One review after `Completed` |
@@ -284,9 +284,9 @@ Sessions: the access JWT is short-lived. On a `401` the client calls `/api/auth/
 | POST | `/users/{id}/unblock` | Optional `{ "reason" }` |
 | GET | `/bookings?status=&providerId=&from=&to=`, `/bookings/{id}` | Oversight |
 | POST | `/bookings/{id}/cancel` | `{ "reason" }`; full refund on the customer's behalf |
-| GET | `/payments?status=`, `/payouts?status=`, `/payouts/csv?status=` | Transactions |
+| GET | `/payments?status=`, `/payouts?status=`, `/payouts/csv?status=` | Transactions. Payments include pack sales (`kind: "Pack"`, with `packName` and no booking); ₹0 rows for credit bookings are left out. |
 | POST | `/payouts/export`, `/payouts/{id}/paid` | Claim pending payouts from closed payout cycles into a CSV batch; mark one paid |
-| GET | `/reports/summary` | Booking counts, paid GMV, pending payouts |
+| GET | `/reports/summary` | Booking counts, paid GMV (bookings paid with money, net of refunds), `packSales` (net of pack refunds), `revenue` (both), `paidBookings`, `creditBookings`, pending payouts |
 | GET / POST / PATCH | `/areas`, `/areas/{id}` | `{ "name", "city" }`. The city must already exist (opening cities is not available yet). Duplicate name in a city is `409`. `isActive: false` hides the area and its providers from browse; existing bookings are untouched. |
 | GET / PATCH | `/categories`, `/categories/{id}` | Rename the label; the slug never changes |
 | GET / PATCH | `/settings` | Platform settings (see above). PATCH sends `version` plus only the fields to change; a stale version is `409`. |

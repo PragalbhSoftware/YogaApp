@@ -28,7 +28,7 @@ export function DashboardPage() {
       ) : null}
       {!home.isLoading && !home.error ? (
         <div className="space-y-8">
-          <section className="grid gap-3 sm:grid-cols-2">
+          <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <StatCard
               label="Your fee"
               value={formatInr(home.yourFee)}
@@ -40,9 +40,15 @@ export function DashboardPage() {
               hint="Pay this from Razorpay settlements"
             />
             <StatCard
-              label="Paid GMV"
-              value={formatInr(home.gmvPaid)}
-              hint="Customer spend, not profit"
+              label="Revenue"
+              value={formatInr(home.revenue)}
+              hint={`Bookings ${formatInr(home.gmvPaid)} + packs ${formatInr(home.packSales)}, net of refunds. Customer spend, not profit.`}
+            />
+            <StatCard label="Paid bookings" value={String(home.paidBookings)} hint="Paid for with money at booking" />
+            <StatCard
+              label="Credit bookings"
+              value={String(home.creditBookings)}
+              hint="Booked with a pack credit; the pack sale is the revenue"
             />
             <StatCard
               label="Take rate"
@@ -64,7 +70,7 @@ export function DashboardPage() {
                 to={`${routes.adminBookings}?status=PendingAccept`}
                 label="Waiting for accept"
                 value={home.pendingAcceptCount}
-                hint="Paid sessions the instructor has not accepted"
+                hint="Sessions the instructor has not accepted"
               />
               <QueueCard
                 to={`${routes.adminBookings}?status=Upcoming`}
@@ -144,8 +150,8 @@ function TodaySessions({ home }: { home: ReturnType<typeof useOwnerHome> }) {
 function DashboardSkeleton() {
   return (
     <div className="space-y-6" aria-hidden="true">
-      <div className="grid gap-3 sm:grid-cols-2">
-        {Array.from({ length: 4 }, (_, index) => (
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {Array.from({ length: 6 }, (_, index) => (
           <Skeleton key={index} variant="rounded" height={112} sx={{ borderRadius: "24px" }} />
         ))}
       </div>
