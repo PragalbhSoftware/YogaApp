@@ -239,14 +239,34 @@ public class UpdateSlotRequest
     public string? End { get; set; }
 }
 
+/// <summary>
+/// <see cref="UseCredit"/> pays the session with a credit. It goes through Razorpay only when the credit booking
+/// carries a convenience fee; otherwise book with <c>POST /api/bookings/credit</c>.
+/// </summary>
 public class CreateBookingOrderRequest
 {
     public Guid SlotId { get; set; }
     public Guid? ServiceId { get; set; }
     public bool Trial { get; set; }
+    public bool UseCredit { get; set; }
     public string? HomeAddress { get; set; }
     public string? Landmark { get; set; }
 }
+
+/// <summary>
+/// The "Use 1 credit" option. When <see cref="Available"/> is false, <see cref="Reason"/> says why
+/// (NoCredits, AboveCap, ExpiresBeforeSession, Trial or Blocked) and <see cref="Message"/> is safe to show.
+/// <see cref="Total"/> is what the customer pays now (the convenience fee, or zero).
+/// </summary>
+public record CreditOptionResponse(
+    bool Available,
+    string? Reason,
+    string? Message,
+    decimal ConvenienceFee,
+    decimal Total,
+    Guid? BatchId,
+    string? PackName,
+    DateOnly? UseBy);
 
 public record BookingQuoteResponse(
     Guid SlotId,
@@ -255,20 +275,72 @@ public record BookingQuoteResponse(
     decimal ConvenienceFee,
     decimal Total,
     string Currency,
-    bool IsTrial);
+    bool IsTrial,
+    CreditOptionResponse Credit);
 
 public record TrialOfferResponse(Guid ServiceId, decimal Price);
 
 /// <summary><see cref="Used"/> is true once the customer's trial with this instructor is spent.</summary>
 public record TrialStatusResponse(bool Offered, decimal? Price, bool Used);
 
-public record ProviderTrialResponse(bool Enabled, decimal? Price, decimal? LowestRegularRate, decimal ConvenienceFee);
+public record ProviderTrialResponse(Guid? ServiceId, bool Enabled, decimal? Price, decimal? LowestRegularRate, decimal ConvenienceFee);
 
+/// <summary><see cref="ServiceId"/> picks which of the instructor's services carries the trial; omitted keeps the current one.</summary>
 public class UpdateProviderTrialRequest
 {
+    public Guid? ServiceId { get; set; }
     public bool Enabled { get; set; }
     public decimal? Price { get; set; }
 }
+
+public record ProviderServiceResponse(
+    Guid Id,
+    string Title,
+    string Category,
+    bool IsActive,
+    bool TrialEnabled,
+    decimal? TrialPrice);
+
+public record PackResponse(
+    Guid Id,
+    string Name,
+    int Sessions,
+    decimal Price,
+    decimal PerSession,
+    int ValidityDays,
+    decimal PriceCap,
+    string Currency);
+
+/// <summary><see cref="UseBy"/> is the last India date a credit from this batch can be booked with.</summary>
+public record CreditBatchResponse(
+    Guid Id,
+    string PackName,
+    int Sessions,
+    int Remaining,
+    decimal PriceCap,
+    DateTimeOffset PurchasedAt,
+    DateTimeOffset ExpiresAt,
+    DateOnly UseBy);
+
+/// <summary>Usable credits, earliest expiry first.</summary>
+public record MyCreditsResponse(int Total, IReadOnlyList<CreditBatchResponse> Batches);
+
+public record PackOrderResponse(
+    Guid CheckoutId,
+    string KeyId,
+    string OrderId,
+    long AmountPaise,
+    decimal Amount,
+    string Currency,
+    Guid PackId,
+    string PackName,
+    bool LocalCapture);
+
+/// <summary>
+/// <see cref="Status"/> is Open until the server has captured the payment, then Completed with the new
+/// <see cref="Batch"/>, or Refunded if the payment was given back.
+/// </summary>
+public record PackOrderStatusResponse(string OrderId, string Status, CreditBatchResponse? Batch);
 
 public record CheckoutOrderResponse(
     Guid CheckoutId,
@@ -343,11 +415,14 @@ public record BookingResponse(
     decimal? LateCancelFee,
     string? CancelledBy,
     string? CancelReason,
-    bool IsTrial);
+    bool IsTrial,
+    bool PaidWithCredit);
 
 /// <summary>
 /// <see cref="Amount"/> is what the customer paid (session plus convenience fee). A late cancel keeps the
 /// late fee and the convenience fee. Terms come from the booking, not from current settings.
+/// For a credit booking, <see cref="CreditReturned"/> says whether the credit comes back, and <see cref="Refund"/>
+/// covers only the convenience fee paid.
 /// </summary>
 public record CancelQuoteResponse(
     decimal Amount,
@@ -359,4 +434,6 @@ public record CancelQuoteResponse(
     string Currency,
     string LateCancelFeeType,
     decimal LateCancelFeeValue,
-    DateTimeOffset? FreeUntil);
+    DateTimeOffset? FreeUntil,
+    bool PaidWithCredit,
+    bool CreditReturned);

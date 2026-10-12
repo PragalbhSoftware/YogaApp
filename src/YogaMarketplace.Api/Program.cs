@@ -140,6 +140,8 @@ public static class DatabaseStartup
             }
 
             await scope.ServiceProvider.GetRequiredService<DbSeeder>().SeedAsync();
+            await scope.ServiceProvider.GetRequiredService<YogaMarketplace.Api.Jobs.CreditExpiryJob>()
+                .EnsureScheduledAsync(DateTimeOffset.UtcNow, CancellationToken.None);
         }
         catch (Exception ex)
         {

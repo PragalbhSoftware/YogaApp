@@ -6,7 +6,7 @@ namespace YogaMarketplace.Api.Controllers;
 
 [ApiController]
 [Authorize]
-[Route("api/providers/me/trial")]
+[Route("api/providers/me")]
 public class ProviderTrialController : ControllerBase
 {
     private readonly ProviderTrialService _trials;
@@ -16,11 +16,15 @@ public class ProviderTrialController : ControllerBase
         _trials = trials;
     }
 
-    [HttpGet]
+    [HttpGet("services")]
+    public async Task<ActionResult<IReadOnlyList<ProviderServiceResponse>>> Services(CancellationToken cancellationToken) =>
+        Ok(await _trials.ListServicesAsync(cancellationToken));
+
+    [HttpGet("trial")]
     public async Task<ActionResult<ProviderTrialResponse>> Get(CancellationToken cancellationToken) =>
         Ok(await _trials.GetAsync(cancellationToken));
 
-    [HttpPut]
+    [HttpPut("trial")]
     public async Task<ActionResult<ProviderTrialResponse>> Update(
         [FromBody] UpdateProviderTrialRequest request,
         CancellationToken cancellationToken) =>

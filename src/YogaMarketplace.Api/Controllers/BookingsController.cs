@@ -42,6 +42,17 @@ public class BookingsController : ControllerBase
         return Ok(await _bookings.CreateOrderAsync(request, cancellationToken));
     }
 
+    /// <summary>Books with one credit when the credit booking has no fee to pay. The quote says which applies.</summary>
+    [HttpPost("credit")]
+    public async Task<ActionResult<BookingResponse>> BookWithCredit(
+        [FromBody] CreateBookingOrderRequest? request,
+        CancellationToken cancellationToken)
+    {
+        if (request is null)
+            return BadRequest(new { error = "Invalid request." });
+        return Ok(await _bookings.CreateCreditBookingAsync(request, cancellationToken));
+    }
+
     [HttpPost("confirm")]
     public async Task<ActionResult<BookingResponse>> Confirm(
         [FromBody] ConfirmBookingPaymentRequest? request,

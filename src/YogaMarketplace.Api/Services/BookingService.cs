@@ -8,11 +8,13 @@ using YogaMarketplace.Infrastructure.Persistence;
 
 namespace YogaMarketplace.Api.Services;
 
-public readonly record struct WebhookResult(bool Booked, Guid? BookingId)
+public readonly record struct WebhookResult(bool Booked, Guid? BookingId, Guid? CreditBatchId = null)
 {
     public static WebhookResult Ignored() => new(false, null);
 
     public static WebhookResult ForBooking(Guid bookingId) => new(true, bookingId);
+
+    public static WebhookResult ForPack(Guid batchId) => new(false, null, batchId);
 }
 
 public interface IBookingService
@@ -22,6 +24,8 @@ public interface IBookingService
     Task<TrialStatusResponse> TrialStatusAsync(Guid providerId, CancellationToken cancellationToken);
 
     Task<CheckoutOrderResponse> CreateOrderAsync(CreateBookingOrderRequest request, CancellationToken cancellationToken);
+
+    Task<BookingResponse> CreateCreditBookingAsync(CreateBookingOrderRequest request, CancellationToken cancellationToken);
 
     Task<BookingResponse> ConfirmAsync(ConfirmBookingPaymentRequest request, CancellationToken cancellationToken);
 
@@ -56,7 +60,7 @@ public interface IRazorpayWebhookHandler
     Task<WebhookResult> HandleWebhookAsync(string rawBody, string? signature, CancellationToken cancellationToken);
 }
 
-public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebhookHandler
+public partial class BookingService : IBookingService, IBookingHandshake, IRazorpayWebhookHandler
 {
     private const string CustomerChangeForbidden = "Only the customer who booked can change this booking.";
     private const string TrialRefundedMessage = TrialRules.AlreadyUsedMessage + " We refunded this payment in full.";
@@ -68,6 +72,8 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
     private readonly ICurrentUser _current;
     private readonly IRazorpayClient _razorpay;
     private readonly IPlatformSettingsService _settings;
+    private readonly CreditLedger _credits;
+    private readonly CreditPurchaseService _packs;
     private readonly ILogger<BookingService> _logger;
 
     public BookingService(
@@ -75,12 +81,16 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
         ICurrentUser current,
         IRazorpayClient razorpay,
         IPlatformSettingsService settings,
+        CreditLedger credits,
+        CreditPurchaseService packs,
         ILogger<BookingService> logger)
     {
         _db = db;
         _current = current;
         _razorpay = razorpay;
         _settings = settings;
+        _credits = credits;
+        _packs = packs;
         _logger = logger;
     }
 
@@ -93,8 +103,9 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
             await EnsureTrialAvailableAsync(customer.Id, service, cancellationToken);
         var settings = await _settings.GetAsync(cancellationToken);
         var price = PriceFor(slot, settings.Terms, trial ? service : null);
+        var credit = await CreditOptionAsync(customer, slot, trial, settings.Terms, cancellationToken);
         return new BookingQuoteResponse(
-            slot.Id, service.Id, price.SessionAmount, price.ConvenienceFee, price.Total, settings.Currency, trial);
+            slot.Id, service.Id, price.SessionAmount, price.ConvenienceFee, price.Total, settings.Currency, trial, credit);
     }
 
     public async Task<TrialStatusResponse> TrialStatusAsync(Guid providerId, CancellationToken cancellationToken)
@@ -113,22 +124,16 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
         var customer = await RequireCustomerAsync(cancellationToken);
         var slot = await LoadBookableSlotAsync(request.SlotId, cancellationToken);
         var provider = slot.Provider!;
-
-        var homeAddress = Clean(request.HomeAddress, 300, "Address");
-        var landmark = Clean(request.Landmark, 160, "Landmark");
-        if (slot.Mode == SessionMode.Home && (string.IsNullOrWhiteSpace(homeAddress) || string.IsNullOrWhiteSpace(landmark))
-            && VisitAddressRules.IsComplete(customer))
-        {
-            (homeAddress, landmark) = VisitAddressRules.ForBooking(customer);
-        }
-        BookingRules.EnsureSessionLocation(slot.Mode, homeAddress, landmark, provider.GoogleMeetLink, provider.StudioAddress);
+        var (homeAddress, landmark) = ResolveLocation(customer, slot, request);
 
         var service = await ResolveServiceAsync(provider.Id, request.ServiceId, cancellationToken);
-        if (request.Trial)
+        if (request.Trial && !request.UseCredit)
             await EnsureTrialAvailableAsync(customer.Id, service, cancellationToken);
         var settings = await _settings.GetAsync(cancellationToken);
         var terms = settings.Terms;
-        var (amount, convenienceFee, total) = PriceFor(slot, terms, request.Trial ? service : null);
+        var (amount, convenienceFee, total) = request.UseCredit
+            ? await PriceCreditOrderAsync(customer, slot, request.Trial, terms, cancellationToken)
+            : PriceFor(slot, terms, request.Trial ? service : null);
         var paise = RazorpayMoney.ToPaise(total);
         var checkoutId = Guid.NewGuid();
 
@@ -154,6 +159,7 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
             Mode = slot.Mode,
             Amount = amount,
             IsTrial = request.Trial,
+            UsesCredit = request.UseCredit,
             ConvenienceFee = convenienceFee,
             CommissionPercent = terms.CommissionPercent,
             CancelFreeWindowHours = terms.CancelFreeWindowHours,
@@ -195,7 +201,7 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
         var signature = Required(request.Signature, "Payment signature is required.");
 
         var preview = await _db.CheckoutIntents.AsNoTracking()
-            .SingleOrDefaultAsync(c => c.GatewayOrderId == orderId, cancellationToken)
+            .SingleOrDefaultAsync(c => c.GatewayOrderId == orderId && c.Kind == CheckoutKind.Booking, cancellationToken)
             ?? throw new DomainException("Unknown payment order.", 404);
         if (preview.CustomerId != customer.Id)
             throw new DomainException("This payment belongs to another account.", 403);
@@ -270,6 +276,14 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
     public async Task<BookingResponse> DeclineAsync(Guid bookingId, CancellationToken cancellationToken)
     {
         var (booking, currency) = await LoadForInstructorAsync(bookingId, cancellationToken);
+        if (booking.CreditBatchId is not null)
+        {
+            await DeclineCreditBookingAsync(booking, cancellationToken);
+            _logger.LogInformation(
+                "Instructor {ProviderId} declined credit booking {BookingId}; the credit was returned.", booking.ProviderId, booking.Id);
+            return ToResponse(booking, booking.Payment, currency);
+        }
+
         var payment = RequireRefundablePayment(booking);
         BookingRules.Decline(booking);
         await RefundAndSaveAsync(booking, payment, payment.Amount, cancellationToken);
@@ -286,6 +300,8 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
         var (booking, currency) = await LoadForCustomerAsync(bookingId, cancellationToken);
         if (booking.Status is not (BookingStatus.PendingAccept or BookingStatus.Upcoming))
             throw new DomainException("Only a pending or upcoming booking can be cancelled.");
+        if (booking.CreditBatchId is not null)
+            return await QuoteCreditCancelAsync(booking, currency, cancellationToken);
         var paid = booking.Payment?.Amount ?? booking.Amount + booking.ConvenienceFee;
         var start = SessionStartOf(booking);
         var settlement = BookingRules.SettleCustomerCancel(booking, paid, start, DateTimeOffset.UtcNow);
@@ -299,12 +315,16 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
             currency,
             booking.LateCancelFeeType.ToString(),
             booking.LateCancelFeeValue,
-            booking.Status == BookingStatus.Upcoming ? BookingRules.FreeCancelUntil(booking, start) : null);
+            booking.Status == BookingStatus.Upcoming ? BookingRules.FreeCancelUntil(booking, start) : null,
+            false,
+            false);
     }
 
     public async Task<BookingResponse> CancelAsync(Guid bookingId, CancellationToken cancellationToken)
     {
         var (booking, currency) = await LoadForCustomerAsync(bookingId, cancellationToken);
+        if (booking.CreditBatchId is not null)
+            return await CancelCreditBookingAsync(booking, currency, cancellationToken);
         var payment = RequireRefundablePayment(booking);
         var start = SessionStartOf(booking);
         var now = DateTimeOffset.UtcNow;
@@ -362,6 +382,7 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
                 throw new DomainException("That slot has already ended.", 409);
             if (await SlotIsTakenAsync(newSlot.Id, cancellationToken, booking.Id))
                 throw new DomainException("That slot is no longer available.", 409);
+            await EnsureCreditCoversMoveAsync(booking, newSlot, cancellationToken);
 
             booking.Slot = newSlot;
             await _db.SaveChangesAsync(cancellationToken);
@@ -460,6 +481,13 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
         if (!RazorpayWebhookParser.TryReadCapturedPayment(rawBody, out var captured))
             return WebhookResult.Ignored();
 
+        var kind = await _db.CheckoutIntents.AsNoTracking()
+            .Where(c => c.GatewayOrderId == captured.OrderId)
+            .Select(c => (CheckoutKind?)c.Kind)
+            .SingleOrDefaultAsync(cancellationToken);
+        if (kind == CheckoutKind.Pack)
+            return await _packs.HandleCapturedWebhookAsync(captured, cancellationToken);
+
         try
         {
             var booking = await CaptureAsync(
@@ -489,7 +517,8 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
         await using var tx = await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         try
         {
-            var checkout = await _db.CheckoutIntents.SingleOrDefaultAsync(c => c.GatewayOrderId == orderId, cancellationToken)
+            var checkout = await _db.CheckoutIntents
+                .SingleOrDefaultAsync(c => c.GatewayOrderId == orderId && c.Kind == CheckoutKind.Booking, cancellationToken)
                 ?? throw new DomainException("Unknown payment order.", 404);
 
             if (expectedCustomerId is Guid customerId && checkout.CustomerId != customerId)
@@ -516,9 +545,12 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
             if (checkout.Status == CheckoutStatus.Completed)
                 throw new DomainException("This order was already paid.", 409);
             if (checkout.Status == CheckoutStatus.Refunded)
-                throw new DomainException(TrialRefundedMessage, 409);
-            if (checkout.IsTrial && await TrialUsedAsync(checkout.CustomerId, checkout.ProviderId, cancellationToken))
-                await RefundDuplicateTrialAsync(checkout, paymentId, total, tx, cancellationToken);
+                throw new DomainException(checkout.UsesCredit ? "This payment was refunded." : TrialRefundedMessage, 409);
+            if (checkout.IsTrial && !checkout.UsesCredit
+                && await TrialUsedAsync(checkout.CustomerId, checkout.ProviderId!.Value, cancellationToken))
+            {
+                await RefundCheckoutAsync(checkout, paymentId, total, tx, TrialRefundedMessage, cancellationToken);
+            }
 
             var slot = await SlotsWithProvider()
                 .SingleOrDefaultAsync(s => s.Id == checkout.SlotId, cancellationToken)
@@ -537,11 +569,14 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
                 s => s.Id == checkout.ServiceId && s.ProviderId == slot.ProviderId && s.IsActive,
                 cancellationToken) ?? throw new DomainException("This session is no longer available.", 409);
 
+            var batch = checkout.UsesCredit
+                ? await TakeCreditAtCaptureAsync(checkout, slot, paymentId, total, tx, cancellationToken)
+                : null;
             var booking = BookingRules.CreateAfterPayment(
                 checkout.CustomerId,
                 service,
                 slot,
-                checkout.Amount,
+                batch is null ? checkout.Amount : CreditRules.InstructorGross(batch, RateOf(slot)),
                 checkout.ToTerms(),
                 checkout.HomeAddress,
                 checkout.Landmark,
@@ -550,6 +585,11 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
                 checkout.IsTrial);
 
             var now = DateTimeOffset.UtcNow;
+            if (batch is not null)
+            {
+                CreditRules.Attach(booking, batch);
+                _credits.Use(batch, booking.Id, now);
+            }
             var payment = new Payment
             {
                 Id = Guid.NewGuid(),
@@ -564,6 +604,7 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
 
             checkout.Status = CheckoutStatus.Completed;
             checkout.BookingId = booking.Id;
+            checkout.GatewayPaymentId = paymentId;
             checkout.CompletedAt = now;
 
             booking.Provider = provider;
@@ -581,25 +622,32 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
             _logger.LogWarning(ex, "Booking save conflict for Razorpay order {OrderId}.", orderId);
             await tx.DisposeAsync();
             _db.ChangeTracker.Clear();
-            await RefundIfTrialTakenAsync(orderId, paymentId, cancellationToken);
+            await RefundIfLostAsync(orderId, paymentId, cancellationToken);
             throw new DomainException("That slot was just booked.", 409);
         }
     }
 
     /// <summary>
-    /// A unique-index clash at capture means another request saved first: either the slot or this customer's trial with
-    /// the instructor (a double-click, for example). For the trial, take the same refund path as the check before saving.
+    /// A clash at capture means another request saved first: the slot, this customer's trial with the instructor (a
+    /// double-click, for example), or the customer's last credit. For the trial and the credit, take the same refund path
+    /// as the check before saving.
     /// </summary>
-    private async Task RefundIfTrialTakenAsync(string orderId, string paymentId, CancellationToken cancellationToken)
+    private async Task RefundIfLostAsync(string orderId, string paymentId, CancellationToken cancellationToken)
     {
         await using var tx = await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         var checkout = await _db.CheckoutIntents.SingleAsync(c => c.GatewayOrderId == orderId, cancellationToken);
-        if (checkout.IsTrial
-            && checkout.Status == CheckoutStatus.Open
-            && await TrialUsedAsync(checkout.CustomerId, checkout.ProviderId, cancellationToken))
+        if (checkout.Status != CheckoutStatus.Open)
+            return;
+        var total = checkout.Amount + checkout.ConvenienceFee;
+        if (checkout.UsesCredit)
         {
-            await RefundDuplicateTrialAsync(checkout, paymentId, checkout.Amount + checkout.ConvenienceFee, tx, cancellationToken);
+            var slot = await SlotsWithProvider().SingleAsync(s => s.Id == checkout.SlotId, cancellationToken);
+            if ((await _credits.ChooseAsync(checkout.CustomerId, RateOf(slot), SessionStartOf(slot), DateTimeOffset.UtcNow, cancellationToken)).Batch is null)
+                await RefundCheckoutAsync(checkout, paymentId, total, tx, CreditFeeRefundedMessage, cancellationToken);
+            return;
         }
+        if (checkout.IsTrial && await TrialUsedAsync(checkout.CustomerId, checkout.ProviderId!.Value, cancellationToken))
+            await RefundCheckoutAsync(checkout, paymentId, total, tx, TrialRefundedMessage, cancellationToken);
     }
 
     private IQueryable<AvailabilitySlot> SlotsWithProvider() =>
@@ -626,6 +674,21 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
         if (await SlotIsTakenAsync(slot.Id, cancellationToken))
             throw new DomainException("That slot is no longer available.", 409);
         return slot;
+    }
+
+    /// <summary>Uses the request's home address, else the customer's saved visit address, and checks the mode has what it needs.</summary>
+    private static (string? HomeAddress, string? Landmark) ResolveLocation(User customer, AvailabilitySlot slot, CreateBookingOrderRequest request)
+    {
+        var provider = slot.Provider!;
+        var homeAddress = Clean(request.HomeAddress, 300, "Address");
+        var landmark = Clean(request.Landmark, 160, "Landmark");
+        if (slot.Mode == SessionMode.Home && (string.IsNullOrWhiteSpace(homeAddress) || string.IsNullOrWhiteSpace(landmark))
+            && VisitAddressRules.IsComplete(customer))
+        {
+            (homeAddress, landmark) = VisitAddressRules.ForBooking(customer);
+        }
+        BookingRules.EnsureSessionLocation(slot.Mode, homeAddress, landmark, provider.GoogleMeetLink, provider.StudioAddress);
+        return (homeAddress, landmark);
     }
 
     private static void EnsureAreaOpen(Provider provider)
@@ -669,28 +732,32 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
             .AnyAsync(b => b.CustomerId == customerId && b.ProviderId == providerId && b.TrialConsumed, cancellationToken);
 
     /// <summary>
-    /// A second trial slipped past the checkout check (two tabs, for example). Marks the checkout refunded, refunds the
-    /// whole payment, commits, and then fails the capture. A replayed capture of the same order sees Refunded and stops.
+    /// The paid checkout can't become a booking (a second trial from another tab, or a credit that is gone). Marks the
+    /// checkout refunded, refunds the whole payment, commits, and then fails the capture with <paramref name="message"/>.
+    /// A replayed capture of the same order sees Refunded and stops.
     /// </summary>
-    private async Task RefundDuplicateTrialAsync(
+    private async Task RefundCheckoutAsync(
         CheckoutIntent checkout,
         string paymentId,
         decimal total,
         IDbContextTransaction tx,
+        string message,
         CancellationToken cancellationToken)
     {
         checkout.Status = CheckoutStatus.Refunded;
+        checkout.GatewayPaymentId = paymentId;
         checkout.CompletedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync(cancellationToken);
         await _razorpay.RefundPaymentAsync(paymentId, RazorpayMoney.ToPaise(total), checkout.Id.ToString("N"), CancellationToken.None);
         await tx.CommitAsync(CancellationToken.None);
         _logger.LogWarning(
-            "Refunded payment {PaymentId} for checkout {CheckoutId}: customer {CustomerId} already used the trial with instructor {ProviderId}.",
+            "Refunded payment {PaymentId} for checkout {CheckoutId} of customer {CustomerId} with instructor {ProviderId}: {Reason}",
             paymentId,
             checkout.Id,
             checkout.CustomerId,
-            checkout.ProviderId);
-        throw new DomainException(TrialRefundedMessage, 409);
+            checkout.ProviderId,
+            message);
+        throw new DomainException(message, 409);
     }
 
     private Task<User> RequireCustomerAsync(CancellationToken cancellationToken) =>
@@ -861,7 +928,8 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
             booking.LateCancelFee,
             booking.CancelledBy?.ToString(),
             booking.CancelReason,
-            booking.IsTrial);
+            booking.IsTrial,
+            booking.CreditBatchId is not null);
     }
 
     private static string Required(string? value, string message)

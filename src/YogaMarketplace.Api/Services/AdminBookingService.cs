@@ -26,6 +26,7 @@ public class AdminBookingService : IAdminBookingService
     private readonly IRazorpayClient _razorpay;
     private readonly ICurrentUser _current;
     private readonly IPlatformSettingsService _settings;
+    private readonly CreditLedger _credits;
     private readonly ILogger<AdminBookingService> _logger;
 
     public AdminBookingService(
@@ -33,12 +34,14 @@ public class AdminBookingService : IAdminBookingService
         IRazorpayClient razorpay,
         ICurrentUser current,
         IPlatformSettingsService settings,
+        CreditLedger credits,
         ILogger<AdminBookingService> logger)
     {
         _db = db;
         _razorpay = razorpay;
         _current = current;
         _settings = settings;
+        _credits = credits;
         _logger = logger;
     }
 
@@ -61,10 +64,17 @@ public class AdminBookingService : IAdminBookingService
         if (booking.Status is not (BookingStatus.PendingAccept or BookingStatus.Upcoming))
             throw new DomainException("Only a pending or upcoming booking can be cancelled.", 409);
         var payment = booking.Payment;
-        if (payment is null || payment.Status != PaymentStatus.Paid || string.IsNullOrWhiteSpace(payment.GatewayPaymentId))
+        var paidWithCredit = booking.CreditBatchId is not null;
+        if (payment is null || payment.Status != PaymentStatus.Paid
+            || (!paidWithCredit && string.IsNullOrWhiteSpace(payment.GatewayPaymentId)))
+        {
             throw new DomainException("This booking has no captured payment to refund.", 409);
+        }
 
-        BookingRules.AdminCancel(booking, request.Reason, DateTimeOffset.UtcNow);
+        var now = DateTimeOffset.UtcNow;
+        BookingRules.AdminCancel(booking, request.Reason, now);
+        if (paidWithCredit)
+            await _credits.ReturnAsync(booking, now, cancellationToken);
         await PaymentRefunds.RefundAndSaveAsync(_db, _razorpay, _logger, booking, payment, payment.Amount, cancellationToken);
 
         _logger.LogInformation(
@@ -166,6 +176,8 @@ public class AdminBookingService : IAdminBookingService
             booking.Payment?.RefundedAmount,
             booking.LateCancelFee,
             booking.CancelledBy?.ToString(),
-            booking.CancelReason);
+            booking.CancelReason,
+            booking.CreditBatchId is not null,
+            booking.CreditValue);
     }
 }
