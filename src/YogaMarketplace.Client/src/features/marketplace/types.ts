@@ -35,11 +35,28 @@ export type InstructorSummary = {
   modes: ModeRate[] | null;
   ratingAverage: number | null;
   reviewCount: number;
+  /** API path of the first profile photo. */
+  photoUrl?: string | null;
+  /** True once admin has approved at least one certificate. */
+  isVerified: boolean;
 };
 
-export type InstructorDetail = InstructorSummary & {
+export type InstructorDetail = Omit<InstructorSummary, "photoUrl"> & {
   age: number | null;
   studioAddress: string | null;
+  /** False when admin has closed the instructor's area. The profile stays viewable but cannot be booked. */
+  areaOpen: boolean;
+  photoUrls: string[];
+  introVideoId: string | null;
+  /** Titles of admin-approved certificates. The files themselves are never public. */
+  certificates: string[];
+  /** One discounted or free first session per customer, when the instructor offers it. */
+  trial: TrialOffer | null;
+};
+
+export type TrialOffer = {
+  serviceId: string;
+  price: number;
 };
 
 export type OpenSlot = {

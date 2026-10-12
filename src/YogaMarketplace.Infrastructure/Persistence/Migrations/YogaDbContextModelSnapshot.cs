@@ -181,6 +181,11 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                         .HasMaxLength(300)
                         .HasColumnType("nvarchar(300)");
 
+                    b.Property<bool>("IsTrial")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
                     b.Property<string>("Landmark")
                         .HasMaxLength(160)
                         .HasColumnType("nvarchar(160)");
@@ -247,6 +252,8 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ProviderId", "Status");
 
+                    b.HasIndex("CustomerId", "ProviderId", "IsTrial");
+
                     b.ToTable("Bookings");
                 });
 
@@ -290,6 +297,17 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("BookingId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<int>("CancelFreeWindowHours")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<decimal>("CommissionPercent")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)")
+                        .HasDefaultValue(0m);
+
                     b.Property<DateTimeOffset?>("CompletedAt")
                         .HasColumnType("datetimeoffset");
 
@@ -324,9 +342,27 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                         .HasMaxLength(300)
                         .HasColumnType("nvarchar(300)");
 
+                    b.Property<bool>("IsTrial")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
                     b.Property<string>("Landmark")
                         .HasMaxLength(160)
                         .HasColumnType("nvarchar(160)");
+
+                    b.Property<string>("LateCancelFeeType")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)")
+                        .HasDefaultValue("Percent");
+
+                    b.Property<decimal>("LateCancelFeeValue")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)")
+                        .HasDefaultValue(0m);
 
                     b.Property<string>("Mode")
                         .IsRequired()
@@ -363,6 +399,67 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                     b.HasIndex("CustomerId", "Status");
 
                     b.ToTable("CheckoutIntents");
+                });
+
+            modelBuilder.Entity("YogaMarketplace.Domain.ContentPage", b =>
+                {
+                    b.Property<string>("Slug")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(20000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
+
+                    b.HasKey("Slug");
+
+                    b.HasIndex("UpdatedByUserId");
+
+                    b.ToTable("ContentPages");
+
+                    b.HasData(
+                        new
+                        {
+                            Slug = "refund-policy",
+                            Body = "You pay when you book. The instructor then accepts or declines your request.\n\n## Full refunds\n- The instructor declines your request.\n- You cancel before the instructor accepts.\n- You cancel before the free-cancellation window closes. The booking page shows the exact time.\n- We cancel the session.\n\n## Late cancellations\nIf you cancel after the free-cancellation window closes, a late-cancellation fee is kept and paid to the instructor. The convenience fee is not refunded on a late cancel. The rest is refunded.\n\n## No-shows\nIf you miss a session without cancelling, no refund is given.\n\n## How refunds reach you\nRefunds go back to the original payment method through Razorpay. Banks usually take 5 to 7 working days.",
+                            Title = "Refund policy",
+                            UpdatedAt = new DateTimeOffset(new DateTime(2026, 10, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Version = 1
+                        },
+                        new
+                        {
+                            Slug = "terms",
+                            Body = "These terms cover your use of the marketplace, where customers book sessions with independent instructors.\n\n## Bookings\n- A booking is a request until the instructor accepts it.\n- Prices, fees and cancellation terms are shown before you pay and stay fixed for that booking.\n- Instructors are independent professionals and are responsible for the sessions they deliver.\n\n## Your account\n- Sign in with your own phone number and keep access to it secure.\n- Do not misuse the service, book on behalf of others without consent, or post misleading reviews.\n\n## Changes\nWe may update these terms. The date at the bottom of this page shows the latest version.",
+                            Title = "Terms of use",
+                            UpdatedAt = new DateTimeOffset(new DateTime(2026, 10, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Version = 1
+                        },
+                        new
+                        {
+                            Slug = "privacy",
+                            Body = "We collect only what we need to run bookings.\n\n## What we collect\n- Your name, phone number and gender, so instructors know who is coming.\n- Your visit address for home sessions, shared only with the instructor you book.\n- Payment references from Razorpay. We never see or store your card or UPI details.\n\n## How we use it\n- To create and manage your bookings, send updates and handle refunds.\n- To keep the marketplace safe, for example by blocking misuse.\n\n## Instructor documents\nCertificates uploaded by instructors are private. Only our team can open them to verify the instructor.\n\n## Your choices\nContact us to correct or delete your details. Some booking and payment records are kept as required by law.",
+                            Title = "Privacy policy",
+                            UpdatedAt = new DateTimeOffset(new DateTime(2026, 10, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Version = 1
+                        });
                 });
 
             modelBuilder.Entity("YogaMarketplace.Domain.OtpChallenge", b =>
@@ -628,6 +725,10 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                         .HasPrecision(10, 2)
                         .HasColumnType("decimal(10,2)");
 
+                    b.Property<string>("IntroVideoId")
+                        .HasMaxLength(11)
+                        .HasColumnType("nvarchar(11)");
+
                     b.Property<bool>("OffersHome")
                         .HasColumnType("bit");
 
@@ -674,6 +775,97 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                     b.HasIndex("Status", "AreaId");
 
                     b.ToTable("Providers");
+                });
+
+            modelBuilder.Entity("YogaMarketplace.Domain.ProviderCertificate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("ProviderId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("RejectionReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<DateTimeOffset?>("ReviewedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("ReviewedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReviewedByUserId");
+
+                    b.HasIndex("ProviderId", "Status");
+
+                    b.HasIndex("Status", "CreatedAt");
+
+                    b.ToTable("ProviderCertificates");
+                });
+
+            modelBuilder.Entity("YogaMarketplace.Domain.ProviderPhoto", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("ProviderId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProviderId", "SortOrder");
+
+                    b.ToTable("ProviderPhotos");
                 });
 
             modelBuilder.Entity("YogaMarketplace.Domain.RefreshToken", b =>
@@ -778,6 +970,15 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(120)
                         .HasColumnType("nvarchar(120)");
+
+                    b.Property<bool>("TrialEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<decimal?>("TrialPrice")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)");
 
                     b.HasKey("Id");
 
@@ -1006,6 +1207,14 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("YogaMarketplace.Domain.ContentPage", b =>
+                {
+                    b.HasOne("YogaMarketplace.Domain.User", null)
+                        .WithMany()
+                        .HasForeignKey("UpdatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("YogaMarketplace.Domain.Payment", b =>
                 {
                     b.HasOne("YogaMarketplace.Domain.Booking", "Booking")
@@ -1051,6 +1260,31 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                     b.Navigation("Area");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("YogaMarketplace.Domain.ProviderCertificate", b =>
+                {
+                    b.HasOne("YogaMarketplace.Domain.Provider", "Provider")
+                        .WithMany("Certificates")
+                        .HasForeignKey("ProviderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("YogaMarketplace.Domain.User", null)
+                        .WithMany()
+                        .HasForeignKey("ReviewedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Provider");
+                });
+
+            modelBuilder.Entity("YogaMarketplace.Domain.ProviderPhoto", b =>
+                {
+                    b.HasOne("YogaMarketplace.Domain.Provider", null)
+                        .WithMany("Photos")
+                        .HasForeignKey("ProviderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("YogaMarketplace.Domain.RefreshToken", b =>
@@ -1141,6 +1375,10 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("YogaMarketplace.Domain.Provider", b =>
                 {
+                    b.Navigation("Certificates");
+
+                    b.Navigation("Photos");
+
                     b.Navigation("Services");
 
                     b.Navigation("Slots");

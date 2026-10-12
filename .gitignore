@@ -6,6 +6,9 @@
 # dotenv files
 .env
 
+# Uploaded files (Storage:RootPath default)
+App_Data/
+
 # User-specific files
 *.rsuser
 *.suo

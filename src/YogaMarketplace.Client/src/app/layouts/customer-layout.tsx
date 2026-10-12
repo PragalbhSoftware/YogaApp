@@ -1,14 +1,22 @@
 import { Suspense } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { CalendarDays, Home, User } from "lucide-react";
+import { CalendarDays, Home, LogIn, User } from "lucide-react";
 import { PageLoader } from "@/components/common/page-loader";
+import { SiteFooter } from "@/components/common/site-footer";
 import { routes } from "@/constants/routes";
+import { useAuth } from "@/features/auth/hooks/use-auth";
 import { cn } from "@/utils/cn";
 
-const navItems = [
+const signedInNav = [
   { to: routes.home, label: "Home", icon: Home },
   { to: routes.bookings, label: "Bookings", icon: CalendarDays },
   { to: routes.profile, label: "Profile", icon: User },
+];
+
+const guestNav = [
+  { to: routes.home, label: "Home", icon: Home },
+  { to: routes.bookings, label: "Bookings", icon: CalendarDays },
+  { to: routes.login, label: "Sign in", icon: LogIn },
 ];
 
 function isNavActive(pathname: string, to: string) {
@@ -29,6 +37,8 @@ function itemClass(active: boolean, compact: boolean) {
 
 export function CustomerLayout() {
   const { pathname } = useLocation();
+  const { isAuthenticated } = useAuth();
+  const navItems = isAuthenticated ? signedInNav : guestNav;
 
   return (
     <div className="min-h-svh bg-brand-background">
@@ -60,6 +70,7 @@ export function CustomerLayout() {
         <Suspense fallback={<PageLoader />}>
           <Outlet />
         </Suspense>
+        <SiteFooter />
       </div>
 
       <nav

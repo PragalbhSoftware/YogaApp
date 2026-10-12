@@ -42,7 +42,9 @@ export function CustomerBookingCard({
         </span>
         <div className="min-w-0 flex-1">
           <h2 className="font-heading text-lg font-medium">{booking.providerName}</h2>
-          <p className="text-sm text-brand-muted">{booking.serviceTitle}</p>
+          <p className="text-sm text-brand-muted">
+            {booking.isTrial ? `Trial class · ${booking.serviceTitle}` : booking.serviceTitle}
+          </p>
           <Chip size="small" label={statusFilterLabel(booking.status)} sx={{ mt: 1 }} />
         </div>
       </div>

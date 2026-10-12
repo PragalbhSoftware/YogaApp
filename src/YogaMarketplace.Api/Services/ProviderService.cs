@@ -114,7 +114,7 @@ public class ProviderService
             throw new DomainException("Choose at least one session mode: Home, Studio, or Online.");
 
         var area = await _db.Areas.SingleOrDefaultAsync(a => a.Id == request.AreaId && a.IsActive, cancellationToken)
-            ?? throw new DomainException("Choose a Mumbai area.");
+            ?? throw new DomainException("Choose an open area.");
 
         var category = request.CategoryId is Guid categoryId
             ? await _db.Categories.SingleOrDefaultAsync(c => c.Id == categoryId && c.IsActive, cancellationToken)
@@ -242,7 +242,7 @@ public class ProviderService
             throw new DomainException("Choose at least one session mode: Home, Studio, or Online.");
 
         var area = await _db.Areas.SingleOrDefaultAsync(a => a.Id == request.AreaId && a.IsActive, cancellationToken)
-            ?? throw new DomainException("Choose a Mumbai area.");
+            ?? throw new DomainException("Choose an open area.");
 
         if (provider.OffersHome && !request.OffersHome
             && await HasLiveBookingsAsync(provider.Id, SessionMode.Home, cancellationToken))
@@ -529,6 +529,9 @@ public class ProviderService
         _db.Providers.AsNoTracking()
             .Include(p => p.Area)
             .Include(p => p.Services).ThenInclude(s => s.Category)
+            .Include(p => p.Photos)
+            .Include(p => p.Certificates)
+            .AsSplitQuery()
             .Where(ProviderApproval.IsListed);
 
     private async Task RequireListedAsync(Guid providerId, CancellationToken cancellationToken)
@@ -564,8 +567,13 @@ public class ProviderService
             provider.Status.ToString(),
             ModesOf(provider),
             rating.Count == 0 ? null : rating.Average,
-            rating.Count);
+            rating.Count,
+            OrderedPhotos(provider).Select(p => ProviderMediaService.PhotoUrl(p.Id)).FirstOrDefault(),
+            ProviderMediaRules.IsVerified(provider.Certificates));
     }
+
+    private static IEnumerable<ProviderPhoto> OrderedPhotos(Provider provider) =>
+        provider.Photos.OrderBy(p => p.SortOrder).ThenBy(p => p.CreatedAt);
 
     private static ProviderDetail ToDetail(Provider provider, IReadOnlyDictionary<Guid, (decimal Average, int Count)> ratings)
     {
@@ -581,7 +589,19 @@ public class ProviderService
             ModesOf(provider),
             provider.StudioAddress,
             rating.Count == 0 ? null : rating.Average,
-            rating.Count);
+            rating.Count,
+            provider.Area.IsActive,
+            OrderedPhotos(provider).Select(p => ProviderMediaService.PhotoUrl(p.Id)).ToList(),
+            provider.IntroVideoId,
+            provider.Certificates
+                .Where(c => c.Status == CertificateStatus.Approved)
+                .OrderBy(c => c.ReviewedAt)
+                .Select(c => c.Title)
+                .ToList(),
+            ProviderMediaRules.IsVerified(provider.Certificates),
+            provider.Services.Where(TrialRules.Offers)
+                .Select(s => new TrialOfferResponse(s.Id, s.TrialPrice!.Value))
+                .FirstOrDefault());
     }
 
     private static ProviderSelf ToSelf(Provider provider, User user, string areaName) => new(

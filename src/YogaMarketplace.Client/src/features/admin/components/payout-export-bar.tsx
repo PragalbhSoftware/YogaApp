@@ -37,10 +37,14 @@ export function PayoutExportBar({ status, rowCount }: PayoutExportBarProps) {
       aria-label="Payout export"
       className="flex flex-col gap-3 rounded-[24px] border border-brand-border bg-brand-surface p-5 sm:flex-row sm:items-center sm:justify-between"
     >
-      <p className="text-sm leading-relaxed text-brand-muted">
-        Export moves every pending payout to <span className="font-medium text-brand-text">Exported</span> and
-        downloads a CSV with each instructor’s phone and amount. Pay by bank or UPI, then mark each one paid.
-      </p>
+      <div className="space-y-1">
+        <p className="text-sm font-medium text-brand-text">Includes completed payout cycles only</p>
+        <p className="text-sm leading-relaxed text-brand-muted">
+          Export moves pending payouts from closed cycles to <span className="font-medium text-brand-text">Exported</span>{" "}
+          and downloads a CSV with each instructor’s phone and amount. Payouts in the current cycle wait for the next
+          export. Pay by bank or UPI, then mark each one paid.
+        </p>
+      </div>
       <div className="flex shrink-0 flex-wrap gap-2">
         {status === "Pending" ? (
           <Button

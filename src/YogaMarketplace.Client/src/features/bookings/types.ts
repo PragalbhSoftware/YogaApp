@@ -1,3 +1,21 @@
+/** What the server will charge for a slot right now. The client never adds these up itself. */
+export type BookingQuote = {
+  slotId: string;
+  serviceId: string;
+  sessionAmount: number;
+  convenienceFee: number;
+  total: number;
+  currency: string;
+  isTrial: boolean;
+};
+
+/** The signed-in customer's trial with one instructor. */
+export type TrialStatus = {
+  offered: boolean;
+  price: number | null;
+  used: boolean;
+};
+
 export type CheckoutOrder = {
   checkoutId: string;
   keyId: string;
@@ -53,6 +71,7 @@ export type BookingRecord = {
   lateCancelFee: number | null;
   cancelledBy: "Customer" | "Admin" | null;
   cancelReason: string | null;
+  isTrial: boolean;
 };
 
 export type CancelQuote = {
@@ -71,6 +90,7 @@ export type CancelQuote = {
 
 export type CreateOrderInput = {
   slotId: string;
+  trial?: boolean;
   homeAddress?: string;
   landmark?: string;
 };

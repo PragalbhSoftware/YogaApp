@@ -10,7 +10,7 @@ import { StatCard } from "@/features/admin/components/stat-card";
 import { useAdminSettings, useUpdateSettings } from "@/features/admin/hooks/use-admin";
 import { feeSettingsSchema, settingsLimits, type FeeSettingsValues } from "@/features/admin/schemas";
 import type { AdminSettings } from "@/features/admin/types";
-import { changedFields, formatAdminDay, lateFeeLabel } from "@/features/admin/utils";
+import { changedFields, formatAdminDay, lateFeeLabel, settingsSaveError } from "@/features/admin/utils";
 import { toUserMessage } from "@/services/http/api-error";
 import { formatInr } from "@/utils/money";
 
@@ -36,7 +36,6 @@ function toFormValues(settings: AdminSettings): FeeSettingsValues {
     commissionPercent: settings.commissionPercent,
     convenienceFee: settings.convenienceFee,
     cancelFreeWindowHours: settings.cancelFreeWindowHours,
-    rescheduleFreeWindowHours: settings.rescheduleFreeWindowHours,
     lateCancelFeeType: settings.lateCancelFeeType,
     lateCancelFeeValue: settings.lateCancelFeeValue,
     payoutCycle: settings.payoutCycle,
@@ -82,7 +81,7 @@ function FeeForm({ settings }: { settings: AdminSettings }) {
               { version: settings.version, ...changes },
               {
                 onSuccess: () => toast.success("Saved. New bookings use these fees."),
-                onError: (error) => toast.error(toUserMessage(error)),
+                onError: (error) => toast.error(settingsSaveError(error)),
               },
             );
           })}
@@ -116,16 +115,6 @@ function FeeForm({ settings }: { settings: AdminSettings }) {
                 `0 to ${settingsLimits.maxWindowHours} hours before the session. 0 means always free.`
               }
               {...form.register("cancelFreeWindowHours")}
-            />
-            <TextField
-              label="Free reschedule window (hours)"
-              fullWidth
-              inputMode="numeric"
-              error={Boolean(errors.rescheduleFreeWindowHours)}
-              helperText={
-                errors.rescheduleFreeWindowHours?.message ?? `0 to ${settingsLimits.maxWindowHours} hours before the session.`
-              }
-              {...form.register("rescheduleFreeWindowHours")}
             />
           </div>
 

@@ -15,6 +15,8 @@ internal static class ModelConfiguration
         ConfigureUserBlockEvent(modelBuilder.Entity<UserBlockEvent>());
         ConfigureRefreshToken(modelBuilder.Entity<RefreshToken>());
         ConfigureProvider(modelBuilder.Entity<Provider>());
+        ConfigureProviderPhoto(modelBuilder.Entity<ProviderPhoto>());
+        ConfigureProviderCertificate(modelBuilder.Entity<ProviderCertificate>());
         ConfigureService(modelBuilder.Entity<Service>());
         ConfigureSlot(modelBuilder.Entity<AvailabilitySlot>());
         ConfigureBooking(modelBuilder.Entity<Booking>());
@@ -24,6 +26,7 @@ internal static class ModelConfiguration
         ConfigurePayout(modelBuilder.Entity<PayoutPending>());
         ConfigureSettings(modelBuilder.Entity<PlatformSettings>());
         ConfigureSettingsAudit(modelBuilder.Entity<SettingsAudit>());
+        ConfigureContentPage(modelBuilder.Entity<ContentPage>());
         ConfigureBackgroundJob(modelBuilder.Entity<BackgroundJob>(), sqlite);
         ConfigureOtp(modelBuilder.Entity<OtpChallenge>());
     }
@@ -80,6 +83,27 @@ internal static class ModelConfiguration
         entity.HasOne(t => t.User).WithMany().HasForeignKey(t => t.UserId).OnDelete(DeleteBehavior.Cascade);
     }
 
+    private static void ConfigureProviderPhoto(EntityTypeBuilder<ProviderPhoto> entity)
+    {
+        entity.Property(p => p.StorageKey).HasMaxLength(200);
+        entity.Property(p => p.ContentType).HasMaxLength(40);
+        entity.HasIndex(p => new { p.ProviderId, p.SortOrder });
+        entity.HasOne<Provider>().WithMany(p => p.Photos).HasForeignKey(p => p.ProviderId).OnDelete(DeleteBehavior.Cascade);
+    }
+
+    private static void ConfigureProviderCertificate(EntityTypeBuilder<ProviderCertificate> entity)
+    {
+        entity.Property(c => c.Title).HasMaxLength(ProviderMediaRules.CertificateTitleMax);
+        entity.Property(c => c.StorageKey).HasMaxLength(200);
+        entity.Property(c => c.ContentType).HasMaxLength(40);
+        entity.Property(c => c.Status).HasConversion<string>().HasMaxLength(16);
+        entity.Property(c => c.RejectionReason).HasMaxLength(ProviderMediaRules.ReasonMax);
+        entity.HasIndex(c => new { c.ProviderId, c.Status });
+        entity.HasIndex(c => new { c.Status, c.CreatedAt });
+        entity.HasOne(c => c.Provider).WithMany(p => p.Certificates).HasForeignKey(c => c.ProviderId).OnDelete(DeleteBehavior.Cascade);
+        entity.HasOne<User>().WithMany().HasForeignKey(c => c.ReviewedByUserId).OnDelete(DeleteBehavior.Restrict);
+    }
+
     private static void ConfigureProvider(EntityTypeBuilder<Provider> entity)
     {
         entity.Property(p => p.DisplayName).HasMaxLength(80);
@@ -87,6 +111,7 @@ internal static class ModelConfiguration
         entity.Property(p => p.StudioAddress).HasMaxLength(300);
         entity.Property(p => p.GoogleMeetLink).HasMaxLength(300);
         entity.Property(p => p.RejectionReason).HasMaxLength(300);
+        entity.Property(p => p.IntroVideoId).HasMaxLength(ProviderMediaRules.YouTubeIdLength);
         entity.Property(p => p.Status).HasConversion<string>().HasMaxLength(16);
         entity.Property(p => p.HomeRate).HasPrecision(10, 2);
         entity.Property(p => p.StudioRate).HasPrecision(10, 2);
@@ -108,6 +133,8 @@ internal static class ModelConfiguration
     private static void ConfigureService(EntityTypeBuilder<Service> entity)
     {
         entity.Property(s => s.Title).HasMaxLength(120);
+        entity.Property(s => s.TrialEnabled).HasDefaultValue(false);
+        entity.Property(s => s.TrialPrice).HasPrecision(10, 2);
         entity.HasIndex(s => new { s.ProviderId, s.CategoryId }).IsUnique();
 
         entity.HasOne(s => s.Provider)
@@ -146,6 +173,8 @@ internal static class ModelConfiguration
         entity.Property(b => b.LateCancelFee).HasPrecision(10, 2);
         entity.Property(b => b.CommissionPercent).HasPrecision(5, 2).HasDefaultValue(0m);
         entity.Property(b => b.ConvenienceFee).HasPrecision(10, 2).HasDefaultValue(0m);
+        entity.Property(b => b.IsTrial).HasDefaultValue(false);
+        entity.HasIndex(b => new { b.CustomerId, b.ProviderId, b.IsTrial });
         entity.Property(b => b.CancelFreeWindowHours).HasDefaultValue(0);
         entity.Property(b => b.LateCancelFeeType).HasConversion<string>().HasMaxLength(16).HasDefaultValue(LateCancelFeeType.Percent);
         entity.Property(b => b.LateCancelFeeValue).HasPrecision(10, 2).HasDefaultValue(0m);
@@ -190,6 +219,11 @@ internal static class ModelConfiguration
         entity.Property(c => c.Status).HasConversion<string>().HasMaxLength(16);
         entity.Property(c => c.Amount).HasPrecision(10, 2);
         entity.Property(c => c.ConvenienceFee).HasPrecision(10, 2).HasDefaultValue(0m);
+        entity.Property(c => c.IsTrial).HasDefaultValue(false);
+        entity.Property(c => c.CommissionPercent).HasPrecision(5, 2).HasDefaultValue(0m);
+        entity.Property(c => c.CancelFreeWindowHours).HasDefaultValue(0);
+        entity.Property(c => c.LateCancelFeeType).HasConversion<string>().HasMaxLength(16).HasDefaultValue(LateCancelFeeType.Percent);
+        entity.Property(c => c.LateCancelFeeValue).HasPrecision(10, 2).HasDefaultValue(0m);
         entity.Property(c => c.Currency).HasMaxLength(8);
         entity.Property(c => c.HomeAddress).HasMaxLength(300);
         entity.Property(c => c.Landmark).HasMaxLength(160);
@@ -262,6 +296,17 @@ internal static class ModelConfiguration
         entity.Property(a => a.NewValue).HasMaxLength(PlatformSettingsRules.PolicyNoteMax);
         entity.HasIndex(a => a.ChangedAt);
         entity.HasOne<User>().WithMany().HasForeignKey(a => a.AdminUserId).OnDelete(DeleteBehavior.Restrict);
+    }
+
+    private static void ConfigureContentPage(EntityTypeBuilder<ContentPage> entity)
+    {
+        entity.HasKey(p => p.Slug);
+        entity.Property(p => p.Slug).HasMaxLength(ContentPageRules.SlugMax);
+        entity.Property(p => p.Title).HasMaxLength(ContentPageRules.TitleMax);
+        entity.Property(p => p.Body).HasMaxLength(ContentPageRules.BodyMax);
+        entity.Property(p => p.Version).HasDefaultValue(1).IsConcurrencyToken();
+        entity.HasOne<User>().WithMany().HasForeignKey(p => p.UpdatedByUserId).OnDelete(DeleteBehavior.Restrict);
+        entity.HasData(ContentPageDefaults.All());
     }
 
     private static void ConfigureBackgroundJob(EntityTypeBuilder<BackgroundJob> entity, bool sqlite)

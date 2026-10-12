@@ -2,8 +2,8 @@ import { Button, Dialog, DialogContent, Skeleton } from "@mui/material";
 import { ErrorState } from "@/components/common/error-state";
 import { useCancelQuote } from "@/features/bookings/hooks/use-bookings";
 import type { BookingRecord, CancelQuote } from "@/features/bookings/types";
+import { quoteNote } from "@/features/bookings/utils/cancel-copy";
 import { toUserMessage } from "@/services/http/api-error";
-import { formatWhenKolkata } from "@/utils/clock";
 import { formatInr } from "@/utils/money";
 
 type CancelDialogProps = {
@@ -85,7 +85,7 @@ function QuoteSummary({ quote }: { quote: CancelQuote }) {
         ) : null}
         {quote.convenienceFeeKept > 0 ? (
           <div className="flex justify-between gap-3">
-            <dt className="text-brand-muted">Convenience fee</dt>
+            <dt className="text-brand-muted">Convenience fee (not refunded)</dt>
             <dd className="tabular-nums">− {formatInr(quote.convenienceFeeKept)}</dd>
           </div>
         ) : null}
@@ -97,24 +97,4 @@ function QuoteSummary({ quote }: { quote: CancelQuote }) {
       <p className="text-sm leading-relaxed text-brand-muted">{quoteNote(quote)}</p>
     </div>
   );
-}
-
-function quoteNote(quote: CancelQuote) {
-  if (quote.lateCancelFee > 0 || quote.convenienceFeeKept > 0) {
-    return `The free cancellation window closed${
-      quote.freeUntil ? ` at ${formatWhenKolkata(quote.freeUntil)}` : ""
-    }. The late fee goes to your instructor, who kept this time for you.`;
-  }
-  if (quote.freeUntil) {
-    return `Free cancellation until ${formatWhenKolkata(quote.freeUntil)}. After that, ${lateFeeText(quote)} is kept.`;
-  }
-  return "Your instructor hasn’t accepted yet, so cancelling is free.";
-}
-
-function lateFeeText(quote: CancelQuote) {
-  const fee =
-    quote.lateCancelFeeType === "Flat"
-      ? formatInr(Math.min(quote.lateCancelFeeValue, quote.sessionAmount))
-      : `${quote.lateCancelFeeValue}% of the session`;
-  return quote.convenienceFee > 0 ? `${fee} plus the convenience fee` : fee;
 }

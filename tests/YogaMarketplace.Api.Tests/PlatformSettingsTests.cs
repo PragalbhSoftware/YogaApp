@@ -105,6 +105,97 @@ public class PlatformSettingsTests : IClassFixture<YogaApiFactory>
     }
 
     [Fact]
+    public async Task Booking_keeps_the_terms_locked_when_checkout_started()
+    {
+        var admin = await SignInAsync(SeedIds.AdminPhone);
+        var instructor = await SignInAsync(SeedIds.AnanyaPhone);
+        try
+        {
+            await AdminSettingsClient.PatchAsync(admin, version => new
+            {
+                version,
+                commissionPercent = 12m,
+                convenienceFee = 25m,
+                cancelFreeWindowHours = 6,
+                lateCancelFeeType = "Flat",
+                lateCancelFeeValue = 150m
+            });
+            var customer = await SignUpAsync("Mid Checkout Customer");
+            var slot = await TomorrowSlotAsync(instructor, "03:05");
+
+            var quote = await customer.GetFromJsonAsync<PriceQuoteBody>($"/api/bookings/quote?slotId={slot}", Json);
+            Assert.Equal(new PriceQuoteBody(749m, 25m, 774m), quote);
+            var order = await PostAsync<CheckoutBody>(customer, "/api/bookings/orders", new { slotId = slot });
+            Assert.Equal(774m, order.Amount);
+
+            await AdminSettingsClient.PatchAsync(admin, version => new
+            {
+                version,
+                commissionPercent = 30m,
+                convenienceFee = 99m,
+                cancelFreeWindowHours = 72,
+                lateCancelFeeType = "Percent",
+                lateCancelFeeValue = 80m
+            });
+
+            var booked = await ConfirmAsync(customer, order.OrderId, "pay_mid_checkout");
+            Assert.Equal(25m, booked.ConvenienceFee);
+            var stored = await QueryAsync(db => db.Bookings.AsNoTracking().SingleAsync(b => b.Id == booked.Id));
+            Assert.Equal(12m, stored.CommissionPercent);
+            Assert.Equal(25m, stored.ConvenienceFee);
+            Assert.Equal(6, stored.CancelFreeWindowHours);
+            Assert.Equal(LateCancelFeeType.Flat, stored.LateCancelFeeType);
+            Assert.Equal(150m, stored.LateCancelFeeValue);
+            Assert.Equal(774m, await QueryAsync(db => db.Payments.Where(p => p.BookingId == booked.Id).Select(p => p.Amount).SingleAsync()));
+        }
+        finally
+        {
+            await AdminSettingsClient.ResetFeesAsync(admin);
+        }
+    }
+
+    [Fact]
+    public async Task Instructor_in_a_closed_area_cannot_be_booked_from_a_direct_link()
+    {
+        var admin = await SignInAsync(SeedIds.AdminPhone);
+        var instructor = await SignInAsync(SeedIds.AnanyaPhone);
+        var customer = await SignUpAsync("Direct Link Customer");
+        var openedEarlier = await PostAsync<CheckoutBody>(customer, "/api/bookings/orders", new { slotId = await TomorrowSlotAsync(instructor, "03:45") });
+        var slot = await TomorrowSlotAsync(instructor, "04:25");
+        var anon = _factory.CreateClient();
+
+        await PatchAsync(admin, $"/api/admin/areas/{SeedIds.AreaBandra}", new { isActive = false });
+        try
+        {
+            var detail = await anon.GetFromJsonAsync<ProviderDetailBody>($"/api/providers/{SeedIds.AnanyaProviderId}", Json);
+            Assert.False(detail!.AreaOpen);
+
+            await AssertAreaClosedAsync(await customer.GetAsync($"/api/bookings/quote?slotId={slot}"));
+            await AssertAreaClosedAsync(await customer.PostAsJsonAsync("/api/bookings/orders", new { slotId = slot }));
+            await AssertAreaClosedAsync(await customer.PostAsJsonAsync("/api/bookings/confirm", new
+            {
+                orderId = openedEarlier.OrderId,
+                paymentId = "pay_closed_area",
+                signature = Sign($"{openedEarlier.OrderId}|pay_closed_area")
+            }));
+        }
+        finally
+        {
+            await PatchAsync(admin, $"/api/admin/areas/{SeedIds.AreaBandra}", new { isActive = true });
+        }
+
+        var reopened = await anon.GetFromJsonAsync<ProviderDetailBody>($"/api/providers/{SeedIds.AnanyaProviderId}", Json);
+        Assert.True(reopened!.AreaOpen);
+    }
+
+    private static async Task AssertAreaClosedAsync(HttpResponseMessage response)
+    {
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<ErrorBody>(Json);
+        Assert.Equal(ProviderApproval.AreaClosedMessage, body!.Error);
+    }
+
+    [Fact]
     public async Task Two_admins_saving_the_same_version_get_one_save_and_one_conflict()
     {
         var first = await SignInAsync(SeedIds.AdminPhone);
@@ -290,6 +381,8 @@ public class PlatformSettingsTests : IClassFixture<YogaApiFactory>
     private sealed record SlotBody(Guid Id);
     private sealed record AreaBody(Guid Id, string City, string Name);
     private sealed record ProviderBody(Guid Id, string DisplayName);
+    private sealed record ProviderDetailBody(Guid Id, bool AreaOpen);
+    private sealed record PriceQuoteBody(decimal SessionAmount, decimal ConvenienceFee, decimal Total);
     private sealed record CheckoutBody(string OrderId, decimal Amount, decimal SessionAmount, decimal ConvenienceFee);
     private sealed record BookingBody(
         Guid Id,

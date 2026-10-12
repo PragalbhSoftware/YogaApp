@@ -21,12 +21,15 @@ public class YogaDbContext : DbContext
     public DbSet<Service> Services => Set<Service>();
     public DbSet<AvailabilitySlot> AvailabilitySlots => Set<AvailabilitySlot>();
     public DbSet<Booking> Bookings => Set<Booking>();
+    public DbSet<ProviderPhoto> ProviderPhotos => Set<ProviderPhoto>();
+    public DbSet<ProviderCertificate> ProviderCertificates => Set<ProviderCertificate>();
     public DbSet<CheckoutIntent> CheckoutIntents => Set<CheckoutIntent>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<Review> Reviews => Set<Review>();
     public DbSet<PayoutPending> PayoutsPending => Set<PayoutPending>();
     public DbSet<PlatformSettings> Settings => Set<PlatformSettings>();
     public DbSet<SettingsAudit> SettingsAudits => Set<SettingsAudit>();
+    public DbSet<ContentPage> ContentPages => Set<ContentPage>();
     public DbSet<BackgroundJob> BackgroundJobs => Set<BackgroundJob>();
     public DbSet<OtpChallenge> OtpChallenges => Set<OtpChallenge>();
 

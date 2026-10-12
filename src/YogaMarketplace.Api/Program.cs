@@ -52,6 +52,8 @@ builder.Services.AddSwaggerGen(options =>
 
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddAppServices(builder.Configuration);
+builder.Services.AddApiRateLimiting(builder.Configuration);
+builder.Services.AddTrustedProxies(builder.Configuration);
 var allowedOrigins = CorsSettings.AllowedOriginsFrom(builder.Configuration, builder.Environment.IsProduction());
 builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
     policy.WithOrigins(allowedOrigins)
@@ -84,17 +86,24 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 builder.Services.AddAuthorization();
 
-var razorpay = builder.Configuration.GetSection(RazorpayOptions.Section).Get<RazorpayOptions>() ?? new RazorpayOptions();
-if (builder.Environment.IsProduction() && razorpay.UseFakeGateway)
-    throw new InvalidOperationException("Razorpay:UseFakeGateway must be false in Production.");
+var productionWarnings = ProductionSafety.Check(builder.Configuration, builder.Environment.IsProduction());
 
 var app = builder.Build();
 
+foreach (var warning in productionWarnings)
+    app.Logger.LogWarning("{ProductionWarning}", warning);
+
+app.UseForwardedHeaders();
+app.UseApiErrorResponses();
 app.UseMiddleware<DomainExceptionMiddleware>();
-app.UseSwagger();
-app.UseSwaggerUI();
+if (!app.Environment.IsProduction())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
 
 app.UseCors();
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

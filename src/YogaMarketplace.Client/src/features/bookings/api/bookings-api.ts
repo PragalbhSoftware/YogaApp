@@ -1,14 +1,26 @@
 import { http } from "@/services/http/http-client";
 import type {
+  BookingQuote,
   BookingRecord,
   CancelQuote,
   CheckoutOrder,
   CreateOrderInput,
   CreateReviewInput,
   ReviewRecord,
+  TrialStatus,
 } from "@/features/bookings/types";
 
 export const bookingsApi = {
+  quote(slotId: string, trial: boolean) {
+    return http
+      .get<BookingQuote>("/api/bookings/quote", { params: trial ? { slotId, trial } : { slotId } })
+      .then((res) => res.data);
+  },
+
+  trialStatus(providerId: string) {
+    return http.get<TrialStatus>("/api/bookings/trial", { params: { providerId } }).then((res) => res.data);
+  },
+
   createOrder(input: CreateOrderInput) {
     return http.post<CheckoutOrder>("/api/bookings/orders", input).then((res) => res.data);
   },

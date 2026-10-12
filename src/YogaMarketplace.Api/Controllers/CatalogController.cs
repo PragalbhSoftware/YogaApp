@@ -1,9 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using YogaMarketplace.Api.Security;
 using YogaMarketplace.Api.Services;
 
 namespace YogaMarketplace.Api.Controllers;
 
 [ApiController]
+[EnableRateLimiting(RateLimitPolicies.Browse)]
 [Route("api")]
 public class CatalogController : ControllerBase
 {

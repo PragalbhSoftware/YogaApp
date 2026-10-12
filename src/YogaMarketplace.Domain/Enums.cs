@@ -73,7 +73,9 @@ public enum CancelledBy
 public enum CheckoutStatus
 {
     Open,
-    Completed
+    Completed,
+    /// <summary>Paid but refunded without a booking, for example a second trial with the same instructor.</summary>
+    Refunded
 }
 
 public enum PayoutStatus
@@ -101,6 +103,13 @@ public enum BackgroundJobStatus
     Running,
     Succeeded,
     Failed
+}
+
+public enum CertificateStatus
+{
+    Pending,
+    Approved,
+    Rejected
 }
 
 public static class PaymentGateways

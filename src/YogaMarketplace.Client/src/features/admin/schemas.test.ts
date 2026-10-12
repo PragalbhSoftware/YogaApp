@@ -5,7 +5,6 @@ const valid = {
   commissionPercent: 15,
   convenienceFee: 0,
   cancelFreeWindowHours: 12,
-  rescheduleFreeWindowHours: 12,
   lateCancelFeeType: "Percent",
   lateCancelFeeValue: 50,
   payoutCycle: "Weekly",
@@ -32,7 +31,7 @@ describe("fee settings form", () => {
     expect(errorPaths({ commissionPercent: 15.555 })).toEqual(["commissionPercent"]);
     expect(errorPaths({ convenienceFee: -1 })).toEqual(["convenienceFee"]);
     expect(errorPaths({ cancelFreeWindowHours: 169 })).toEqual(["cancelFreeWindowHours"]);
-    expect(errorPaths({ rescheduleFreeWindowHours: 1.5 })).toEqual(["rescheduleFreeWindowHours"]);
+    expect(errorPaths({ cancelFreeWindowHours: 1.5 })).toEqual(["cancelFreeWindowHours"]);
   });
 
   it("checks the late fee against its type", () => {

@@ -29,13 +29,14 @@ public static class BookingRules
         string? homeAddress,
         string? landmark,
         string? meetLink,
-        string? studioAddress)
+        string? studioAddress,
+        bool isTrial = false)
     {
         if (service.ProviderId != slot.ProviderId)
             throw new DomainException("Service and slot must belong to the same instructor.");
         if (slot.IsBlocked)
             throw new DomainException("That slot is blocked.");
-        if (amount <= 0)
+        if (amount < 0 || (amount == 0 && !isTrial))
             throw new DomainException("Amount must be greater than zero.");
 
         EnsureSessionLocation(slot.Mode, homeAddress, landmark, meetLink, studioAddress);
@@ -51,6 +52,7 @@ public static class BookingRules
             Mode = slot.Mode,
             Status = BookingStatus.PendingAccept,
             Amount = amount,
+            IsTrial = isTrial,
             CommissionPercent = terms.CommissionPercent,
             ConvenienceFee = terms.ConvenienceFee,
             CancelFreeWindowHours = terms.CancelFreeWindowHours,

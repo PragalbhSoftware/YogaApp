@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using YogaMarketplace.Infrastructure.Persistence;
+using YogaMarketplace.Infrastructure.Storage;
 
 namespace YogaMarketplace.Infrastructure;
 
@@ -15,6 +16,9 @@ public static class DependencyInjection
 
         services.AddDbContext<YogaDbContext>(options => options.UseSqlServer(connectionString));
         services.AddScoped<DbSeeder>();
+        services.Configure<StorageOptions>(options =>
+            options.RootPath = configuration[$"{StorageOptions.Section}:{nameof(StorageOptions.RootPath)}"] ?? options.RootPath);
+        services.AddSingleton<IFileStorage, LocalFileStorage>();
         services.AddHealthChecks()
             .AddDbContextCheck<YogaDbContext>("database", tags: new[] { "ready" });
 

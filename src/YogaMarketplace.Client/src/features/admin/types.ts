@@ -1,6 +1,22 @@
 export const providerStatuses = ["Pending", "Verified", "Rejected"] as const;
 export type ProviderStatus = (typeof providerStatuses)[number];
 
+export const certificateStatuses = ["Pending", "Approved", "Rejected"] as const;
+export type AdminCertificateStatus = (typeof certificateStatuses)[number];
+
+export type AdminCertificate = {
+  id: string;
+  providerId: string;
+  providerName: string;
+  title: string;
+  contentType: string;
+  sizeBytes: number;
+  status: AdminCertificateStatus;
+  rejectionReason: string | null;
+  createdAt: string;
+  reviewedAt: string | null;
+};
+
 export const adminRoles = ["Customer", "Provider", "Admin"] as const;
 export type AdminRole = (typeof adminRoles)[number];
 
@@ -193,7 +209,6 @@ export type UpdateSettingsInput = Partial<
     | "commissionPercent"
     | "convenienceFee"
     | "cancelFreeWindowHours"
-    | "rescheduleFreeWindowHours"
     | "lateCancelFeeType"
     | "lateCancelFeeValue"
     | "payoutCycle"

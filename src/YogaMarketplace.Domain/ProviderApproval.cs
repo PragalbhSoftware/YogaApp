@@ -9,6 +9,7 @@ namespace YogaMarketplace.Domain;
 public static class ProviderApproval
 {
     public const int MaxReasonLength = 300;
+    public const string AreaClosedMessage = "Not available in this area right now.";
 
     /// <summary>Listed on public browse and bookable. Needs <see cref="Provider.User"/> in the query.</summary>
     public static readonly Expression<Func<Provider, bool>> IsListed =

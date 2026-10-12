@@ -1,3 +1,4 @@
+import { ApiError, toUserMessage } from "@/services/http/api-error";
 import { formatInr } from "@/utils/money";
 import { formatSlotDay, formatTimeRange12 } from "@/utils/clock";
 import type { AdminProvider } from "@/features/admin/types";
@@ -74,6 +75,14 @@ export function changedFields<T extends Record<string, unknown>>(
     if (dirty[key]) changed[key] = values[key];
   }
   return changed;
+}
+
+export const settingsConflictMessage =
+  "Another admin saved first. We reloaded the latest values, so your unsaved edits were discarded. Make them again and save.";
+
+/** A 409 refetches settings (see useUpdateSettings), which resets the form; say so instead of the raw error. */
+export function settingsSaveError(error: unknown) {
+  return error instanceof ApiError && error.status === 409 ? settingsConflictMessage : toUserMessage(error);
 }
 
 export function lateFeeLabel(type: "Percent" | "Flat", value: number) {

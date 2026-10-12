@@ -11,6 +11,7 @@ namespace YogaMarketplace.Api.Tests;
 public sealed class YogaApiFactory : WebApplicationFactory<Program>
 {
     private readonly string _dbPath = Path.Combine(Path.GetTempPath(), $"yoga-marketplace-{Guid.NewGuid():N}.db");
+    private readonly string _storagePath = Path.Combine(Path.GetTempPath(), $"yoga-marketplace-uploads-{Guid.NewGuid():N}");
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -34,7 +35,8 @@ public sealed class YogaApiFactory : WebApplicationFactory<Program>
                 ["Razorpay:KeyId"] = "rzp_test_placeholder",
                 ["Razorpay:KeySecret"] = "dev-only-not-a-live-key-secret",
                 ["Razorpay:WebhookSecret"] = "dev-only-not-a-live-webhook-secret",
-                ["Razorpay:UseFakeGateway"] = "true"
+                ["Razorpay:UseFakeGateway"] = "true",
+                ["Storage:RootPath"] = _storagePath
             });
         });
 
@@ -60,6 +62,14 @@ public sealed class YogaApiFactory : WebApplicationFactory<Program>
         TryDelete(_dbPath);
         TryDelete(_dbPath + "-wal");
         TryDelete(_dbPath + "-shm");
+        try
+        {
+            if (Directory.Exists(_storagePath))
+                Directory.Delete(_storagePath, recursive: true);
+        }
+        catch (IOException)
+        {
+        }
     }
 
     private static void TryDelete(string path)

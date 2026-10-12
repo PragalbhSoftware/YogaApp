@@ -11,6 +11,14 @@ export const rejectSchema = z.object({
   reason: z.string().trim().max(300, "Keep the reason to 300 characters.").optional().or(z.literal("")),
 });
 
+export const certificateRejectSchema = z.object({
+  reason: z
+    .string()
+    .trim()
+    .min(1, "Say what the instructor should fix.")
+    .max(300, "Keep the reason to 300 characters."),
+});
+
 export const adminCancelSchema = z.object({
   reason: z
     .string()
@@ -82,7 +90,6 @@ export const feeSettingsSchema = z
     commissionPercent: percent,
     convenienceFee: flatAmount,
     cancelFreeWindowHours: windowHours,
-    rescheduleFreeWindowHours: windowHours,
     lateCancelFeeType: z.enum(lateCancelFeeTypes),
     lateCancelFeeValue: flatAmount,
     payoutCycle: z.enum(payoutCycles),
@@ -109,6 +116,7 @@ export const bannerSchema = z.object({
 });
 
 export type RejectFormValues = z.infer<typeof rejectSchema>;
+export type CertificateRejectValues = z.infer<typeof certificateRejectSchema>;
 export type AdminCancelValues = z.infer<typeof adminCancelSchema>;
 export type UserBlockValues = z.infer<ReturnType<typeof userBlockSchema>>;
 export type AreaFormValues = z.infer<typeof areaSchema>;

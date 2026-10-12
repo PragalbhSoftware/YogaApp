@@ -1,6 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { bookingsApi } from "@/features/bookings/api/bookings-api";
-import type { ConfirmPaymentInput, CreateOrderInput, CreateReviewInput } from "@/features/bookings/types";
+import type {
+  BookingQuote,
+  ConfirmPaymentInput,
+  CreateOrderInput,
+  CreateReviewInput,
+} from "@/features/bookings/types";
 
 export function invalidateBookingLists(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({ queryKey: ["bookings-me"] });
@@ -9,9 +14,42 @@ export function invalidateBookingLists(queryClient: ReturnType<typeof useQueryCl
   void queryClient.invalidateQueries({ queryKey: ["instructor-open-slots"] });
 }
 
+export function useBookingQuote(slotId: string | undefined, trial: boolean, enabled: boolean) {
+  return useQuery({
+    queryKey: ["booking-quote", slotId, trial],
+    queryFn: () => bookingsApi.quote(slotId ?? "", trial),
+    enabled: enabled && Boolean(slotId),
+    staleTime: 0,
+  });
+}
+
+export function useTrialStatus(providerId: string | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: ["trial-status", providerId],
+    queryFn: () => bookingsApi.trialStatus(providerId ?? ""),
+    enabled: enabled && Boolean(providerId),
+    staleTime: 0,
+  });
+}
+
 export function useCreateBookingOrder() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: CreateOrderInput) => bookingsApi.createOrder(input),
+    onSuccess: (order, input) => {
+      void queryClient.invalidateQueries({ queryKey: ["trial-status"] });
+      queryClient.setQueryData<BookingQuote>(["booking-quote", order.slotId, Boolean(input.trial)], (current) =>
+        current
+          ? {
+              ...current,
+              sessionAmount: order.sessionAmount,
+              convenienceFee: order.convenienceFee,
+              total: order.amount,
+              currency: order.currency,
+            }
+          : current,
+      );
+    },
   });
 }
 

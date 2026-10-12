@@ -1,6 +1,7 @@
 using System.Data;
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using YogaMarketplace.Api.Security;
 using YogaMarketplace.Domain;
 using YogaMarketplace.Infrastructure.Persistence;
@@ -16,6 +17,10 @@ public readonly record struct WebhookResult(bool Booked, Guid? BookingId)
 
 public interface IBookingService
 {
+    Task<BookingQuoteResponse> QuoteAsync(Guid slotId, Guid? serviceId, bool trial, CancellationToken cancellationToken);
+
+    Task<TrialStatusResponse> TrialStatusAsync(Guid providerId, CancellationToken cancellationToken);
+
     Task<CheckoutOrderResponse> CreateOrderAsync(CreateBookingOrderRequest request, CancellationToken cancellationToken);
 
     Task<BookingResponse> ConfirmAsync(ConfirmBookingPaymentRequest request, CancellationToken cancellationToken);
@@ -54,6 +59,7 @@ public interface IRazorpayWebhookHandler
 public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebhookHandler
 {
     private const string CustomerChangeForbidden = "Only the customer who booked can change this booking.";
+    private const string TrialRefundedMessage = TrialRules.AlreadyUsedMessage + " We refunded this payment in full.";
 
     private static readonly BookingStatus[] Occupying =
         Enum.GetValues<BookingStatus>().Where(BookingRules.OccupiesSlot).ToArray();
@@ -78,30 +84,35 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
         _logger = logger;
     }
 
+    public async Task<BookingQuoteResponse> QuoteAsync(Guid slotId, Guid? serviceId, bool trial, CancellationToken cancellationToken)
+    {
+        var customer = await RequireCustomerAsync(cancellationToken);
+        var slot = await LoadBookableSlotAsync(slotId, cancellationToken);
+        var service = await ResolveServiceAsync(slot.ProviderId, serviceId, cancellationToken);
+        if (trial)
+            await EnsureTrialAvailableAsync(customer.Id, service, cancellationToken);
+        var settings = await _settings.GetAsync(cancellationToken);
+        var price = PriceFor(slot, settings.Terms, trial ? service : null);
+        return new BookingQuoteResponse(
+            slot.Id, service.Id, price.SessionAmount, price.ConvenienceFee, price.Total, settings.Currency, trial);
+    }
+
+    public async Task<TrialStatusResponse> TrialStatusAsync(Guid providerId, CancellationToken cancellationToken)
+    {
+        var customer = await RequireCustomerAsync(cancellationToken);
+        var offer = await _db.Services.AsNoTracking()
+            .Where(s => s.ProviderId == providerId && s.IsActive && s.TrialEnabled && s.TrialPrice != null)
+            .Select(s => s.TrialPrice)
+            .FirstOrDefaultAsync(cancellationToken);
+        var used = await TrialUsedAsync(customer.Id, providerId, cancellationToken);
+        return new TrialStatusResponse(offer is not null, offer, used);
+    }
+
     public async Task<CheckoutOrderResponse> CreateOrderAsync(CreateBookingOrderRequest request, CancellationToken cancellationToken)
     {
         var customer = await RequireCustomerAsync(cancellationToken);
-        if (request.SlotId == Guid.Empty)
-            throw new DomainException("Slot is required.");
-
-        var slot = await _db.AvailabilitySlots
-            .Include(s => s.Provider!).ThenInclude(p => p.User)
-            .SingleOrDefaultAsync(s => s.Id == request.SlotId, cancellationToken)
-            ?? throw new DomainException("That slot is no longer available.", 404);
-
-        var provider = slot.Provider ?? throw new DomainException("Instructor not found.", 404);
-        if (!ProviderApproval.IsListedNow(provider))
-            throw new DomainException("Instructor not found.", 404);
-        if (slot.IsBlocked || !provider.Offers(slot.Mode))
-            throw new DomainException("That slot is no longer available.", 409);
-        if (MumbaiClock.SessionStart(slot.Date, slot.EndTime) <= DateTimeOffset.UtcNow)
-            throw new DomainException("That slot has already ended.", 409);
-        if (await SlotIsTakenAsync(slot.Id, cancellationToken))
-            throw new DomainException("That slot is no longer available.", 409);
-
-        var amount = provider.RateFor(slot.Mode) ?? throw new DomainException("This session has no price.");
-        if (amount <= 0)
-            throw new DomainException("This session has no price.");
+        var slot = await LoadBookableSlotAsync(request.SlotId, cancellationToken);
+        var provider = slot.Provider!;
 
         var homeAddress = Clean(request.HomeAddress, 300, "Address");
         var landmark = Clean(request.Landmark, 160, "Landmark");
@@ -113,9 +124,11 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
         BookingRules.EnsureSessionLocation(slot.Mode, homeAddress, landmark, provider.GoogleMeetLink, provider.StudioAddress);
 
         var service = await ResolveServiceAsync(provider.Id, request.ServiceId, cancellationToken);
+        if (request.Trial)
+            await EnsureTrialAvailableAsync(customer.Id, service, cancellationToken);
         var settings = await _settings.GetAsync(cancellationToken);
-        var convenienceFee = settings.Terms.ConvenienceFee;
-        var total = amount + convenienceFee;
+        var terms = settings.Terms;
+        var (amount, convenienceFee, total) = PriceFor(slot, terms, request.Trial ? service : null);
         var paise = RazorpayMoney.ToPaise(total);
         var checkoutId = Guid.NewGuid();
 
@@ -140,7 +153,12 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
             SlotId = slot.Id,
             Mode = slot.Mode,
             Amount = amount,
+            IsTrial = request.Trial,
             ConvenienceFee = convenienceFee,
+            CommissionPercent = terms.CommissionPercent,
+            CancelFreeWindowHours = terms.CancelFreeWindowHours,
+            LateCancelFeeType = terms.LateCancelFeeType,
+            LateCancelFeeValue = terms.LateCancelFeeValue,
             Currency = settings.Currency,
             HomeAddress = slot.Mode == SessionMode.Home ? homeAddress : null,
             Landmark = slot.Mode == SessionMode.Home ? landmark : null,
@@ -196,7 +214,7 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
     public async Task<BookingResponse> ConfirmLocalAsync(LocalConfirmRequest request, CancellationToken cancellationToken)
     {
         if (!_razorpay.SupportsLocalCapture)
-            throw new DomainException("Pay with Razorpay Checkout.", 400);
+            throw new DomainException("Not found.", 404);
 
         var orderId = Required(request.OrderId, "Order id is required.");
         var (paymentId, signature) = _razorpay.CreateLocalCapture(orderId);
@@ -497,15 +515,19 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
 
             if (checkout.Status == CheckoutStatus.Completed)
                 throw new DomainException("This order was already paid.", 409);
+            if (checkout.Status == CheckoutStatus.Refunded)
+                throw new DomainException(TrialRefundedMessage, 409);
+            if (checkout.IsTrial && await TrialUsedAsync(checkout.CustomerId, checkout.ProviderId, cancellationToken))
+                await RefundDuplicateTrialAsync(checkout, paymentId, total, tx, cancellationToken);
 
-            var slot = await _db.AvailabilitySlots
-                .Include(s => s.Provider!).ThenInclude(p => p.User)
+            var slot = await SlotsWithProvider()
                 .SingleOrDefaultAsync(s => s.Id == checkout.SlotId, cancellationToken)
                 ?? throw new DomainException("That slot is no longer available.", 409);
 
             var provider = slot.Provider ?? throw new DomainException("Instructor not found.", 404);
             if (!ProviderApproval.IsListedNow(provider) || slot.IsBlocked || !provider.Offers(slot.Mode))
                 throw new DomainException("That slot is no longer available.", 409);
+            EnsureAreaOpen(provider);
             if (MumbaiClock.SessionStart(slot.Date, slot.EndTime) <= DateTimeOffset.UtcNow)
                 throw new DomainException("That slot has already ended.", 409);
             if (await SlotIsTakenAsync(slot.Id, cancellationToken))
@@ -515,17 +537,17 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
                 s => s.Id == checkout.ServiceId && s.ProviderId == slot.ProviderId && s.IsActive,
                 cancellationToken) ?? throw new DomainException("This session is no longer available.", 409);
 
-            var settings = await _settings.GetAsync(cancellationToken);
             var booking = BookingRules.CreateAfterPayment(
                 checkout.CustomerId,
                 service,
                 slot,
                 checkout.Amount,
-                settings.Terms with { ConvenienceFee = checkout.ConvenienceFee },
+                checkout.ToTerms(),
                 checkout.HomeAddress,
                 checkout.Landmark,
                 provider.GoogleMeetLink,
-                provider.StudioAddress);
+                provider.StudioAddress,
+                checkout.IsTrial);
 
             var now = DateTimeOffset.UtcNow;
             var payment = new Payment
@@ -559,6 +581,98 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
             _logger.LogWarning(ex, "Booking save conflict for Razorpay order {OrderId}.", orderId);
             throw new DomainException("That slot was just booked.", 409);
         }
+    }
+
+    private IQueryable<AvailabilitySlot> SlotsWithProvider() =>
+        _db.AvailabilitySlots
+            .Include(s => s.Provider!).ThenInclude(p => p.User)
+            .Include(s => s.Provider!).ThenInclude(p => p.Area);
+
+    private async Task<AvailabilitySlot> LoadBookableSlotAsync(Guid slotId, CancellationToken cancellationToken)
+    {
+        if (slotId == Guid.Empty)
+            throw new DomainException("Slot is required.");
+
+        var slot = await SlotsWithProvider().SingleOrDefaultAsync(s => s.Id == slotId, cancellationToken)
+            ?? throw new DomainException("That slot is no longer available.", 404);
+
+        var provider = slot.Provider ?? throw new DomainException("Instructor not found.", 404);
+        if (!ProviderApproval.IsListedNow(provider))
+            throw new DomainException("Instructor not found.", 404);
+        EnsureAreaOpen(provider);
+        if (slot.IsBlocked || !provider.Offers(slot.Mode))
+            throw new DomainException("That slot is no longer available.", 409);
+        if (MumbaiClock.SessionStart(slot.Date, slot.EndTime) <= DateTimeOffset.UtcNow)
+            throw new DomainException("That slot has already ended.", 409);
+        if (await SlotIsTakenAsync(slot.Id, cancellationToken))
+            throw new DomainException("That slot is no longer available.", 409);
+        return slot;
+    }
+
+    private static void EnsureAreaOpen(Provider provider)
+    {
+        var area = provider.Area ?? throw new InvalidOperationException("Provider area was not loaded.");
+        if (!area.IsActive)
+            throw new DomainException(ProviderApproval.AreaClosedMessage, 409);
+    }
+
+    /// <summary>Regular sessions use the mode rate; a trial uses the service's trial price, which may be zero.</summary>
+    private static (decimal SessionAmount, decimal ConvenienceFee, decimal Total) PriceFor(
+        AvailabilitySlot slot,
+        BookingTerms terms,
+        Service? trialService = null)
+    {
+        var fee = terms.ConvenienceFee;
+        if (trialService is not null)
+        {
+            var trialAmount = trialService.TrialPrice ?? throw new DomainException(TrialRules.NotOfferedMessage, 409);
+            var trialTotal = decimal.Round(trialAmount + fee, 2, MidpointRounding.AwayFromZero);
+            TrialRules.EnsureChargeable(trialTotal);
+            return (trialAmount, fee, trialTotal);
+        }
+
+        var amount = slot.Provider!.RateFor(slot.Mode) ?? 0m;
+        if (amount <= 0)
+            throw new DomainException("This session has no price.");
+        return (amount, fee, decimal.Round(amount + fee, 2, MidpointRounding.AwayFromZero));
+    }
+
+    private async Task EnsureTrialAvailableAsync(Guid customerId, Service service, CancellationToken cancellationToken)
+    {
+        if (!TrialRules.Offers(service))
+            throw new DomainException(TrialRules.NotOfferedMessage, 409);
+        if (await TrialUsedAsync(customerId, service.ProviderId, cancellationToken))
+            throw new DomainException(TrialRules.AlreadyUsedMessage, 409);
+    }
+
+    private Task<bool> TrialUsedAsync(Guid customerId, Guid providerId, CancellationToken cancellationToken) =>
+        _db.Bookings
+            .Where(b => b.CustomerId == customerId && b.ProviderId == providerId)
+            .AnyAsync(TrialRules.UsesTrial, cancellationToken);
+
+    /// <summary>
+    /// A second trial slipped past the checkout check (two tabs, for example). Marks the checkout refunded, refunds the
+    /// whole payment, commits, and then fails the capture. A replayed capture of the same order sees Refunded and stops.
+    /// </summary>
+    private async Task RefundDuplicateTrialAsync(
+        CheckoutIntent checkout,
+        string paymentId,
+        decimal total,
+        IDbContextTransaction tx,
+        CancellationToken cancellationToken)
+    {
+        checkout.Status = CheckoutStatus.Refunded;
+        checkout.CompletedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(cancellationToken);
+        await _razorpay.RefundPaymentAsync(paymentId, RazorpayMoney.ToPaise(total), checkout.Id.ToString("N"), CancellationToken.None);
+        await tx.CommitAsync(CancellationToken.None);
+        _logger.LogWarning(
+            "Refunded payment {PaymentId} for checkout {CheckoutId}: customer {CustomerId} already used the trial with instructor {ProviderId}.",
+            paymentId,
+            checkout.Id,
+            checkout.CustomerId,
+            checkout.ProviderId);
+        throw new DomainException(TrialRefundedMessage, 409);
     }
 
     private Task<User> RequireCustomerAsync(CancellationToken cancellationToken) =>
@@ -728,7 +842,8 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
             payment?.RefundedAmount ?? 0m,
             booking.LateCancelFee,
             booking.CancelledBy?.ToString(),
-            booking.CancelReason);
+            booking.CancelReason,
+            booking.IsTrial);
     }
 
     private static string Required(string? value, string message)

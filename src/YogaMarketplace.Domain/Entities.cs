@@ -85,10 +85,14 @@ public class Provider
     public string? StudioAddress { get; set; }
     public string? GoogleMeetLink { get; set; }
     public string? RejectionReason { get; set; }
+    /// <summary>YouTube video id only (11 characters). Shown through youtube-nocookie.com embeds.</summary>
+    public string? IntroVideoId { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? ReviewedAt { get; set; }
     public List<Service> Services { get; set; } = new();
     public List<AvailabilitySlot> Slots { get; set; } = new();
+    public List<ProviderPhoto> Photos { get; set; } = new();
+    public List<ProviderCertificate> Certificates { get; set; } = new();
 
     public bool Offers(SessionMode mode) => mode switch
     {
@@ -105,6 +109,13 @@ public class Provider
         SessionMode.Online => OnlineRate,
         _ => null
     };
+
+    public decimal? LowestOfferedRate() =>
+        Enum.GetValues<SessionMode>()
+            .Where(Offers)
+            .Select(RateFor)
+            .Where(rate => rate is > 0)
+            .Min();
 }
 
 public class Service
@@ -116,6 +127,11 @@ public class Service
     public Category? Category { get; set; }
     public string Title { get; set; } = "";
     public bool IsActive { get; set; } = true;
+
+    /// <summary>Offers one trial session per customer at <see cref="TrialPrice"/>. See <see cref="TrialRules"/>.</summary>
+    public bool TrialEnabled { get; set; }
+
+    public decimal? TrialPrice { get; set; }
 }
 
 public class AvailabilitySlot
@@ -144,6 +160,7 @@ public class Booking
     public SessionMode Mode { get; set; }
     public BookingStatus Status { get; set; }
     public decimal Amount { get; set; }
+    public bool IsTrial { get; set; }
     public string? HomeAddress { get; set; }
     public string? Landmark { get; set; }
     public string? MeetLinkSnapshot { get; set; }
@@ -166,6 +183,7 @@ public class Booking
 /// <summary>
 /// Holds a Razorpay order until payment is captured. Not a booking.
 /// Abandoning checkout leaves this row and creates no <see cref="Booking"/>.
+/// The booking terms are locked here when checkout starts, so a settings change before capture does not apply.
 /// </summary>
 public class CheckoutIntent
 {
@@ -176,7 +194,12 @@ public class CheckoutIntent
     public Guid SlotId { get; set; }
     public SessionMode Mode { get; set; }
     public decimal Amount { get; set; }
+    public bool IsTrial { get; set; }
     public decimal ConvenienceFee { get; set; }
+    public decimal CommissionPercent { get; set; }
+    public int CancelFreeWindowHours { get; set; }
+    public LateCancelFeeType LateCancelFeeType { get; set; } = LateCancelFeeType.Percent;
+    public decimal LateCancelFeeValue { get; set; }
     public string Currency { get; set; } = "INR";
     public string? HomeAddress { get; set; }
     public string? Landmark { get; set; }
@@ -186,6 +209,9 @@ public class CheckoutIntent
     public Guid? BookingId { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? CompletedAt { get; set; }
+
+    public BookingTerms ToTerms() =>
+        new(CommissionPercent, ConvenienceFee, CancelFreeWindowHours, LateCancelFeeType, LateCancelFeeValue);
 }
 
 public class Payment

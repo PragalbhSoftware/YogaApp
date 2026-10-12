@@ -150,10 +150,9 @@ API tests build the model with SQLite; the app itself uses SQL Server. CI (`.git
 dotnet tool restore
 dotnet ef migrations add <Name> --project src/YogaMarketplace.Infrastructure --startup-project src/YogaMarketplace.Infrastructure --output-dir Persistence/Migrations
 dotnet ef database update --project src/YogaMarketplace.Infrastructure --startup-project src/YogaMarketplace.Api
-dotnet ef migrations script --project src/YogaMarketplace.Infrastructure --startup-project src/YogaMarketplace.Api --idempotent -o deploy.sql
 ```
 
-New columns must be nullable or defaulted, and every migration needs a working `Down()`.
+New columns must be nullable or defaulted, and every migration needs a working `Down()`. Production uses the idempotent script; see **Deploy guide → Database migrations**.
 
 ## Money and concurrency rules
 
@@ -172,11 +171,11 @@ Business values live in one typed `PlatformSettings` row that admins edit under 
 | Convenience fee (flat ₹) | Added to the session price at checkout |
 | Free cancel window (hours, 0–168) | Late cancel starts this many hours before the session. `0` means cancelling is always free. |
 | Late-cancel fee (% or flat ₹) | Kept on a late cancel, computed on the session price only and never more than it |
-| Free reschedule window (hours) | Reschedule is refused inside it |
+| Free reschedule window (hours) | Reschedule is refused inside it. Kept in the API but hidden from the Settings page until reschedule rules are reviewed. |
 | Payout cycle (weekly / biweekly) | Which payouts `/payouts/export` may claim |
 | Banner title, subtitle, offer | Home hero text. Empty fields fall back to the built-in copy. |
 
-- **Snapshots.** Each booking copies the commission, convenience fee, cancel window and late fee when it is created. Cancel-quote, refunds and payouts always use the booking's copy, so a settings change only affects new bookings.
+- **Snapshots.** The commission, convenience fee, cancel window and late fee are locked when checkout starts (`POST /api/bookings/orders`) and copied to the booking at payment. Cancel-quote, refunds and payouts always use the booking's copy, so a settings change mid-checkout or later only affects new checkouts.
 - **Convenience fee.** The customer pays session price plus the fee. It is refunded on decline, admin cancel and free cancel, and kept on a late cancel. It is never paid out to the provider.
 - **Saving.** `PATCH /api/admin/settings` needs the `version` you edited. If another admin saved first you get `409` and reload. Every changed field is written to `SettingsAudits` (who, when, old, new).
 - **Cache.** Each API instance caches the settings for 60 seconds. A save clears the cache on the instance that handled it, so with several instances others can serve the old values for up to a minute.
@@ -193,7 +192,9 @@ Business values live in one typed `PlatformSettings` row that admins edit under 
 
 ## HTTP API
 
-Errors use `{ "error": "..." }` with the matching status code. Missing token is `401`; wrong role is `403`.
+Errors use `{ "error": "..." }` with the matching status code. Missing token is `401`; wrong role is `403`. Unhandled errors return `500` with a generic `error` and a `traceId` that matches the log line; exception details never reach the client.
+
+Browse endpoints (areas, categories, providers, slots, reviews, photos, policy pages) are public and rate limited per IP (`RateLimiting:BrowsePerMinute`).
 
 Sessions: the access JWT is short-lived. On a `401` the client calls `/api/auth/refresh` once (shared by parallel requests), retries the original request, and signs out with a toast if the refresh fails. Blocking a user revokes all their refresh tokens, so their next request gets `401` and they are signed out.
 
@@ -212,9 +213,11 @@ Sessions: the access JWT is short-lived. On a `401` the client calls `/api/auth/
 | GET | `/api/policy` | | Commission %, convenience fee, cancel/reschedule windows and late-cancel fee for new bookings |
 | GET | `/api/site/banner` | | Home banner `{ title, subtitle, offer }`; `null` fields mean "use the default copy" |
 | GET | `/api/providers?city=&area=&mode=&category=` | | Listed providers: verified, not blocked, in an active area |
-| GET | `/api/providers/{id}` | | Public profile (no Meet link) |
+| GET | `/api/providers/{id}` | | Public profile (no Meet link): photos, intro video id, approved certificate titles, `isVerified`, trial offer |
 | GET | `/api/providers/{id}/slots?mode=` | | Open slots for that mode |
 | GET | `/api/providers/{id}/reviews` | | Public reviews |
+| GET | `/api/media/photos/{id}` | | Profile photo of a listed provider |
+| GET | `/api/pages/{slug}` | | Policy page: `refund-policy`, `terms`, `privacy` |
 
 ### Provider
 
@@ -223,6 +226,12 @@ Sessions: the access JWT is short-lived. On a `401` the client calls `/api/auth/
 | POST | `/api/providers/register` | Creates a **Pending** provider and returns a new token |
 | GET / PATCH | `/api/providers/me` | Own profile, including the Meet link |
 | PATCH | `/api/providers/me/rates` | Per-mode rates |
+| GET | `/api/providers/me/media` | Own photos, intro video and certificates with their review status |
+| POST / DELETE | `/api/providers/me/photos`, `/photos/{id}` | Add (multipart `file`) or remove a photo |
+| PUT | `/api/providers/me/intro-video` | `{ "url" }` YouTube link, or empty to remove |
+| POST / DELETE | `/api/providers/me/certificates`, `/certificates/{id}` | Upload (multipart `title`, `file`) or remove a certificate |
+| GET | `/api/providers/me/certificates/{id}/file` | Download own certificate (never cached) |
+| GET / PUT | `/api/providers/me/trial` | Trial offer on the main service: `{ "enabled", "price" }` |
 | GET | `/api/providers/me/payouts?status=` | Own payouts |
 | GET / POST | `/api/providers/me/slots?mode=&from=&to=` | List or add slots for an offered mode |
 | PUT / DELETE | `/api/providers/me/slots/{id}` | Edit or remove a future slot without a booking |
@@ -234,9 +243,11 @@ Sessions: the access JWT is short-lived. On a `401` the client calls `/api/auth/
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| POST | `/api/bookings/orders` | Razorpay order for a slot. Home needs `homeAddress` and `landmark`. The server prices it: `amount` = `sessionAmount` + `convenienceFee`. |
+| GET | `/api/bookings/quote?slotId=&trial=` | Server price for a slot: session amount, convenience fee and total. The book page shows this, never its own sum. |
+| GET | `/api/bookings/trial?providerId=` | Whether this customer can still book the provider's trial |
+| POST | `/api/bookings/orders` | Razorpay order for a slot (`trial: true` for the trial price). Home needs `homeAddress` and `landmark`. The server prices it: `amount` = `sessionAmount` + `convenienceFee`. A provider in an inactive area is refused. |
 | POST | `/api/bookings/confirm` | Verify the checkout signature and create the booking (`PendingAccept`). Idempotent per payment. |
-| POST | `/api/bookings/local-confirm` | Fake gateway only |
+| POST | `/api/bookings/local-confirm` | Fake gateway only; `404` otherwise |
 | GET / PATCH | `/api/profile` | Own account details |
 | PUT | `/api/profile/visit-address` | Default home-visit address |
 | GET | `/api/bookings/me` | Own bookings |
@@ -264,18 +275,114 @@ Sessions: the access JWT is short-lived. On a `401` the client calls `/api/auth/
 | GET / PATCH | `/categories`, `/categories/{id}` | Rename the label; the slug never changes |
 | GET / PATCH | `/settings` | Platform settings (see above). PATCH sends `version` plus only the fields to change; a stale version is `409`. |
 | GET | `/settings/audit` | Last 50 settings changes, newest first |
+| GET | `/certificates?status=` | Certificate queue (`Pending` by default, `Approved`, `Rejected` or `all`) |
+| GET | `/certificates/{id}/file` | View the private file |
+| POST | `/certificates/{id}/approve`, `/reject` | Approve, or reject with `{ "reason" }` |
+| GET | `/pages` | All policy pages |
+| PUT | `/pages/{slug}` | `{ "title", "body", "version" }`; a stale version is `409` |
 
 Lists return at most 100 rows, newest first.
 
-## Deploying the API (IIS / Plesk example)
+## Provider trust signals
 
-1. Install the .NET 8 Hosting Bundle; create the SQL Server database and login.
-2. `dotnet publish src/YogaMarketplace.Api -c Release -o ./publish`, upload, set the app pool to **No Managed Code**.
-3. Set at least: `ASPNETCORE_ENVIRONMENT=Production`, `ConnectionStrings__Default`, `Jwt__Key` (32+ bytes), `Otp__Pepper`, `Cors__AllowedOrigins__0` (when using option B), `Razorpay__KeyId`, `Razorpay__KeySecret`, `Razorpay__WebhookSecret`, `Razorpay__UseFakeGateway=false`, `Database__AutoMigrate=false`, `Seed__DemoData=false`.
-4. Apply the schema with `dotnet ef database update --connection "<prod>"` or the idempotent `deploy.sql`.
-5. Wire a real SMS/WhatsApp OTP sender before public sign-in.
+- **Photos**: up to 6, JPEG, PNG or WebP, 5 MB each. Public at `/api/media/photos/{id}` while the provider is listed.
+- **Intro video**: a YouTube link. Only the 11-character video id is stored, and the SPA embeds it from `youtube-nocookie.com` in a sandboxed iframe. No other hosts.
+- **Certificates**: up to 5, PDF, JPEG or PNG, 10 MB each. The file is **always private**: only the owner and admins can download it, with `Cache-Control: private, no-store`. After approval the public sees the title only.
+- **Verified badge**: shown once at least one certificate is approved.
+- File type is checked from the file's first bytes, not its name. Files live on local disk under `Storage:RootPath` (default `App_Data/uploads`, outside `wwwroot`), named by id, and are only ever served through the API.
 
-Deploy the SPA `dist/` with either routing option above.
+## Trial class
+
+A provider can offer one trial on their main service, free or at most their lowest regular rate. Each customer gets one trial per provider. A customer cancel or no-show uses it up; an instructor decline or admin cancel gives it back. Razorpay always takes at least ₹1, so a free trial still charges the convenience fee, and when that fee is ₹0 the trial price must be at least ₹1. If two trial payments race, the second is refunded in full.
+
+## Policy pages
+
+Refund policy, Terms and Privacy are rows in `ContentPages`, seeded with starter text and edited under **Settings → Pages**. The body is plain text with three rules: a blank line starts a new paragraph, `## ` starts a heading, `- ` starts a bullet. The SPA renders it as text (no HTML), and saving needs the `version` you edited.
+
+## Deploy guide
+
+The API and the SPA deploy separately. Any host works: a VPS with Nginx, IIS/Plesk, Azure App Service, AWS, or containers.
+
+### What Production enforces
+
+With `ASPNETCORE_ENVIRONMENT=Production` the API **refuses to start** when:
+
+- `Database:AutoMigrate` is true (apply migrations with the script below instead),
+- `Otp:ExposeCode` or `Otp:UseFixedCode` is true,
+- `Razorpay:UseFakeGateway` is true, or any of `Razorpay:KeyId`, `Razorpay:KeySecret`, `Razorpay:WebhookSecret` is empty,
+- `Cors:AllowedOrigins` is empty, or `Jwt:Key` is shorter than 32 bytes.
+
+It logs a warning (and still starts) when the key id is a `rzp_test_` key. It also turns off Swagger, returns `404` for `/api/bookings/local-confirm`, and writes one-line JSON logs to the console with UTC timestamps and the request trace id.
+
+### API environment variables
+
+Use the host's secret store or environment variables. Never put live values in `appsettings*.json`.
+
+| Variable | Value |
+| --- | --- |
+| `ASPNETCORE_ENVIRONMENT` | `Production` |
+| `ConnectionStrings__Default` | SQL Server connection string |
+| `Jwt__Key` | Random string, 32+ bytes |
+| `Otp__Pepper` | Random string |
+| `Cors__AllowedOrigins__0` | SPA origin, e.g. `https://app.example.com` (required in Production even when same-origin) |
+| `Razorpay__KeyId`, `Razorpay__KeySecret` | Razorpay API keys (test keys for the QA run, then live keys) |
+| `Razorpay__WebhookSecret` | The secret set on the Razorpay webhook |
+| `Storage__RootPath` | Folder for uploaded photos and certificates. Use an absolute path on a persistent disk or volume that the app can write to. |
+| `ForwardedHeaders__KnownProxies__0` | IP of your reverse proxy, so rate limits see the real client IP |
+| `RefreshToken__CookieSameSite` | Leave `Strict` for same-site; `None` only for a cross-site API (HTTPS required) |
+
+`Database:AutoMigrate`, `Seed:DemoData`, `Otp:ExposeCode`, `Otp:UseFixedCode` and `Razorpay:UseFakeGateway` are already `false` in `appsettings.Production.json`.
+
+### Build and run the API
+
+```bash
+dotnet publish src/YogaMarketplace.Api -c Release -o ./publish
+```
+
+Run `./publish/YogaMarketplace.Api.dll` behind HTTPS (Nginx, IIS with the .NET 8 Hosting Bundle and an app pool set to **No Managed Code**, or a platform service). Health checks:
+
+- `GET /health`: the process is up (use for liveness)
+- `GET /health/ready`: the database answers (use for readiness or the load balancer)
+
+### Database migrations
+
+Production never migrates on startup. Every CI run publishes an idempotent script as the `migrations-sql` artifact; it only applies migrations the database is missing, so it is safe to re-run. To build it locally:
+
+```bash
+dotnet tool restore
+dotnet ef migrations script --idempotent --project src/YogaMarketplace.Infrastructure --startup-project src/YogaMarketplace.Infrastructure -o artifacts/migrations.sql
+```
+
+Release order: back up the database, run the script, then deploy the new API build. With `sqlcmd`, pass `-I` (some indexes need `QUOTED_IDENTIFIER ON`) and `-b` to stop on the first error:
+
+```bash
+sqlcmd -S <server> -d <db> -I -b -i migrations.sql
+```
+
+### Backups
+
+- **Database**: turn on automated full backups with point-in-time restore (Azure SQL and RDS do this by default; on your own SQL Server, schedule nightly full plus frequent log backups). Keep at least 7 days, store copies off the server, and test a restore before launch.
+- **Uploads**: back up `Storage__RootPath` on the same schedule. Rows in the database point at these files, so restore both from the same point in time.
+
+### Build the SPA
+
+`VITE_API_BASE_URL` is read when the bundle is **built**, not at runtime, so set it in the build environment (CI variable or `.env.production`) and rebuild to change it.
+
+```bash
+cd src/YogaMarketplace.Client
+npm ci
+VITE_API_BASE_URL=https://api.example.com npm run build   # or leave empty for same-origin
+```
+
+Upload `dist/` to any static host or CDN. Every unknown path must fall back to `index.html` so deep links like `/teachers/123` work on refresh: `try_files $uri /index.html;` in Nginx (see above), a rewrite rule on IIS, or the "single-page app" / 404-to-`index.html` option on static hosts. The SPA shows its own 404 page for routes it does not know.
+
+### Go-live checklist
+
+1. Deploy with Razorpay **test** keys and set the webhook in the Razorpay dashboard to `https://<api>/api/webhooks/razorpay` (event `payment.captured`) with the same secret as `Razorpay__WebhookSecret`.
+2. QA does one full run: sign in, browse signed out, book, pay with a Razorpay test card, instructor accepts, cancel (free and late), admin refund.
+3. Switch to live keys and the live webhook secret, restart, and check the log has no test-key warning.
+4. Wire a real SMS/WhatsApp OTP sender before public sign-in.
+5. Review the policy pages under **Settings → Pages**.
 
 ## Out of scope
 

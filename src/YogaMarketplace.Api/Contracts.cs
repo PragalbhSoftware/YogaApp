@@ -88,7 +88,9 @@ public record ProviderSummary(
     string Status,
     IReadOnlyList<ModeRate> Modes,
     decimal? RatingAverage,
-    int ReviewCount);
+    int ReviewCount,
+    string? PhotoUrl,
+    bool IsVerified);
 
 public record ProviderDetail(
     Guid Id,
@@ -101,7 +103,35 @@ public record ProviderDetail(
     IReadOnlyList<ModeRate> Modes,
     string? StudioAddress,
     decimal? RatingAverage,
-    int ReviewCount);
+    int ReviewCount,
+    bool AreaOpen,
+    IReadOnlyList<string> PhotoUrls,
+    string? IntroVideoId,
+    IReadOnlyList<string> Certificates,
+    bool IsVerified,
+    TrialOfferResponse? Trial);
+
+public record ProviderPhotoResponse(Guid Id, string Url, int SortOrder);
+
+public record ProviderCertificateResponse(
+    Guid Id,
+    string Title,
+    string ContentType,
+    long SizeBytes,
+    string Status,
+    string? RejectionReason,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? ReviewedAt);
+
+public record ProviderMediaResponse(
+    IReadOnlyList<ProviderPhotoResponse> Photos,
+    string? IntroVideoId,
+    IReadOnlyList<ProviderCertificateResponse> Certificates,
+    bool IsVerified);
+
+public record IntroVideoRequest(string? Url);
+
+public record ContentPageResponse(string Slug, string Title, string Body, int Version, DateTimeOffset UpdatedAt);
 
 public record ProviderSelf(
     Guid Id,
@@ -213,8 +243,31 @@ public class CreateBookingOrderRequest
 {
     public Guid SlotId { get; set; }
     public Guid? ServiceId { get; set; }
+    public bool Trial { get; set; }
     public string? HomeAddress { get; set; }
     public string? Landmark { get; set; }
+}
+
+public record BookingQuoteResponse(
+    Guid SlotId,
+    Guid ServiceId,
+    decimal SessionAmount,
+    decimal ConvenienceFee,
+    decimal Total,
+    string Currency,
+    bool IsTrial);
+
+public record TrialOfferResponse(Guid ServiceId, decimal Price);
+
+/// <summary><see cref="Used"/> is true once the customer's trial with this instructor is spent.</summary>
+public record TrialStatusResponse(bool Offered, decimal? Price, bool Used);
+
+public record ProviderTrialResponse(bool Enabled, decimal? Price, decimal? LowestRegularRate, decimal ConvenienceFee);
+
+public class UpdateProviderTrialRequest
+{
+    public bool Enabled { get; set; }
+    public decimal? Price { get; set; }
 }
 
 public record CheckoutOrderResponse(
@@ -289,7 +342,8 @@ public record BookingResponse(
     decimal RefundedAmount,
     decimal? LateCancelFee,
     string? CancelledBy,
-    string? CancelReason);
+    string? CancelReason,
+    bool IsTrial);
 
 /// <summary>
 /// <see cref="Amount"/> is what the customer paid (session plus convenience fee). A late cancel keeps the
