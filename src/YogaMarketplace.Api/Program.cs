@@ -113,8 +113,9 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
     Predicate = check => check.Tags.Contains("ready")
 });
 
-if (!app.Environment.IsEnvironment("Testing"))
+if (!app.Environment.IsEnvironment(DatabaseStartup.TestingEnvironment))
     await DatabaseStartup.InitializeAsync(app);
+await DatabaseStartup.ScheduleRecurringJobsAsync(app);
 
 app.Run();
 
@@ -124,6 +125,21 @@ public partial class Program
 
 public static class DatabaseStartup
 {
+    public const string TestingEnvironment = "Testing";
+
+    /// <summary>Tests queue the jobs they need themselves, so a recurring job never lands in their counts.</summary>
+    public static bool ShouldScheduleRecurringJobs(IHostEnvironment environment) =>
+        !environment.IsEnvironment(TestingEnvironment);
+
+    public static async Task ScheduleRecurringJobsAsync(WebApplication app)
+    {
+        if (!ShouldScheduleRecurringJobs(app.Environment))
+            return;
+        using var scope = app.Services.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<YogaMarketplace.Api.Jobs.CreditExpiryJob>()
+            .EnsureScheduledAsync(DateTimeOffset.UtcNow, CancellationToken.None);
+    }
+
     public static async Task InitializeAsync(WebApplication app)
     {
         using var scope = app.Services.CreateScope();
@@ -140,8 +156,6 @@ public static class DatabaseStartup
             }
 
             await scope.ServiceProvider.GetRequiredService<DbSeeder>().SeedAsync();
-            await scope.ServiceProvider.GetRequiredService<YogaMarketplace.Api.Jobs.CreditExpiryJob>()
-                .EnsureScheduledAsync(DateTimeOffset.UtcNow, CancellationToken.None);
         }
         catch (Exception ex)
         {
