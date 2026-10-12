@@ -4,10 +4,12 @@ import { AdminPage } from "@/features/admin/components/admin-page";
 import { AreaSettings } from "@/features/admin/components/area-settings";
 import { BannerSettings } from "@/features/admin/components/banner-settings";
 import { CategorySettings } from "@/features/admin/components/category-settings";
+import { CreditRulesSettings } from "@/features/admin/components/credit-rules-settings";
 import { FeeSettings } from "@/features/admin/components/fee-settings";
+import { PackSettings } from "@/features/admin/components/pack-settings";
 import { PageSettings } from "@/features/admin/components/page-settings";
 
-const tabs = ["earnings", "areas", "banner", "catalog", "pages"] as const;
+const tabs = ["earnings", "packs", "areas", "banner", "catalog", "pages"] as const;
 type SettingsTab = (typeof tabs)[number];
 
 function readTab(value: string | null): SettingsTab {
@@ -22,7 +24,7 @@ export function SettingsPage() {
     <AdminPage
       kicker="Owner"
       title="Settings"
-      lead="Fees and payouts, the neighbourhoods customers can pick, the home banner, the yoga label on browse, and the policy pages."
+      lead="Fees and payouts, session packs and credit rules, the neighbourhoods customers can pick, the home banner, the yoga label on browse, and the policy pages."
     >
       <Tabs
         value={tab}
@@ -40,6 +42,7 @@ export function SettingsPage() {
         }}
       >
         <Tab value="earnings" label="Fees" />
+        <Tab value="packs" label="Packs" />
         <Tab value="areas" label="Areas" />
         <Tab value="banner" label="Banner" />
         <Tab value="catalog" label="Catalog" />
@@ -47,6 +50,12 @@ export function SettingsPage() {
       </Tabs>
 
       {tab === "earnings" ? <FeeSettings /> : null}
+      {tab === "packs" ? (
+        <div className="space-y-8">
+          <PackSettings />
+          <CreditRulesSettings />
+        </div>
+      ) : null}
       {tab === "areas" ? <AreaSettings /> : null}
       {tab === "banner" ? <BannerSettings /> : null}
       {tab === "catalog" ? <CategorySettings /> : null}

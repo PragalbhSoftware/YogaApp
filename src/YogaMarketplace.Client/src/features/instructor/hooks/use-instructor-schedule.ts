@@ -182,6 +182,13 @@ export function useUnblockSlot() {
   });
 }
 
+export function useInstructorServices() {
+  return useQuery({
+    queryKey: ["instructor-services"],
+    queryFn: instructorApi.services,
+  });
+}
+
 export function useInstructorTrial() {
   return useQuery({
     queryKey: ["instructor-trial"],
@@ -196,6 +203,7 @@ export function useUpdateInstructorTrial() {
     onSuccess: (trial) => {
       queryClient.setQueryData(["instructor-trial"], trial);
       void queryClient.invalidateQueries({ queryKey: ["instructor"] });
+      void queryClient.invalidateQueries({ queryKey: ["instructor-services"] });
     },
   });
 }

@@ -129,11 +129,16 @@ export type AdminBooking = {
   lateCancelFee: number | null;
   cancelledBy: "Customer" | "Admin" | null;
   cancelReason: string | null;
+  paidWithCredit: boolean;
+  /** The pack's per-session value frozen at booking; null for paid bookings. */
+  creditValue: number | null;
 };
 
+/** A booking payment, or a pack sale (no booking or provider; `packName` instead). */
 export type AdminPayment = {
   id: string;
-  bookingId: string;
+  kind: "Booking" | "Pack";
+  bookingId: string | null;
   amount: number;
   currency: string;
   status: string;
@@ -142,8 +147,9 @@ export type AdminPayment = {
   gatewayPaymentId: string | null;
   createdAt: string;
   updatedAt: string | null;
-  providerId: string;
-  providerName: string;
+  providerId: string | null;
+  providerName: string | null;
+  packName: string | null;
   customerId: string;
   customerName: string | null;
   customerPhone: string;
@@ -184,7 +190,24 @@ export type LateCancelFeeType = (typeof lateCancelFeeTypes)[number];
 export const payoutCycles = ["Weekly", "Biweekly"] as const;
 export type PayoutCycle = (typeof payoutCycles)[number];
 
-export type AdminSettings = {
+export const creditPayBases = ["PackPerSession", "SessionPrice"] as const;
+export type CreditPayBasis = (typeof creditPayBases)[number];
+
+export const creditLateCancelRules = ["PayInstructorShare", "KeepCredit", "ReturnCredit"] as const;
+export type CreditLateCancel = (typeof creditLateCancelRules)[number];
+
+/** Pack rules. Each purchase saves the values in force when it was bought. */
+export type CreditSettings = {
+  creditConvenienceFee: boolean;
+  creditPayBasis: CreditPayBasis;
+  creditLateCancel: CreditLateCancel;
+  creditBookingStandsAfterExpiry: boolean;
+  packRefundsEnabled: boolean;
+  packReferenceSessionPrice: number;
+  packRefundFee: number;
+};
+
+export type AdminSettings = CreditSettings & {
   version: number;
   currency: string;
   commissionPercent: number;
@@ -213,12 +236,63 @@ export type UpdateSettingsInput = Partial<
     | "lateCancelFeeValue"
     | "payoutCycle"
     | "policyNote"
+    | keyof CreditSettings
   >
 > & {
   version: number;
   bannerTitle?: string;
   bannerSubtitle?: string;
   bannerOffer?: string;
+};
+
+export type AdminPack = {
+  id: string;
+  name: string;
+  sessions: number;
+  price: number;
+  validityDays: number;
+  priceCap: number;
+  isActive: boolean;
+  version: number;
+  sold: number;
+  createdAt: string;
+  updatedAt: string | null;
+};
+
+export type CreatePackInput = Pick<AdminPack, "name" | "sessions" | "price" | "validityDays" | "priceCap">;
+
+/** Send the version that was edited; omitted fields stay as they are. */
+export type UpdatePackInput = Partial<CreatePackInput & { isActive: boolean }> & { version: number };
+
+export const creditBatchStatuses = ["Active", "UsedUp", "Expired", "Refunded"] as const;
+export type CreditBatchStatus = (typeof creditBatchStatuses)[number];
+
+/** One pack purchase with the rules saved on it. `refundPreview` is what a partial refund would pay now. */
+export type AdminCreditBatch = {
+  id: string;
+  packId: string;
+  packName: string;
+  sessions: number;
+  remaining: number;
+  used: number;
+  price: number;
+  priceCap: number;
+  currency: string;
+  purchasedAt: string;
+  expiresAt: string;
+  useBy: string;
+  status: CreditBatchStatus;
+  refundsEnabled: boolean;
+  referenceSessionPrice: number;
+  refundFee: number;
+  refundPreview: number;
+  refundedAmount: number;
+  refundedAt: string | null;
+  gatewayPaymentId: string;
+  payBasis: CreditPayBasis;
+  lateCancel: CreditLateCancel;
+  bookingStandsAfterExpiry: boolean;
+  chargeConvenienceFee: boolean;
 };
 
 export type SettingsAuditEntry = {
@@ -233,9 +307,16 @@ export type SettingsAuditEntry = {
 
 export type AdminReport = {
   bookingsByStatus: { status: string; count: number }[];
+  /** Money paid for bookings, net of refunds. Bookings made with a credit never count. */
   gmvPaid: number;
   currency: string;
   pendingPayouts: { count: number; gross: number; net: number };
+  /** Pack payments net of pack refunds. */
+  packSales: number;
+  /** Bookings plus packs, as calculated by the server. */
+  revenue: number;
+  paidBookings: number;
+  creditBookings: number;
 };
 
 export type BookingListQuery = {

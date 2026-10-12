@@ -1,4 +1,4 @@
-import { Button, FormControlLabel, Switch, TextField } from "@mui/material";
+import { Button, FormControlLabel, MenuItem, Switch, TextField } from "@mui/material";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
@@ -11,11 +11,11 @@ import {
   trialSchema,
   type TrialFormValues,
 } from "@/features/instructor/trial-schema";
-import type { ProviderTrial } from "@/features/instructor/types";
+import type { ProviderService, ProviderTrial } from "@/features/instructor/types";
 import { toUserMessage } from "@/services/http/api-error";
 import { formatInr } from "@/utils/money";
 
-export function TrialSettings() {
+export function TrialSettings({ services }: { services: ProviderService[] }) {
   const trial = useInstructorTrial();
 
   return (
@@ -24,21 +24,27 @@ export function TrialSettings() {
         <h2 className="font-heading text-lg font-medium">Trial class</h2>
         <p className="text-sm leading-relaxed text-brand-muted">
           Offer each new customer one low-priced or free first session. A customer who cancels or doesn’t show up
-          doesn’t get another; if you decline, they can try again.
+          doesn’t get another; if you decline, they can try again. Trials can’t be booked with pack credits.
         </p>
       </div>
       {trial.isLoading ? <BookingListSkeleton /> : null}
       {trial.isError ? <ErrorState message={toUserMessage(trial.error)} onRetry={() => void trial.refetch()} /> : null}
-      {trial.data ? <TrialForm key={`${trial.data.enabled}-${trial.data.price}`} trial={trial.data} /> : null}
+      {trial.data ? (
+        <TrialForm
+          key={`${trial.data.serviceId}-${trial.data.enabled}-${trial.data.price}`}
+          trial={trial.data}
+          services={services.filter((service) => service.isActive)}
+        />
+      ) : null}
     </section>
   );
 }
 
-function TrialForm({ trial }: { trial: ProviderTrial }) {
+function TrialForm({ trial, services }: { trial: ProviderTrial; services: ProviderService[] }) {
   const update = useUpdateInstructorTrial();
   const form = useForm<TrialFormValues>({
     resolver: zodResolver(trialSchema),
-    defaultValues: trialFormFromSettings(trial),
+    defaultValues: trialFormFromSettings(trial, services),
   });
   const enabled = useWatch({ control: form.control, name: "enabled" });
 
@@ -64,14 +70,37 @@ function TrialForm({ trial }: { trial: ProviderTrial }) {
         )}
       />
       {enabled ? (
-        <TextField
-          label="Trial price (₹)"
-          fullWidth
-          error={Boolean(form.formState.errors.price)}
-          helperText={form.formState.errors.price?.message ?? trialHelp(trial)}
-          slotProps={{ htmlInput: { inputMode: "decimal" } }}
-          {...form.register("price")}
-        />
+        <>
+          <Controller
+            control={form.control}
+            name="serviceId"
+            render={({ field }) => (
+              <TextField
+                select
+                label="Service"
+                fullWidth
+                value={field.value}
+                onChange={field.onChange}
+                error={Boolean(form.formState.errors.serviceId)}
+                helperText={form.formState.errors.serviceId?.message ?? "The trial is a first session of this service."}
+              >
+                {services.map((service) => (
+                  <MenuItem key={service.id} value={service.id}>
+                    {service.title}
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
+          />
+          <TextField
+            label="Trial price (₹)"
+            fullWidth
+            error={Boolean(form.formState.errors.price)}
+            helperText={form.formState.errors.price?.message ?? trialHelp(trial)}
+            slotProps={{ htmlInput: { inputMode: "decimal" } }}
+            {...form.register("price")}
+          />
+        </>
       ) : null}
       <Button
         type="submit"

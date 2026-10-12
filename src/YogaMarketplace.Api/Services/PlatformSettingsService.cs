@@ -16,6 +16,7 @@ public sealed record CurrentSettings(
     string? BannerTitle,
     string? BannerSubtitle,
     string? BannerOffer,
+    CreditTerms Credits,
     int Version,
     DateTimeOffset? UpdatedAt)
 {
@@ -28,6 +29,7 @@ public sealed record CurrentSettings(
         settings.BannerTitle,
         settings.BannerSubtitle,
         settings.BannerOffer,
+        PlatformSettingsRules.CreditTermsFor(settings),
         settings.Version,
         settings.UpdatedAt);
 }
@@ -164,7 +166,14 @@ public class PlatformSettingsService : IPlatformSettingsService
         request.PolicyNote,
         request.BannerTitle,
         request.BannerSubtitle,
-        request.BannerOffer);
+        request.BannerOffer,
+        request.CreditConvenienceFee,
+        AdminQuery.ParseOptional<CreditPayBasis>(request.CreditPayBasis, "Credit pay basis must be PackPerSession or SessionPrice."),
+        AdminQuery.ParseOptional<CreditLateCancel>(request.CreditLateCancel, "Credit late-cancel rule must be PayInstructorShare, KeepCredit or ReturnCredit."),
+        request.CreditBookingStandsAfterExpiry,
+        request.PackRefundsEnabled,
+        request.PackReferenceSessionPrice,
+        request.PackRefundFee);
 
     private static AdminSettingsResponse ToAdmin(PlatformSettings settings) => new(
         settings.Version,
@@ -181,5 +190,12 @@ public class PlatformSettingsService : IPlatformSettingsService
         settings.BannerTitle,
         settings.BannerSubtitle,
         settings.BannerOffer,
-        settings.UpdatedAt);
+        settings.UpdatedAt,
+        settings.CreditConvenienceFee,
+        settings.CreditPayBasis.ToString(),
+        settings.CreditLateCancel.ToString(),
+        settings.CreditBookingStandsAfterExpiry,
+        settings.PackRefundsEnabled,
+        settings.PackReferenceSessionPrice,
+        settings.PackRefundFee);
 }

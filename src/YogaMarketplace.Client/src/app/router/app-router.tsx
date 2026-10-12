@@ -57,6 +57,9 @@ const BookingsPage = lazy(() =>
     default: module.BookingsPage,
   })),
 );
+const PacksPage = lazy(() =>
+  import("@/features/credits/pages/packs-page").then((module) => ({ default: module.PacksPage })),
+);
 const ProfilePage = lazy(() =>
   import("@/features/profile/pages/profile-page").then((module) => ({
     default: module.ProfilePage,
@@ -75,6 +78,11 @@ const InstructorRequestsPage = lazy(() =>
 const InstructorEarningsPage = lazy(() =>
   import("@/features/instructor/pages/earnings-page").then((module) => ({
     default: module.InstructorEarningsPage,
+  })),
+);
+const InstructorServicesPage = lazy(() =>
+  import("@/features/instructor/pages/services-page").then((module) => ({
+    default: module.InstructorServicesPage,
   })),
 );
 const InstructorProfilePage = lazy(() =>
@@ -121,6 +129,7 @@ export function AppRouter() {
               <Route element={<CustomerLayout />}>
                 <Route path={routes.home} element={<HomePage />} />
                 <Route path={routes.teacher} element={<TeacherPage />} />
+                <Route path={routes.packs} element={<PacksPage />} />
                 <Route path={routes.refundPolicy} element={<RefundPolicyPage />} />
                 <Route path={routes.terms} element={<TermsPage />} />
                 <Route path={routes.privacy} element={<PrivacyPage />} />
@@ -140,6 +149,7 @@ export function AppRouter() {
                   <Route path={routes.instructor} element={<SchedulePage />} />
                   <Route path={routes.instructorBookings} element={<InstructorRequestsPage />} />
                   <Route path={routes.instructorEarnings} element={<InstructorEarningsPage />} />
+                  <Route path={routes.instructorServices} element={<InstructorServicesPage />} />
                   <Route path={routes.instructorProfile} element={<InstructorProfilePage />} />
                 </Route>
               </Route>

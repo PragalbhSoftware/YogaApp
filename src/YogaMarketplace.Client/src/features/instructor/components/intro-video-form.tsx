@@ -2,6 +2,7 @@ import { Button, TextField } from "@mui/material";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
+import { MediaHeading } from "@/features/instructor/components/media-heading";
 import { IntroVideo } from "@/features/marketplace/components/intro-video";
 import { useSetIntroVideo } from "@/features/instructor/hooks/use-instructor-schedule";
 import { introVideoSchema, youTubeWatchUrl, type IntroVideoValues } from "@/features/instructor/media-rules";
@@ -21,10 +22,7 @@ export function IntroVideoForm({ name, videoId }: IntroVideoFormProps) {
 
   return (
     <section className="space-y-3">
-      <div className="space-y-1">
-        <h3 className="font-heading text-base font-medium">Intro video</h3>
-        <p className="text-sm text-brand-muted">Paste a YouTube link. Leave it empty and save to remove the video.</p>
-      </div>
+      <MediaHeading title="Intro video" caption="A YouTube link · clear the field and save to remove it" />
       <form
         className="flex flex-col gap-3 sm:flex-row sm:items-start"
         noValidate

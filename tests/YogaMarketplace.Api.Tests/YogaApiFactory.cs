@@ -9,7 +9,7 @@ using YogaMarketplace.Infrastructure.Persistence;
 
 namespace YogaMarketplace.Api.Tests;
 
-public sealed class YogaApiFactory : WebApplicationFactory<Program>
+public class YogaApiFactory : WebApplicationFactory<Program>
 {
     private readonly string _dbPath = Path.Combine(Path.GetTempPath(), $"yoga-marketplace-{Guid.NewGuid():N}.db");
     private readonly string _storagePath = Path.Combine(Path.GetTempPath(), $"yoga-marketplace-uploads-{Guid.NewGuid():N}");
@@ -49,11 +49,25 @@ public sealed class YogaApiFactory : WebApplicationFactory<Program>
             foreach (var descriptor in toRemove)
                 services.Remove(descriptor);
 
-            services.AddDbContext<YogaDbContext>((provider, options) => options
-                .UseSqlite($"Data Source={_dbPath}")
-                .AddInterceptors(provider.GetServices<IInterceptor>()));
-            services.AddHostedService<TestDatabaseStartup>();
+            services.AddDbContext<YogaDbContext>((provider, options) =>
+            {
+                UseDatabase(options);
+                options.AddInterceptors(provider.GetServices<IInterceptor>());
+            });
+            services.AddHostedService(provider => new TestDatabaseStartup(provider, this));
         });
+    }
+
+    protected virtual void UseDatabase(DbContextOptionsBuilder options) => options.UseSqlite($"Data Source={_dbPath}");
+
+    protected virtual Task CreateDatabaseAsync(YogaDbContext db, CancellationToken cancellationToken) =>
+        db.Database.EnsureCreatedAsync(cancellationToken);
+
+    protected virtual void DeleteDatabase()
+    {
+        TryDelete(_dbPath);
+        TryDelete(_dbPath + "-wal");
+        TryDelete(_dbPath + "-shm");
     }
 
     protected override void Dispose(bool disposing)
@@ -62,9 +76,7 @@ public sealed class YogaApiFactory : WebApplicationFactory<Program>
         if (!disposing)
             return;
 
-        TryDelete(_dbPath);
-        TryDelete(_dbPath + "-wal");
-        TryDelete(_dbPath + "-shm");
+        DeleteDatabase();
         try
         {
             if (Directory.Exists(_storagePath))
@@ -90,17 +102,19 @@ public sealed class YogaApiFactory : WebApplicationFactory<Program>
     private sealed class TestDatabaseStartup : IHostedService
     {
         private readonly IServiceProvider _services;
+        private readonly YogaApiFactory _factory;
 
-        public TestDatabaseStartup(IServiceProvider services)
+        public TestDatabaseStartup(IServiceProvider services, YogaApiFactory factory)
         {
             _services = services;
+            _factory = factory;
         }
 
         public async Task StartAsync(CancellationToken cancellationToken)
         {
             using var scope = _services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<YogaDbContext>();
-            await db.Database.EnsureCreatedAsync(cancellationToken);
+            await _factory.CreateDatabaseAsync(db, cancellationToken);
             await scope.ServiceProvider.GetRequiredService<DbSeeder>().SeedAsync(cancellationToken);
         }
 

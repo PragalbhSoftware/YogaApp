@@ -7,6 +7,7 @@ export const routes = {
   book: "/book/:providerId/:slotId",
   bookings: "/bookings",
   profile: "/profile",
+  packs: "/packs",
   refundPolicy: "/refund-policy",
   terms: "/terms",
   privacy: "/privacy",
@@ -22,11 +23,17 @@ export const routes = {
   instructorRegister: "/instructor/register",
   instructorBookings: "/instructor/bookings",
   instructorEarnings: "/instructor/earnings",
+  instructorServices: "/instructor/services",
   instructorProfile: "/instructor/profile",
 } as const;
 
-export function teacherPath(id: string) {
-  return `${routes.instructors}/${id}`;
+export function teacherPath(id: string, mode?: string) {
+  const path = `${routes.instructors}/${id}`;
+  return mode ? `${path}?mode=${encodeURIComponent(mode)}` : path;
+}
+
+export function packPath(packId: string) {
+  return `${routes.packs}?pack=${encodeURIComponent(packId)}`;
 }
 
 export function bookPath(providerId: string, slotId: string, mode: string) {

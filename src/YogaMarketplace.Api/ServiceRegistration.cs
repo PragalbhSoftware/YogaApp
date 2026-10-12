@@ -34,6 +34,11 @@ public static class ServiceRegistration
         services.AddScoped<ProviderMediaService>();
         services.AddScoped<ProviderTrialService>();
         services.AddScoped<ContentPageService>();
+        services.AddScoped<CreditLedger>();
+        services.AddScoped<CreditPurchaseService>();
+        services.AddScoped<IAdminCreditService, AdminCreditService>();
+        services.AddScoped<CreditExpiryJob>();
+        services.AddScoped<IBackgroundJobHandler>(sp => sp.GetRequiredService<CreditExpiryJob>());
         services.AddScoped<IAdminProviderService, AdminProviderService>();
         services.AddScoped<IAdminCertificateService, AdminCertificateService>();
         services.AddScoped<IAdminUserService, AdminUserService>();

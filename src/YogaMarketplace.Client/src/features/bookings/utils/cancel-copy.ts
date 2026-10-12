@@ -2,7 +2,27 @@ import type { CancelQuote } from "@/features/bookings/types";
 import { formatWhenKolkata } from "@/utils/clock";
 import { formatInr } from "@/utils/money";
 
+export function cancelButtonLabel(quote: CancelQuote) {
+  if (!quote.paidWithCredit) return `Cancel and refund ${formatInr(quote.refund)}`;
+  if (quote.creditReturned) return "Cancel and get the credit back";
+  if (packClosedNote(quote)) return "Cancel booking";
+  return "Cancel and use the credit";
+}
+
+/** Why no credit comes back when the pack itself can't take one any more, or null. */
+function packClosedNote(quote: CancelQuote) {
+  if (quote.creditNotReturnedReason === "PackRefunded") return "No credit will be returned (pack was refunded).";
+  if (quote.creditNotReturnedReason === "PackExpired") return "No credit will be returned (pack has expired).";
+  return null;
+}
+
+export function creditOutcomeLabel(quote: CancelQuote) {
+  if (quote.creditReturned) return "Returned";
+  return packClosedNote(quote) ? "Not returned" : "Used";
+}
+
 export function quoteNote(quote: CancelQuote) {
+  if (quote.paidWithCredit) return creditQuoteNote(quote);
   if (quote.lateCancelFee > 0 || quote.convenienceFeeKept > 0) {
     const closed = `The free cancellation window closed${
       quote.freeUntil ? ` at ${formatWhenKolkata(quote.freeUntil)}` : ""
@@ -18,6 +38,18 @@ export function quoteNote(quote: CancelQuote) {
       : `${after}.`;
   }
   return "Your instructor hasn’t accepted yet, so cancelling is free.";
+}
+
+function creditQuoteNote(quote: CancelQuote) {
+  const packClosed = packClosedNote(quote);
+  if (packClosed) return quote.refund > 0 ? `${packClosed} Your ${formatInr(quote.refund)} fee comes back.` : packClosed;
+  if (!quote.creditReturned) {
+    return `The free cancellation window closed${
+      quote.freeUntil ? ` at ${formatWhenKolkata(quote.freeUntil)}` : ""
+    }, so the credit counts as used.`;
+  }
+  const back = quote.refund > 0 ? `Your credit and the ${formatInr(quote.refund)} fee come back.` : "Your credit comes back.";
+  return quote.freeUntil ? `${back} Free cancellation until ${formatWhenKolkata(quote.freeUntil)}.` : back;
 }
 
 function lateFeeText(quote: CancelQuote) {

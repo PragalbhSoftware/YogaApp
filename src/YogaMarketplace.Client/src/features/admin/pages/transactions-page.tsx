@@ -11,7 +11,7 @@ import { FilterChips } from "@/features/admin/components/filter-chips";
 import { PayoutCard } from "@/features/admin/components/payout-card";
 import { useAdminPayments, useAdminPayouts, useMarkPayoutPaid } from "@/features/admin/hooks/use-admin";
 import { paymentStatuses, payoutStatuses } from "@/features/admin/types";
-import { displayName, formatAdminWhen, listCap } from "@/features/admin/utils";
+import { displayName, formatAdminWhen, listCap, paymentTitle } from "@/features/admin/utils";
 import { PayoutExportBar } from "@/features/admin/components/payout-export-bar";
 import { paymentStatusLabel } from "@/features/bookings/utils/status";
 import { toUserMessage } from "@/services/http/api-error";
@@ -47,7 +47,7 @@ export function TransactionsPage() {
     <AdminPage
       kicker="Money"
       title="Transactions"
-      lead="Customer payments stay here. When a session is completed, marked no-show, or cancelled late, a payout appears so you can send the instructor their share and keep your take."
+      lead="Customer payments and pack sales stay here. When a session is completed, marked no-show, or cancelled late, a payout appears so you can send the instructor their share and keep your take."
       note={listCap}
     >
       <Tabs
@@ -81,7 +81,7 @@ export function TransactionsPage() {
             <ErrorState message={toUserMessage(payments.error)} onRetry={() => void payments.refetch()} />
           ) : null}
           {payments.isSuccess && payments.data.length === 0 ? (
-            <EmptyState title="No payments in this list" description="Paid bookings appear here after checkout." />
+            <EmptyState title="No payments in this list" description="Paid bookings and pack sales appear here after checkout." />
           ) : null}
           {payments.isSuccess
             ? payments.data.map((payment) => (
@@ -91,7 +91,14 @@ export function TransactionsPage() {
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <h2 className="font-heading text-lg font-medium">{payment.providerName}</h2>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="font-heading text-lg font-medium">{paymentTitle(payment)}</h2>
+                        {payment.kind === "Pack" ? (
+                          <span className="rounded-full bg-brand-background px-2.5 py-0.5 text-xs font-semibold text-brand-primary">
+                            Pack
+                          </span>
+                        ) : null}
+                      </div>
                       <p className="mt-1 text-sm text-brand-muted">
                         {displayName(payment.customerName, payment.customerPhone)} ·{" "}
                         <PhoneText value={payment.customerPhone} />

@@ -175,6 +175,12 @@ public class Booking
     public int CancelFreeWindowHours { get; set; }
     public LateCancelFeeType LateCancelFeeType { get; set; } = LateCancelFeeType.Percent;
     public decimal LateCancelFeeValue { get; set; }
+    /// <summary>Set when the session was paid with a credit. <see cref="Amount"/> then holds the frozen instructor gross.</summary>
+    public Guid? CreditBatchId { get; set; }
+
+    /// <summary>The credit's frozen worth: pack price divided by its sessions.</summary>
+    public decimal? CreditValue { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     public Payment? Payment { get; set; }
@@ -186,14 +192,20 @@ public class Booking
 /// Holds a Razorpay order until payment is captured. Not a booking.
 /// Abandoning checkout leaves this row and creates no <see cref="Booking"/>.
 /// The booking terms are locked here when checkout starts, so a settings change before capture does not apply.
+/// A <see cref="CheckoutKind.Pack"/> checkout buys <see cref="PackId"/> and has no provider, service or slot.
 /// </summary>
 public class CheckoutIntent
 {
     public Guid Id { get; set; }
+    public CheckoutKind Kind { get; set; } = CheckoutKind.Booking;
     public Guid CustomerId { get; set; }
-    public Guid ProviderId { get; set; }
-    public Guid ServiceId { get; set; }
-    public Guid SlotId { get; set; }
+    public Guid? ProviderId { get; set; }
+    public Guid? ServiceId { get; set; }
+    public Guid? SlotId { get; set; }
+    public Guid? PackId { get; set; }
+
+    /// <summary>A booking paid with a credit; the order charges only the convenience fee.</summary>
+    public bool UsesCredit { get; set; }
     public SessionMode Mode { get; set; }
     public decimal Amount { get; set; }
     public bool IsTrial { get; set; }
@@ -207,6 +219,7 @@ public class CheckoutIntent
     public string? Landmark { get; set; }
     public string Gateway { get; set; } = PaymentGateways.Razorpay;
     public string GatewayOrderId { get; set; } = "";
+    public string? GatewayPaymentId { get; set; }
     public CheckoutStatus Status { get; set; } = CheckoutStatus.Open;
     public Guid? BookingId { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
@@ -277,6 +290,13 @@ public class PlatformSettings
     public string? BannerTitle { get; set; }
     public string? BannerSubtitle { get; set; }
     public string? BannerOffer { get; set; }
+    public bool CreditConvenienceFee { get; set; }
+    public CreditPayBasis CreditPayBasis { get; set; } = CreditPayBasis.PackPerSession;
+    public CreditLateCancel CreditLateCancel { get; set; } = CreditLateCancel.PayInstructorShare;
+    public bool CreditBookingStandsAfterExpiry { get; set; } = true;
+    public bool PackRefundsEnabled { get; set; } = true;
+    public decimal PackReferenceSessionPrice { get; set; } = PlatformSettingsRules.DefaultPackReferenceSessionPrice;
+    public decimal PackRefundFee { get; set; }
     public int Version { get; set; } = 1;
     public DateTimeOffset? UpdatedAt { get; set; }
 }

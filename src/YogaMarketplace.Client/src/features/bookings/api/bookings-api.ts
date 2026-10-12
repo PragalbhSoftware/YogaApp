@@ -25,6 +25,10 @@ export const bookingsApi = {
     return http.post<CheckoutOrder>("/api/bookings/orders", input).then((res) => res.data);
   },
 
+  bookWithCredit(input: CreateOrderInput) {
+    return http.post<BookingRecord>("/api/bookings/credit", input).then((res) => res.data);
+  },
+
   confirmLocal(orderId: string) {
     return http.post<BookingRecord>("/api/bookings/local-confirm", { orderId }).then((res) => res.data);
   },

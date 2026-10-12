@@ -22,7 +22,14 @@ public sealed record PlatformSettingsChanges(
     string? PolicyNote = null,
     string? BannerTitle = null,
     string? BannerSubtitle = null,
-    string? BannerOffer = null);
+    string? BannerOffer = null,
+    bool? CreditConvenienceFee = null,
+    CreditPayBasis? CreditPayBasis = null,
+    CreditLateCancel? CreditLateCancel = null,
+    bool? CreditBookingStandsAfterExpiry = null,
+    bool? PackRefundsEnabled = null,
+    decimal? PackReferenceSessionPrice = null,
+    decimal? PackRefundFee = null);
 
 public sealed record SettingChange(string Field, string? OldValue, string? NewValue);
 
@@ -34,6 +41,7 @@ public static class PlatformSettingsRules
     public const int BannerTitleMax = 80;
     public const int BannerSubtitleMax = 160;
     public const int BannerOfferMax = 60;
+    public const decimal DefaultPackReferenceSessionPrice = 799m;
 
     public static BookingTerms TermsFor(PlatformSettings settings) => new(
         settings.CommissionPercent,
@@ -41,6 +49,15 @@ public static class PlatformSettingsRules
         settings.CancelFreeWindowHours,
         settings.LateCancelFeeType,
         settings.LateCancelFeeValue);
+
+    public static CreditTerms CreditTermsFor(PlatformSettings settings) => new(
+        settings.CreditConvenienceFee,
+        settings.CreditPayBasis,
+        settings.CreditLateCancel,
+        settings.CreditBookingStandsAfterExpiry,
+        settings.PackRefundsEnabled,
+        settings.PackReferenceSessionPrice,
+        settings.PackRefundFee);
 
     /// <summary>
     /// Validates every field first, then applies <paramref name="changes"/>, so a bad value changes nothing.
@@ -63,6 +80,17 @@ public static class PlatformSettingsRules
         var title = changes.BannerTitle is null ? settings.BannerTitle : Text(changes.BannerTitle, BannerTitleMax, "Banner title");
         var subtitle = changes.BannerSubtitle is null ? settings.BannerSubtitle : Text(changes.BannerSubtitle, BannerSubtitleMax, "Banner subtitle");
         var offer = changes.BannerOffer is null ? settings.BannerOffer : Text(changes.BannerOffer, BannerOfferMax, "Banner offer");
+        var creditFee = changes.CreditConvenienceFee ?? settings.CreditConvenienceFee;
+        var payBasis = changes.CreditPayBasis ?? settings.CreditPayBasis;
+        if (!Enum.IsDefined(payBasis))
+            throw new DomainException("Credit pay basis must be PackPerSession or SessionPrice.");
+        var lateCancel = changes.CreditLateCancel ?? settings.CreditLateCancel;
+        if (!Enum.IsDefined(lateCancel))
+            throw new DomainException("Credit late-cancel rule must be PayInstructorShare, KeepCredit or ReturnCredit.");
+        var standsAfterExpiry = changes.CreditBookingStandsAfterExpiry ?? settings.CreditBookingStandsAfterExpiry;
+        var refunds = changes.PackRefundsEnabled ?? settings.PackRefundsEnabled;
+        var referencePrice = changes.PackReferenceSessionPrice is decimal rp ? Flat(rp, "Reference session price") : settings.PackReferenceSessionPrice;
+        var refundFee = changes.PackRefundFee is decimal rf ? Flat(rf, "Pack refund fee") : settings.PackRefundFee;
 
         var log = new List<SettingChange>();
         Set(log, nameof(settings.CommissionPercent), settings.CommissionPercent, commission, v => settings.CommissionPercent = v);
@@ -76,6 +104,13 @@ public static class PlatformSettingsRules
         Set(log, nameof(settings.BannerTitle), settings.BannerTitle, title, v => settings.BannerTitle = v);
         Set(log, nameof(settings.BannerSubtitle), settings.BannerSubtitle, subtitle, v => settings.BannerSubtitle = v);
         Set(log, nameof(settings.BannerOffer), settings.BannerOffer, offer, v => settings.BannerOffer = v);
+        Set(log, nameof(settings.CreditConvenienceFee), settings.CreditConvenienceFee, creditFee, v => settings.CreditConvenienceFee = v);
+        Set(log, nameof(settings.CreditPayBasis), settings.CreditPayBasis, payBasis, v => settings.CreditPayBasis = v);
+        Set(log, nameof(settings.CreditLateCancel), settings.CreditLateCancel, lateCancel, v => settings.CreditLateCancel = v);
+        Set(log, nameof(settings.CreditBookingStandsAfterExpiry), settings.CreditBookingStandsAfterExpiry, standsAfterExpiry, v => settings.CreditBookingStandsAfterExpiry = v);
+        Set(log, nameof(settings.PackRefundsEnabled), settings.PackRefundsEnabled, refunds, v => settings.PackRefundsEnabled = v);
+        Set(log, nameof(settings.PackReferenceSessionPrice), settings.PackReferenceSessionPrice, referencePrice, v => settings.PackReferenceSessionPrice = v);
+        Set(log, nameof(settings.PackRefundFee), settings.PackRefundFee, refundFee, v => settings.PackRefundFee = v);
         return log;
     }
 

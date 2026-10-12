@@ -5,7 +5,10 @@ using YogaMarketplace.Infrastructure.Persistence;
 
 namespace YogaMarketplace.Api.Services;
 
-/// <summary>The instructor's trial offer. It lives on their main service, so at most one service per instructor has it.</summary>
+/// <summary>
+/// The instructor's services and trial offer. The instructor picks which active service carries the trial; at most one
+/// service per instructor has it.
+/// </summary>
 public class ProviderTrialService
 {
     private readonly YogaDbContext _db;
@@ -19,6 +22,23 @@ public class ProviderTrialService
         _settings = settings;
     }
 
+    public async Task<IReadOnlyList<ProviderServiceResponse>> ListServicesAsync(CancellationToken cancellationToken)
+    {
+        var provider = await RequireMineAsync(cancellationToken);
+        var categories = await _db.Categories.AsNoTracking().ToDictionaryAsync(c => c.Id, c => c.Name, cancellationToken);
+        return provider.Services
+            .OrderByDescending(s => s.IsActive)
+            .ThenBy(s => s.Title, StringComparer.Ordinal)
+            .Select(s => new ProviderServiceResponse(
+                s.Id,
+                s.Title,
+                categories.GetValueOrDefault(s.CategoryId, ""),
+                s.IsActive,
+                TrialRules.Offers(s),
+                s.TrialPrice))
+            .ToList();
+    }
+
     public async Task<ProviderTrialResponse> GetAsync(CancellationToken cancellationToken)
     {
         var provider = await RequireMineAsync(cancellationToken);
@@ -29,25 +49,37 @@ public class ProviderTrialService
     {
         var provider = await RequireMineAsync(cancellationToken);
         var services = provider.Services.Where(s => s.IsActive).ToList();
-        var main = services.OrderBy(s => s.Title).FirstOrDefault()
-            ?? throw new DomainException("You have no bookable service yet.", 409);
+        var target = PickService(services, request.ServiceId);
 
-        foreach (var other in services.Where(s => s.Id != main.Id))
+        foreach (var other in services.Where(s => s.Id != target.Id))
             TrialRules.Disable(other);
 
         if (request.Enabled)
         {
             var price = request.Price ?? throw new DomainException("Enter a trial price. It can be 0.");
             var settings = await _settings.GetAsync(cancellationToken);
-            TrialRules.Enable(main, TrialRules.CleanPrice(price, provider.LowestOfferedRate(), settings.Terms.ConvenienceFee));
+            TrialRules.Enable(target, TrialRules.CleanPrice(price, provider.LowestOfferedRate(), settings.Terms.ConvenienceFee));
         }
         else
         {
-            TrialRules.Disable(main);
+            TrialRules.Disable(target);
         }
 
         await _db.SaveChangesAsync(cancellationToken);
         return await ToResponseAsync(provider, cancellationToken);
+    }
+
+    /// <summary>The requested service, else the one that has the trial now, else the first by title.</summary>
+    private static Service PickService(List<Service> active, Guid? serviceId)
+    {
+        if (serviceId is Guid id && id != Guid.Empty)
+        {
+            return active.SingleOrDefault(s => s.Id == id)
+                ?? throw new DomainException("Pick one of your active services.");
+        }
+        return active.FirstOrDefault(TrialRules.Offers)
+            ?? active.OrderBy(s => s.Title, StringComparer.Ordinal).FirstOrDefault()
+            ?? throw new DomainException("You have no bookable service yet.", 409);
     }
 
     private async Task<ProviderTrialResponse> ToResponseAsync(Provider provider, CancellationToken cancellationToken)
@@ -55,7 +87,7 @@ public class ProviderTrialService
         var settings = await _settings.GetAsync(cancellationToken);
         var trial = provider.Services.FirstOrDefault(TrialRules.Offers);
         var price = trial?.TrialPrice ?? provider.Services.Select(s => s.TrialPrice).FirstOrDefault(p => p is not null);
-        return new ProviderTrialResponse(trial is not null, price, provider.LowestOfferedRate(), settings.Terms.ConvenienceFee);
+        return new ProviderTrialResponse(trial?.Id, trial is not null, price, provider.LowestOfferedRate(), settings.Terms.ConvenienceFee);
     }
 
     private async Task<Provider> RequireMineAsync(CancellationToken cancellationToken) =>

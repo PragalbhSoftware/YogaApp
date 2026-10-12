@@ -1,7 +1,7 @@
 import { ApiError, toUserMessage } from "@/services/http/api-error";
 import { formatInr } from "@/utils/money";
 import { formatSlotDay, formatTimeRange12 } from "@/utils/clock";
-import type { AdminProvider } from "@/features/admin/types";
+import type { AdminPayment, AdminProvider } from "@/features/admin/types";
 
 export function formatAdminWhen(value: string) {
   return new Intl.DateTimeFormat("en-IN", {
@@ -56,6 +56,12 @@ export function modeRateLabel(mode: string, rate: number | null) {
 }
 
 export const listCap = "Lists show up to 100 rows.";
+
+/** Instructor for a booking payment, the pack name for a pack sale. */
+export function paymentTitle(payment: Pick<AdminPayment, "kind" | "providerName" | "packName">) {
+  if (payment.kind === "Pack") return payment.packName ?? "Session pack";
+  return payment.providerName ?? "Booking";
+}
 
 export function bookingStatusCount(rows: { status: string; count: number }[], status: string) {
   return rows.find((row) => row.status === status)?.count ?? 0;

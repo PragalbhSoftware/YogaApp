@@ -127,16 +127,22 @@ public record AdminBookingResponse(
     decimal? RefundedAmount,
     decimal? LateCancelFee,
     string? CancelledBy,
-    string? CancelReason);
+    string? CancelReason,
+    bool PaidWithCredit,
+    decimal? CreditValue);
 
 public class AdminCancelBookingRequest
 {
     public string? Reason { get; set; }
 }
 
+/// <summary>
+/// A booking payment or a pack sale. <see cref="Kind"/> is "Booking" or "Pack". A pack row has no booking or provider
+/// and carries <see cref="PackName"/> instead.
+/// </summary>
 public record AdminPaymentResponse(
     Guid Id,
-    Guid BookingId,
+    Guid? BookingId,
     decimal Amount,
     string Currency,
     string Status,
@@ -145,12 +151,20 @@ public record AdminPaymentResponse(
     string? GatewayPaymentId,
     DateTimeOffset CreatedAt,
     DateTimeOffset? UpdatedAt,
-    Guid ProviderId,
-    string ProviderName,
+    Guid? ProviderId,
+    string? ProviderName,
     Guid CustomerId,
     string? CustomerName,
     string CustomerPhone,
-    decimal RefundedAmount);
+    decimal RefundedAmount,
+    string Kind = AdminPaymentKind.Booking,
+    string? PackName = null);
+
+public static class AdminPaymentKind
+{
+    public const string Booking = "Booking";
+    public const string Pack = "Pack";
+}
 
 public record AdminPayoutResponse(
     Guid Id,
@@ -201,6 +215,13 @@ public class UpdateSettingsRequest
     public string? BannerTitle { get; set; }
     public string? BannerSubtitle { get; set; }
     public string? BannerOffer { get; set; }
+    public bool? CreditConvenienceFee { get; set; }
+    public string? CreditPayBasis { get; set; }
+    public string? CreditLateCancel { get; set; }
+    public bool? CreditBookingStandsAfterExpiry { get; set; }
+    public bool? PackRefundsEnabled { get; set; }
+    public decimal? PackReferenceSessionPrice { get; set; }
+    public decimal? PackRefundFee { get; set; }
 }
 
 public record AdminSettingsResponse(
@@ -218,7 +239,69 @@ public record AdminSettingsResponse(
     string? BannerTitle,
     string? BannerSubtitle,
     string? BannerOffer,
+    DateTimeOffset? UpdatedAt,
+    bool CreditConvenienceFee,
+    string CreditPayBasis,
+    string CreditLateCancel,
+    bool CreditBookingStandsAfterExpiry,
+    bool PackRefundsEnabled,
+    decimal PackReferenceSessionPrice,
+    decimal PackRefundFee);
+
+public record AdminPackResponse(
+    Guid Id,
+    string Name,
+    int Sessions,
+    decimal Price,
+    int ValidityDays,
+    decimal PriceCap,
+    bool IsActive,
+    int Version,
+    int Sold,
+    DateTimeOffset CreatedAt,
     DateTimeOffset? UpdatedAt);
+
+/// <summary>Create needs every field. Update needs <see cref="Version"/>; omitted fields stay as they are.</summary>
+public class SavePackRequest
+{
+    public string? Name { get; set; }
+    public int? Sessions { get; set; }
+    public decimal? Price { get; set; }
+    public int? ValidityDays { get; set; }
+    public decimal? PriceCap { get; set; }
+    public bool? IsActive { get; set; }
+    public int? Version { get; set; }
+}
+
+/// <summary>
+/// One purchase with the rules saved on it. <see cref="Status"/> is Active, UsedUp, Expired or Refunded.
+/// <see cref="RefundPreview"/> is what an admin partial refund would pay now.
+/// </summary>
+public record AdminCreditBatchResponse(
+    Guid Id,
+    Guid PackId,
+    string PackName,
+    int Sessions,
+    int Remaining,
+    int Used,
+    decimal Price,
+    decimal PriceCap,
+    string Currency,
+    DateTimeOffset PurchasedAt,
+    DateTimeOffset ExpiresAt,
+    DateOnly UseBy,
+    string Status,
+    bool RefundsEnabled,
+    decimal ReferenceSessionPrice,
+    decimal RefundFee,
+    decimal RefundPreview,
+    decimal RefundedAmount,
+    DateTimeOffset? RefundedAt,
+    string GatewayPaymentId,
+    string PayBasis,
+    string LateCancel,
+    bool BookingStandsAfterExpiry,
+    bool ChargeConvenienceFee);
 
 public record SettingsAuditResponse(
     Guid Id,
@@ -233,8 +316,17 @@ public record BookingStatusCount(string Status, int Count);
 
 public record PendingPayoutTotals(int Count, decimal Gross, decimal Net);
 
+/// <summary>
+/// <see cref="GmvPaid"/> is money customers paid for bookings, net of refunds; ₹0 credit payment rows never count.
+/// <see cref="PackSales"/> is pack payments net of pack refunds, and <see cref="Revenue"/> is the two together.
+/// <see cref="PaidBookings"/> counts bookings paid with money; <see cref="CreditBookings"/> counts bookings made with a credit.
+/// </summary>
 public record AdminReportResponse(
     IReadOnlyList<BookingStatusCount> BookingsByStatus,
     decimal GmvPaid,
     string Currency,
-    PendingPayoutTotals PendingPayouts);
+    PendingPayoutTotals PendingPayouts,
+    decimal PackSales,
+    decimal Revenue,
+    int PaidBookings,
+    int CreditBookings);

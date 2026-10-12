@@ -1,8 +1,11 @@
+import { Link } from "react-router-dom";
 import { Button, Chip } from "@mui/material";
+import { teacherPath } from "@/constants/routes";
 import { ReviewForm } from "@/features/bookings/components/review-form";
 import { SessionFacts } from "@/features/bookings/components/session-facts";
 import type { BookingRecord, CreateReviewInput } from "@/features/bookings/types";
 import {
+  canBookAgain,
   canCancel,
   canReschedule,
   canSubmitReview,
@@ -49,7 +52,7 @@ export function CustomerBookingCard({
         </div>
       </div>
       <div className="mt-4">
-        <SessionFacts booking={booking} />
+        <SessionFacts booking={booking} customerView />
       </div>
       {showReview ? (
         <div className="mt-4">
@@ -61,12 +64,24 @@ export function CustomerBookingCard({
           You reviewed this session.
         </p>
       ) : null}
+      {canBookAgain(booking) ? (
+        <Button
+          component={Link}
+          to={teacherPath(booking.providerId, booking.mode)}
+          variant="outlined"
+          fullWidth
+          sx={{ mt: 2, minHeight: 44, borderRadius: "14px" }}
+        >
+          Book again
+        </Button>
+      ) : null}
       {showCancel || showReschedule ? (
         <div className="mt-4 flex flex-col gap-2">
           {showReschedule ? (
             <>
               <p className="text-sm text-brand-muted">
-                Move to another open {booking.mode.toLowerCase()} time with this instructor. Payment stays paid.
+                Move to another open {booking.mode.toLowerCase()} time with this instructor.{" "}
+                {booking.paidWithCredit ? "No extra credit is used." : "Payment stays paid."}
               </p>
               <Button
                 variant="contained"
@@ -83,7 +98,9 @@ export function CustomerBookingCard({
             <>
               <p className="text-sm text-brand-muted">
                 {booking.status === "Upcoming"
-                  ? "Free until the cancellation window closes. You’ll see the refund before you confirm."
+                  ? booking.paidWithCredit
+                    ? "Free until the cancellation window closes. You’ll see whether the credit comes back before you confirm."
+                    : "Free until the cancellation window closes. You’ll see the refund before you confirm."
                   : "Free while the instructor hasn’t accepted. The slot opens up again."}
               </p>
               <Button

@@ -1,4 +1,4 @@
-import { TextField } from "@mui/material";
+import { InputAdornment, TextField } from "@mui/material";
 import type { HTMLInputTypeAttribute, Ref } from "react";
 import { fieldInputSx } from "@/features/profile/components/field-styles";
 
@@ -17,6 +17,8 @@ type AddressFieldProps = {
   maxLength?: number;
   inputMode?: "text" | "numeric" | "decimal";
   type?: HTMLInputTypeAttribute;
+  /** Short text shown inside the field before the value, such as a currency symbol. */
+  prefix?: string;
 };
 
 const fieldSx = {
@@ -49,6 +51,7 @@ export function AddressField({
   maxLength,
   inputMode,
   type = "text",
+  prefix,
 }: AddressFieldProps) {
   return (
     <div className="flex flex-col gap-2">
@@ -76,6 +79,7 @@ export function AddressField({
             maxLength,
             inputMode,
           },
+          input: prefix ? { startAdornment: <InputAdornment position="start">{prefix}</InputAdornment> } : undefined,
         }}
         sx={fieldSx}
       />

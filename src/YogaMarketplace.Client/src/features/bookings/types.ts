@@ -7,6 +7,22 @@ export type BookingQuote = {
   total: number;
   currency: string;
   isTrial: boolean;
+  credit: CreditOption;
+};
+
+/**
+ * The "Use 1 credit" option, priced by the server. When it isn't available, `message` says why and is safe to show.
+ * `total` is what the customer pays on top of the credit (the convenience fee, when the pack's rules charge it).
+ */
+export type CreditOption = {
+  available: boolean;
+  reason: "NoCredits" | "AboveCap" | "ExpiresBeforeSession" | "Trial" | "Blocked" | null;
+  message: string | null;
+  convenienceFee: number;
+  total: number;
+  batchId: string | null;
+  packName: string | null;
+  useBy: string | null;
 };
 
 /** The signed-in customer's trial with one instructor. */
@@ -72,6 +88,7 @@ export type BookingRecord = {
   cancelledBy: "Customer" | "Admin" | null;
   cancelReason: string | null;
   isTrial: boolean;
+  paidWithCredit: boolean;
 };
 
 export type CancelQuote = {
@@ -86,11 +103,18 @@ export type CancelQuote = {
   lateCancelFeeType: "Percent" | "Flat";
   lateCancelFeeValue: number;
   freeUntil: string | null;
+  paidWithCredit: boolean;
+  /** For a credit booking: whether cancelling now gives a usable credit back. */
+  creditReturned: boolean;
+  /** For a credit booking that won't get its credit back: why. */
+  creditNotReturnedReason?: "LateCancel" | "PackRefunded" | "PackExpired" | null;
 };
 
 export type CreateOrderInput = {
   slotId: string;
   trial?: boolean;
+  /** Pay only the convenience fee and use a credit for the session. */
+  useCredit?: boolean;
   homeAddress?: string;
   landmark?: string;
 };

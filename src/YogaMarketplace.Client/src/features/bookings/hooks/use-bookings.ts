@@ -6,9 +6,12 @@ import type {
   CreateOrderInput,
   CreateReviewInput,
 } from "@/features/bookings/types";
+import { myCreditsKey } from "@/features/credits/hooks/use-credits";
+import { withRetry } from "@/services/http/retry";
 
 export function invalidateBookingLists(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({ queryKey: ["bookings-me"] });
+  void queryClient.invalidateQueries({ queryKey: myCreditsKey });
   void queryClient.invalidateQueries({ queryKey: ["instructor-bookings"] });
   void queryClient.invalidateQueries({ queryKey: ["instructor-slots"] });
   void queryClient.invalidateQueries({ queryKey: ["instructor-open-slots"] });
@@ -38,6 +41,7 @@ export function useCreateBookingOrder() {
     mutationFn: (input: CreateOrderInput) => bookingsApi.createOrder(input),
     onSuccess: (order, input) => {
       void queryClient.invalidateQueries({ queryKey: ["trial-status"] });
+      if (input.useCredit) return;
       queryClient.setQueryData<BookingQuote>(["booking-quote", order.slotId, Boolean(input.trial)], (current) =>
         current
           ? {
@@ -53,6 +57,14 @@ export function useCreateBookingOrder() {
   });
 }
 
+export function useBookWithCredit() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateOrderInput) => bookingsApi.bookWithCredit(input),
+    onSuccess: () => invalidateBookingLists(queryClient),
+  });
+}
+
 export function useConfirmLocalPayment() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -61,11 +73,16 @@ export function useConfirmLocalPayment() {
   });
 }
 
+const CONFIRM_RETRY_MS = [1000, 3000, 6000] as const;
+
+/** Confirm is idempotent per payment, so a dropped connection after the customer has paid is retried. */
 export function useConfirmPayment() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: ConfirmPaymentInput) => bookingsApi.confirm(input.orderId, input.paymentId, input.signature),
+    mutationFn: (input: ConfirmPaymentInput) =>
+      withRetry(() => bookingsApi.confirm(input.orderId, input.paymentId, input.signature), CONFIRM_RETRY_MS),
     onSuccess: () => invalidateBookingLists(queryClient),
+    onError: () => invalidateBookingLists(queryClient),
   });
 }
 

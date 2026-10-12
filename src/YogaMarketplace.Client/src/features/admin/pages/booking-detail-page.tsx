@@ -56,7 +56,11 @@ function BookingDetail({ booking }: { booking: AdminBooking }) {
       {
         onSuccess: (updated) => {
           setCancelOpen(false);
-          toast.success(`Cancelled. ${formatInr(updated.refundedAmount ?? updated.amount)} refunded to the customer.`);
+          toast.success(
+            updated.paidWithCredit
+              ? "Cancelled. The credit went back to the customer."
+              : `Cancelled. ${formatInr(updated.refundedAmount ?? updated.amount)} refunded to the customer.`,
+          );
         },
         onError: (error) => toast.error(toUserMessage(error)),
       },
@@ -100,9 +104,20 @@ function BookingDetail({ booking }: { booking: AdminBooking }) {
         <Fact label="When">{formatSessionWhen(booking.date, booking.start, booking.end)}</Fact>
         <Fact label="Mode">{booking.mode}</Fact>
         <Fact label="Status">{statusFilterLabel(booking.status)}</Fact>
-        <Fact label="Amount">
+        <Fact label={booking.paidWithCredit ? "Instructor gross (frozen)" : "Amount"}>
           <PriceText amount={booking.amount} className="min-w-0 text-sm" /> · {booking.currency}
         </Fact>
+        {booking.paidWithCredit ? (
+          <Fact label="Paid with">
+            1 credit
+            {booking.creditValue != null ? (
+              <>
+                {" · worth "}
+                <PriceText amount={booking.creditValue} className="min-w-0 text-sm" />
+              </>
+            ) : null}
+          </Fact>
+        ) : null}
         {booking.paymentStatus ? <Fact label="Payment">{paymentStatusLabel(booking.paymentStatus)}</Fact> : null}
         {booking.refundedAmount ? (
           <Fact label="Refunded">

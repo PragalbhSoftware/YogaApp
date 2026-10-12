@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bannerSchema, feeSettingsSchema } from "@/features/admin/schemas";
+import { bannerSchema, creditSettingsSchema, feeSettingsSchema, packSchema } from "@/features/admin/schemas";
 
 const valid = {
   commissionPercent: 15,
@@ -38,6 +38,45 @@ describe("fee settings form", () => {
     expect(errorPaths({ lateCancelFeeValue: 250 })).toEqual(["lateCancelFeeValue"]);
     expect(errorPaths({ lateCancelFeeType: "Flat", lateCancelFeeValue: 250 })).toEqual([]);
     expect(errorPaths({ lateCancelFeeType: "Flat", lateCancelFeeValue: 10_001 })).toEqual(["lateCancelFeeValue"]);
+  });
+});
+
+describe("pack form", () => {
+  const pack = { name: "8 sessions", sessions: 8, price: 4800, validityDays: 30, priceCap: 800 };
+  const packErrors = (input: Record<string, unknown>) => {
+    const result = packSchema.safeParse({ ...pack, ...input });
+    return result.success ? [] : result.error.issues.map((issue) => issue.path.join("."));
+  };
+
+  it("accepts a normal pack typed as text", () => {
+    expect(packErrors({ sessions: "8", price: "4800.50", validityDays: "30", priceCap: "800" })).toEqual([]);
+  });
+
+  it("rejects zero or fractional sessions, prices under ₹1 and long validity", () => {
+    expect(packErrors({ sessions: 0 })).toEqual(["sessions"]);
+    expect(packErrors({ sessions: 2.5 })).toEqual(["sessions"]);
+    expect(packErrors({ price: 0.5 })).toEqual(["price"]);
+    expect(packErrors({ price: 99.999 })).toEqual(["price"]);
+    expect(packErrors({ validityDays: 731 })).toEqual(["validityDays"]);
+    expect(packErrors({ priceCap: 0 })).toEqual(["priceCap"]);
+  });
+});
+
+describe("credit settings form", () => {
+  const credit = {
+    creditConvenienceFee: false,
+    creditPayBasis: "PackPerSession",
+    creditLateCancel: "PayInstructorShare",
+    creditBookingStandsAfterExpiry: true,
+    packRefundsEnabled: true,
+    packReferenceSessionPrice: 799,
+    packRefundFee: 0,
+  };
+
+  it("accepts the defaults and rejects unknown rules or negative fees", () => {
+    expect(creditSettingsSchema.safeParse(credit).success).toBe(true);
+    expect(creditSettingsSchema.safeParse({ ...credit, creditLateCancel: "Refund" }).success).toBe(false);
+    expect(creditSettingsSchema.safeParse({ ...credit, packRefundFee: -1 }).success).toBe(false);
   });
 });
 
