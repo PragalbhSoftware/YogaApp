@@ -95,6 +95,7 @@ Set in `appsettings.*.json`, user secrets, or environment variables (`Section__K
 | `RefreshToken:LifetimeDays`, `RefreshToken:ReuseGraceSeconds` | Refresh cookie lifetime (default 30 days) and how long a just-rotated token gets `409` (a parallel tab) before it counts as reuse (default 30 s) |
 | `RefreshToken:CookieSecure`, `RefreshToken:CookieSameSite` | Cookie flags. Defaults are `true` and `Strict`; Development and Testing turn `CookieSecure` off for plain HTTP. Use `None` (with HTTPS) only if the SPA and API are on different sites. |
 | `Otp:Pepper`, `Otp:ExposeCode`, `Otp:UseFixedCode` | OTP hashing and the dev shortcuts (forced off in Production) |
+| `Otp:DemoPhones`, `Otp:DemoCode` | Demo site sign-in: the listed phones (comma-separated) accept the 6-digit demo code; other phones get a normal OTP. Allowed in Production only with both set. |
 | `Cors:AllowedOrigins` | Array of browser origins allowed to call the API cross-origin. Development allows `http://localhost:5173`. **Production refuses to start with an empty list.** |
 | `Razorpay:KeyId`, `Razorpay:KeySecret`, `Razorpay:WebhookSecret` | Payment gateway. Never commit live keys. |
 | `Razorpay:UseFakeGateway` | Development and tests issue `order_fake_…` ids and capture locally (`/api/bookings/local-confirm`). Production refuses to start when this is on. |
@@ -343,6 +344,7 @@ With `ASPNETCORE_ENVIRONMENT=Production` the API **refuses to start** when:
 
 - `Database:AutoMigrate` is true (apply migrations with the script below instead),
 - `Otp:ExposeCode` or `Otp:UseFixedCode` is true,
+- `Otp:DemoCode` is set without `Otp:DemoPhones`, is not 6 digits, or `Otp:DemoPhones` has an invalid phone,
 - `Razorpay:UseFakeGateway` is true, or any of `Razorpay:KeyId`, `Razorpay:KeySecret`, `Razorpay:WebhookSecret` is empty,
 - `Cors:AllowedOrigins` is empty, or `Jwt:Key` is shorter than 32 bytes,
 - `DataProtection:KeysPath` is empty or not a full path.
@@ -489,7 +491,7 @@ Create an MS SQL database and user in Plesk. Production never migrates on startu
 
 ### 6. Environment variables (Production)
 
-Set these in the **server copy** of `web.config`, inside `<environmentVariables>`. They must never be in the repo. Escape XML in values: `&` becomes `&amp;`, `<` becomes `&lt;`, and `"` becomes `&quot;`.
+Set these in Plesk, if your plan shows environment variables for the site. Otherwise put them **only in the server's copy of `web.config`**, inside `<environmentVariables>`. They must never be in the repo or in the `web.config` you upload from your machine. **Never re-upload `web.config` after the first deploy**: it would wipe the variables and the app would not start. In `web.config` values, escape XML: `&` becomes `&amp;`, `<` becomes `&lt;`, and `"` becomes `&quot;`.
 
 | Variable | Required | Value |
 | --- | --- | --- |
@@ -503,18 +505,20 @@ Set these in the **server copy** of `web.config`, inside `<environmentVariables>
 | `Razorpay__WebhookSecret` | Yes | The secret set on the Razorpay webhook (below) |
 | `DataProtection__KeysPath` | Yes | Full path of the `keys` folder from step 3. The app refuses to start without it. |
 | `Storage__RootPath` | Yes, for this deploy | Full path of the `uploads` folder from step 3. The default (`App_Data/uploads`) lives in the site folder and is lost on redeploy. |
+| `Otp__DemoPhones` | No (demo site only) | Comma-separated phones that sign in with the demo code, e.g. `+919000000001,+919000000002`. Every other phone gets a normal OTP. Empty or missing turns demo mode off. |
+| `Otp__DemoCode` | No (demo site only) | The 6-digit code for `Otp__DemoPhones`. Startup fails if it is set without `Otp__DemoPhones`. Attempt lockout and rate limits still apply, and the log shows a warning (with masked phones) while demo mode is on. |
 
 Leave `ForwardedHeaders__*` empty (IIS in-process has no proxy in front of the app) and `RefreshToken__CookieSameSite` at `Strict` (one site). The app refuses to start if a required value is missing or unsafe; see [What Production enforces](#what-production-enforces).
 
 ### 7. Upload (FTP)
 
-**First deploy:** upload everything in `publish/` to the document root, then add the variables above to the server's `web.config`.
+**First deploy:** upload everything in `publish/` to the document root, then set the variables above in Plesk or in the server's `web.config`.
 
 **Every later deploy:**
 
 1. Upload `deploy/plesk/app_offline.htm` to the document root. IIS stops the app, unlocks its files and shows the maintenance page.
 2. Back up the database, then run the `migrations-sql` script if this release has new migrations.
-3. Upload the new `publish/` files, overwriting old ones, **except `web.config`**. The server copy holds your variables. If `web.config` itself changed, merge your `<environmentVariables>` into the new one. Never delete or overwrite the `keys` or `uploads` folders.
+3. Upload the new `publish/` files, overwriting old ones, **except `web.config`**. Never re-upload it after the first deploy, because the server copy holds your variables. If a release really changes `web.config`, edit the server copy by hand. Never delete or overwrite the `keys` or `uploads` folders.
 4. Delete `app_offline.htm`. The app starts on the next request. Check that `https://yogademo.psoftcs.com/health/ready` returns `200`.
 
 Old files in `wwwroot/assets` are harmless (every build uses new file names), and they keep already-open tabs working. Clear them now and then.
