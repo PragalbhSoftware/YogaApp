@@ -14,6 +14,12 @@ describe("purchaseStage", () => {
     expect(purchaseStage("order_1", status("order_0", "Completed"))).toBe("confirming");
   });
 
+  it("turns slow past the time limit unless the order already settled", () => {
+    expect(purchaseStage("order_1", status("order_1", "Open"), true)).toBe("slow");
+    expect(purchaseStage("order_1", undefined, true)).toBe("slow");
+    expect(purchaseStage("order_1", status("order_1", "Completed"), true)).toBe("done");
+  });
+
   it("finishes on Completed or Refunded", () => {
     expect(purchaseStage("order_1", status("order_1", "Completed"))).toBe("done");
     expect(purchaseStage("order_1", status("order_1", "Refunded"))).toBe("refunded");
