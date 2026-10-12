@@ -56,6 +56,7 @@ public partial class BookingService
             CreatedAt = now
         };
         PaymentRules.MarkPaid(payment, null);
+        _db.Services.Attach(service);
         booking.Provider = provider;
         booking.Service = service;
         booking.Slot = slot;
