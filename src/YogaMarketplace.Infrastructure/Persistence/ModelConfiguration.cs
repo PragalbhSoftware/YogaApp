@@ -20,7 +20,7 @@ internal static class ModelConfiguration
         ConfigureService(modelBuilder.Entity<Service>());
         ConfigureSlot(modelBuilder.Entity<AvailabilitySlot>());
         ConfigureBooking(modelBuilder.Entity<Booking>());
-        ConfigureCheckout(modelBuilder.Entity<CheckoutIntent>());
+        ConfigureCheckout(modelBuilder.Entity<CheckoutIntent>(), sqlite);
         ConfigurePayment(modelBuilder.Entity<Payment>(), sqlite);
         ConfigureReview(modelBuilder.Entity<Review>());
         ConfigurePayout(modelBuilder.Entity<PayoutPending>());
@@ -29,6 +29,70 @@ internal static class ModelConfiguration
         ConfigureContentPage(modelBuilder.Entity<ContentPage>());
         ConfigureBackgroundJob(modelBuilder.Entity<BackgroundJob>(), sqlite);
         ConfigureOtp(modelBuilder.Entity<OtpChallenge>());
+        ConfigureCreditPack(modelBuilder.Entity<CreditPack>());
+        ConfigureCreditBatch(modelBuilder.Entity<CreditBatch>(), sqlite);
+        ConfigureCreditLedger(modelBuilder.Entity<CreditLedgerEntry>());
+        ConfigureCreditAccount(modelBuilder.Entity<CreditAccount>());
+    }
+
+    private static void ConfigureCreditPack(EntityTypeBuilder<CreditPack> entity)
+    {
+        entity.Property(p => p.Name).HasMaxLength(CreditPackRules.NameMax);
+        entity.Property(p => p.Price).HasPrecision(10, 2);
+        entity.Property(p => p.PriceCap).HasPrecision(10, 2);
+        entity.Property(p => p.Version).HasDefaultValue(1).IsConcurrencyToken();
+        entity.HasIndex(p => p.IsActive);
+    }
+
+    private static void ConfigureCreditBatch(EntityTypeBuilder<CreditBatch> entity, bool sqlite)
+    {
+        entity.Property(b => b.PackName).HasMaxLength(CreditPackRules.NameMax);
+        entity.Property(b => b.Price).HasPrecision(10, 2);
+        entity.Property(b => b.PriceCap).HasPrecision(10, 2);
+        entity.Property(b => b.Currency).HasMaxLength(8);
+        entity.Property(b => b.PayBasis).HasConversion<string>().HasMaxLength(24);
+        entity.Property(b => b.LateCancel).HasConversion<string>().HasMaxLength(24);
+        entity.Property(b => b.ReferenceSessionPrice).HasPrecision(10, 2);
+        entity.Property(b => b.RefundFee).HasPrecision(10, 2);
+        entity.Property(b => b.RefundedAmount).HasPrecision(10, 2);
+        entity.Property(b => b.GatewayPaymentId).HasMaxLength(80);
+        entity.Ignore(b => b.Terms);
+        entity.HasIndex(b => b.CheckoutIntentId).IsUnique();
+        entity.HasIndex(b => b.GatewayPaymentId).IsUnique();
+        entity.HasIndex(b => new { b.CustomerId, b.ExpiresAt });
+        if (sqlite)
+        {
+            // SQLite cannot compare DateTimeOffset text; the expiry job filters on this in SQL.
+            entity.Property(b => b.ExpiresAt).HasConversion<DateTimeOffsetToBinaryConverter>();
+        }
+
+        entity.HasOne<User>().WithMany().HasForeignKey(b => b.CustomerId).OnDelete(DeleteBehavior.Restrict);
+        entity.HasOne<CreditPack>().WithMany().HasForeignKey(b => b.PackId).OnDelete(DeleteBehavior.Restrict);
+        entity.HasOne<CheckoutIntent>().WithMany().HasForeignKey(b => b.CheckoutIntentId).OnDelete(DeleteBehavior.Restrict);
+    }
+
+    private static void ConfigureCreditLedger(EntityTypeBuilder<CreditLedgerEntry> entity)
+    {
+        entity.ToTable("CreditLedger");
+        entity.Property(e => e.Kind).HasConversion<string>().HasMaxLength(16);
+        entity.HasIndex(e => new { e.BatchId, e.Kind });
+        entity.HasIndex(e => e.CustomerId);
+        entity.HasIndex(e => e.BookingId, "IX_CreditLedger_OneUsePerBooking").IsUnique().HasFilter("Kind = 'Use'");
+        entity.HasIndex(e => e.BookingId, "IX_CreditLedger_OneReturnPerBooking").IsUnique().HasFilter("Kind = 'Return'");
+        entity.HasIndex(e => e.BatchId, "IX_CreditLedger_OnePurchasePerBatch").IsUnique().HasFilter("Kind = 'Purchase'");
+        entity.HasIndex(e => e.BatchId, "IX_CreditLedger_OneExpirePerBatch").IsUnique().HasFilter("Kind = 'Expire'");
+        entity.HasIndex(e => e.BatchId, "IX_CreditLedger_OneRefundPerBatch").IsUnique().HasFilter("Kind = 'Refund'");
+
+        entity.HasOne<CreditBatch>().WithMany().HasForeignKey(e => e.BatchId).OnDelete(DeleteBehavior.Restrict);
+        entity.HasOne<User>().WithMany().HasForeignKey(e => e.CustomerId).OnDelete(DeleteBehavior.Restrict);
+        entity.HasOne<Booking>().WithMany().HasForeignKey(e => e.BookingId).OnDelete(DeleteBehavior.Restrict);
+    }
+
+    private static void ConfigureCreditAccount(EntityTypeBuilder<CreditAccount> entity)
+    {
+        entity.HasKey(a => a.CustomerId);
+        entity.Property(a => a.Version).HasDefaultValue(1).IsConcurrencyToken();
+        entity.HasOne<User>().WithOne().HasForeignKey<CreditAccount>(a => a.CustomerId).OnDelete(DeleteBehavior.Restrict);
     }
 
     private static void ConfigureCategory(EntityTypeBuilder<Category> entity)
@@ -195,6 +259,9 @@ internal static class ModelConfiguration
         entity.HasOne(b => b.Provider).WithMany().HasForeignKey(b => b.ProviderId).OnDelete(DeleteBehavior.Restrict);
         entity.HasOne(b => b.Service).WithMany().HasForeignKey(b => b.ServiceId).OnDelete(DeleteBehavior.Restrict);
         entity.HasOne(b => b.Slot).WithMany().HasForeignKey(b => b.SlotId).OnDelete(DeleteBehavior.Restrict);
+
+        entity.Property(b => b.CreditValue).HasPrecision(10, 2);
+        entity.HasOne<CreditBatch>().WithMany().HasForeignKey(b => b.CreditBatchId).OnDelete(DeleteBehavior.Restrict);
     }
 
     private static void ConfigurePayment(EntityTypeBuilder<Payment> entity, bool sqlite)
@@ -218,8 +285,15 @@ internal static class ModelConfiguration
             .OnDelete(DeleteBehavior.Restrict);
     }
 
-    private static void ConfigureCheckout(EntityTypeBuilder<CheckoutIntent> entity)
+    private static void ConfigureCheckout(EntityTypeBuilder<CheckoutIntent> entity, bool sqlite)
     {
+        entity.Property(c => c.Kind).HasConversion<string>().HasMaxLength(16).HasDefaultValue(CheckoutKind.Booking);
+        entity.Property(c => c.UsesCredit).HasDefaultValue(false);
+        entity.Property(c => c.GatewayPaymentId).HasMaxLength(80);
+        entity.HasIndex(c => c.GatewayPaymentId)
+            .IsUnique()
+            .HasFilter(sqlite ? "\"GatewayPaymentId\" IS NOT NULL" : "[GatewayPaymentId] IS NOT NULL");
+        entity.HasOne<CreditPack>().WithMany().HasForeignKey(c => c.PackId).OnDelete(DeleteBehavior.Restrict);
         entity.Property(c => c.Mode).HasConversion<string>().HasMaxLength(16);
         entity.Property(c => c.Status).HasConversion<string>().HasMaxLength(16);
         entity.Property(c => c.Amount).HasPrecision(10, 2);
@@ -292,6 +366,11 @@ internal static class ModelConfiguration
         entity.Property(s => s.BannerSubtitle).HasMaxLength(PlatformSettingsRules.BannerSubtitleMax);
         entity.Property(s => s.BannerOffer).HasMaxLength(PlatformSettingsRules.BannerOfferMax);
         entity.Property(s => s.Version).HasDefaultValue(1).IsConcurrencyToken();
+        entity.Property(s => s.CreditConvenienceFee).HasDefaultValue(false);
+        entity.Property(s => s.CreditPayBasis).HasConversion<string>().HasMaxLength(24).HasDefaultValue(CreditPayBasis.PackPerSession);
+        entity.Property(s => s.CreditLateCancel).HasConversion<string>().HasMaxLength(24).HasDefaultValue(CreditLateCancel.PayInstructorShare);
+        entity.Property(s => s.PackReferenceSessionPrice).HasPrecision(10, 2).HasDefaultValue(PlatformSettingsRules.DefaultPackReferenceSessionPrice);
+        entity.Property(s => s.PackRefundFee).HasPrecision(10, 2).HasDefaultValue(0m);
     }
 
     private static void ConfigureSettingsAudit(EntityTypeBuilder<SettingsAudit> entity)

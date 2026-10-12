@@ -174,6 +174,13 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<Guid?>("CreditBatchId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal?>("CreditValue")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)");
+
                     b.Property<Guid>("CustomerId")
                         .HasColumnType("uniqueidentifier");
 
@@ -244,6 +251,8 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                         .HasColumnType("datetimeoffset");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CreditBatchId");
 
                     b.HasIndex("CustomerId");
 
@@ -348,6 +357,10 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                         .HasMaxLength(80)
                         .HasColumnType("nvarchar(80)");
 
+                    b.Property<string>("GatewayPaymentId")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
                     b.Property<string>("HomeAddress")
                         .HasMaxLength(300)
                         .HasColumnType("nvarchar(300)");
@@ -356,6 +369,13 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
                         .HasDefaultValue(false);
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)")
+                        .HasDefaultValue("Booking");
 
                     b.Property<string>("Landmark")
                         .HasMaxLength(160)
@@ -379,13 +399,16 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                         .HasMaxLength(16)
                         .HasColumnType("nvarchar(16)");
 
-                    b.Property<Guid>("ProviderId")
+                    b.Property<Guid?>("PackId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid>("ServiceId")
+                    b.Property<Guid?>("ProviderId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid>("SlotId")
+                    b.Property<Guid?>("ServiceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("SlotId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Status")
@@ -393,12 +416,23 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                         .HasMaxLength(16)
                         .HasColumnType("nvarchar(16)");
 
+                    b.Property<bool>("UsesCredit")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
                     b.HasKey("Id");
 
                     b.HasIndex("BookingId");
 
                     b.HasIndex("GatewayOrderId")
                         .IsUnique();
+
+                    b.HasIndex("GatewayPaymentId")
+                        .IsUnique()
+                        .HasFilter("[GatewayPaymentId] IS NOT NULL");
+
+                    b.HasIndex("PackId");
 
                     b.HasIndex("ProviderId");
 
@@ -470,6 +504,229 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                             UpdatedAt = new DateTimeOffset(new DateTime(2026, 10, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
                             Version = 1
                         });
+                });
+
+            modelBuilder.Entity("YogaMarketplace.Domain.CreditAccount", b =>
+                {
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
+
+                    b.HasKey("CustomerId");
+
+                    b.ToTable("CreditAccounts");
+                });
+
+            modelBuilder.Entity("YogaMarketplace.Domain.CreditBatch", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("BookingStandsAfterExpiry")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("ChargeConvenienceFee")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("CheckoutIntentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("nvarchar(8)");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("GatewayPaymentId")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<string>("LateCancel")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("nvarchar(24)");
+
+                    b.Property<Guid>("PackId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("PackName")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<string>("PayBasis")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("nvarchar(24)");
+
+                    b.Property<decimal>("Price")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<decimal>("PriceCap")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<DateTimeOffset>("PurchasedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<decimal>("ReferenceSessionPrice")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<decimal>("RefundFee")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<decimal>("RefundedAmount")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<DateTimeOffset?>("RefundedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<bool>("RefundsEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("Remaining")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Sessions")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ValidityDays")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CheckoutIntentId")
+                        .IsUnique();
+
+                    b.HasIndex("GatewayPaymentId")
+                        .IsUnique();
+
+                    b.HasIndex("PackId");
+
+                    b.HasIndex("CustomerId", "ExpiresAt");
+
+                    b.ToTable("CreditBatches");
+                });
+
+            modelBuilder.Entity("YogaMarketplace.Domain.CreditLedgerEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("BatchId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("BookingId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("Credits")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("BatchId", "Kind");
+
+                    b.HasIndex(new[] { "BatchId" }, "IX_CreditLedger_OneExpirePerBatch")
+                        .IsUnique()
+                        .HasFilter("Kind = 'Expire'");
+
+                    b.HasIndex(new[] { "BatchId" }, "IX_CreditLedger_OnePurchasePerBatch")
+                        .IsUnique()
+                        .HasFilter("Kind = 'Purchase'");
+
+                    b.HasIndex(new[] { "BatchId" }, "IX_CreditLedger_OneRefundPerBatch")
+                        .IsUnique()
+                        .HasFilter("Kind = 'Refund'");
+
+                    b.HasIndex(new[] { "BookingId" }, "IX_CreditLedger_OneReturnPerBooking")
+                        .IsUnique()
+                        .HasFilter("Kind = 'Return'");
+
+                    b.HasIndex(new[] { "BookingId" }, "IX_CreditLedger_OneUsePerBooking")
+                        .IsUnique()
+                        .HasFilter("Kind = 'Use'");
+
+                    b.ToTable("CreditLedger", (string)null);
+                });
+
+            modelBuilder.Entity("YogaMarketplace.Domain.CreditPack", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<decimal>("Price")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<decimal>("PriceCap")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<int>("Sessions")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("ValidityDays")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsActive");
+
+                    b.ToTable("CreditPacks");
                 });
 
             modelBuilder.Entity("YogaMarketplace.Domain.OtpChallenge", b =>
@@ -658,6 +915,28 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                         .HasColumnType("decimal(10,2)")
                         .HasDefaultValue(0m);
 
+                    b.Property<bool>("CreditBookingStandsAfterExpiry")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("CreditConvenienceFee")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("CreditLateCancel")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(24)
+                        .HasColumnType("nvarchar(24)")
+                        .HasDefaultValue("PayInstructorShare");
+
+                    b.Property<string>("CreditPayBasis")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(24)
+                        .HasColumnType("nvarchar(24)")
+                        .HasDefaultValue("PackPerSession");
+
                     b.Property<string>("Currency")
                         .IsRequired()
                         .HasMaxLength(8)
@@ -673,6 +952,21 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                     b.Property<decimal>("LateCancelFeeValue")
                         .HasPrecision(10, 2)
                         .HasColumnType("decimal(10,2)");
+
+                    b.Property<decimal>("PackReferenceSessionPrice")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)")
+                        .HasDefaultValue(799m);
+
+                    b.Property<decimal>("PackRefundFee")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)")
+                        .HasDefaultValue(0m);
+
+                    b.Property<bool>("PackRefundsEnabled")
+                        .HasColumnType("bit");
 
                     b.Property<string>("PayoutCycle")
                         .IsRequired()
@@ -1152,6 +1446,11 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("YogaMarketplace.Domain.Booking", b =>
                 {
+                    b.HasOne("YogaMarketplace.Domain.CreditBatch", null)
+                        .WithMany()
+                        .HasForeignKey("CreditBatchId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("YogaMarketplace.Domain.User", "Customer")
                         .WithMany()
                         .HasForeignKey("CustomerId")
@@ -1198,23 +1497,25 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("YogaMarketplace.Domain.CreditPack", null)
+                        .WithMany()
+                        .HasForeignKey("PackId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("YogaMarketplace.Domain.Provider", null)
                         .WithMany()
                         .HasForeignKey("ProviderId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("YogaMarketplace.Domain.Service", null)
                         .WithMany()
                         .HasForeignKey("ServiceId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("YogaMarketplace.Domain.AvailabilitySlot", null)
                         .WithMany()
                         .HasForeignKey("SlotId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("YogaMarketplace.Domain.ContentPage", b =>
@@ -1223,6 +1524,56 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("UpdatedByUserId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("YogaMarketplace.Domain.CreditAccount", b =>
+                {
+                    b.HasOne("YogaMarketplace.Domain.User", null)
+                        .WithOne()
+                        .HasForeignKey("YogaMarketplace.Domain.CreditAccount", "CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("YogaMarketplace.Domain.CreditBatch", b =>
+                {
+                    b.HasOne("YogaMarketplace.Domain.CheckoutIntent", null)
+                        .WithMany()
+                        .HasForeignKey("CheckoutIntentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("YogaMarketplace.Domain.User", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("YogaMarketplace.Domain.CreditPack", null)
+                        .WithMany()
+                        .HasForeignKey("PackId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("YogaMarketplace.Domain.CreditLedgerEntry", b =>
+                {
+                    b.HasOne("YogaMarketplace.Domain.CreditBatch", null)
+                        .WithMany()
+                        .HasForeignKey("BatchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("YogaMarketplace.Domain.Booking", null)
+                        .WithMany()
+                        .HasForeignKey("BookingId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("YogaMarketplace.Domain.User", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("YogaMarketplace.Domain.Payment", b =>

@@ -105,6 +105,51 @@ public enum BackgroundJobStatus
     Failed
 }
 
+public enum CheckoutKind
+{
+    Booking,
+    Pack
+}
+
+public enum CreditEntryKind
+{
+    Purchase,
+    Use,
+    Return,
+    Expire,
+    /// <summary>Unused credits removed by an admin partial refund.</summary>
+    Refund
+}
+
+/// <summary>What the instructor's gross is for a session paid with a credit.</summary>
+public enum CreditPayBasis
+{
+    /// <summary>Pack price divided by its sessions.</summary>
+    PackPerSession,
+    /// <summary>The instructor's regular rate for the session mode.</summary>
+    SessionPrice
+}
+
+/// <summary>What happens to the credit when the customer cancels a credit booking inside the late window.</summary>
+public enum CreditLateCancel
+{
+    /// <summary>The credit is used and the instructor earns the late-cancel share of the frozen value.</summary>
+    PayInstructorShare,
+    /// <summary>The credit is used and nobody is paid.</summary>
+    KeepCredit,
+    /// <summary>The credit goes back to the customer.</summary>
+    ReturnCredit
+}
+
+public enum CreditUnavailable
+{
+    NoCredits,
+    AboveCap,
+    ExpiresBeforeSession,
+    Trial,
+    Blocked
+}
+
 public enum CertificateStatus
 {
     Pending,
@@ -115,4 +160,7 @@ public enum CertificateStatus
 public static class PaymentGateways
 {
     public const string Razorpay = "razorpay";
+
+    /// <summary>A credit booking with no fee to pay. Its payment row is ₹0 and never goes to Razorpay.</summary>
+    public const string Credit = "credit";
 }
