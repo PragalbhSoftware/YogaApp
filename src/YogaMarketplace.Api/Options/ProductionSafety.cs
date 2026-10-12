@@ -28,6 +28,8 @@ public static class ProductionSafety
             || string.IsNullOrWhiteSpace(razorpay.KeySecret)
             || string.IsNullOrWhiteSpace(razorpay.WebhookSecret))
             problems.Add("Razorpay:KeyId, Razorpay:KeySecret and Razorpay:WebhookSecret are required in Production.");
+        if (DataProtectionSettings.ProductionProblem(configuration) is string keysProblem)
+            problems.Add(keysProblem);
 
         if (problems.Count > 0)
             throw new InvalidOperationException(string.Join(" ", problems));

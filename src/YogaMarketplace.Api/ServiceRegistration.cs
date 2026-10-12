@@ -13,6 +13,7 @@ public static class ServiceRegistration
     {
         services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.Section));
         services.Configure<OtpOptions>(configuration.GetSection(OtpOptions.Section));
+        services.AddPersistedDataProtection(configuration);
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUser, HttpCurrentUser>();
         services.AddScoped<IOtpSender, LoggingOtpSender>();

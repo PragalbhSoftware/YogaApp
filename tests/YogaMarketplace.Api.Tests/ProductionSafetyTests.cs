@@ -28,7 +28,8 @@ public class ProductionSafetyTests : IClassFixture<YogaApiFactory>
         ["Razorpay:KeyId"] = "rzp_live_example",
         ["Razorpay:KeySecret"] = "live-secret",
         ["Razorpay:WebhookSecret"] = "webhook-secret",
-        ["Razorpay:UseFakeGateway"] = "false"
+        ["Razorpay:UseFakeGateway"] = "false",
+        ["DataProtection:KeysPath"] = Path.Combine(Path.GetTempPath(), "yoga-keys")
     };
 
     [Fact]
@@ -45,6 +46,8 @@ public class ProductionSafetyTests : IClassFixture<YogaApiFactory>
     [InlineData("Razorpay:KeyId", "", "Razorpay:KeyId")]
     [InlineData("Razorpay:KeySecret", " ", "Razorpay:KeyId")]
     [InlineData("Razorpay:WebhookSecret", "", "Razorpay:KeyId")]
+    [InlineData("DataProtection:KeysPath", "", "DataProtection:KeysPath is required")]
+    [InlineData("DataProtection:KeysPath", "App_Data/keys", "DataProtection:KeysPath must be a full path")]
     public void Unsafe_production_settings_stop_startup(string key, string value, string expected)
     {
         var error = Assert.Throws<InvalidOperationException>(() =>
