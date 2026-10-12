@@ -175,6 +175,11 @@ internal static class ModelConfiguration
         entity.Property(b => b.ConvenienceFee).HasPrecision(10, 2).HasDefaultValue(0m);
         entity.Property(b => b.IsTrial).HasDefaultValue(false);
         entity.HasIndex(b => new { b.CustomerId, b.ProviderId, b.IsTrial });
+        entity.Property(b => b.TrialConsumed).HasDefaultValue(false);
+        entity.HasIndex(b => new { b.CustomerId, b.ProviderId })
+            .HasDatabaseName("IX_Bookings_OneConsumedTrial")
+            .IsUnique()
+            .HasFilter("TrialConsumed = 1");
         entity.Property(b => b.CancelFreeWindowHours).HasDefaultValue(0);
         entity.Property(b => b.LateCancelFeeType).HasConversion<string>().HasMaxLength(16).HasDefaultValue(LateCancelFeeType.Percent);
         entity.Property(b => b.LateCancelFeeValue).HasPrecision(10, 2).HasDefaultValue(0m);

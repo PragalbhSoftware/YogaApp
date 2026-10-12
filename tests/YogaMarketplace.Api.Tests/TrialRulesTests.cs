@@ -4,8 +4,6 @@ namespace YogaMarketplace.Api.Tests;
 
 public class TrialRulesTests
 {
-    private static readonly Func<Booking, bool> UsesTrial = TrialRules.UsesTrial.Compile();
-
     [Theory]
     [InlineData(0, 25, 0)]
     [InlineData(199.999, 0, 200)]
@@ -46,8 +44,39 @@ public class TrialRulesTests
         BookingStatus status, CancelledBy? cancelledBy, bool usesTrial)
     {
         var booking = new Booking { IsTrial = true, Status = status, CancelledBy = cancelledBy };
-        Assert.Equal(usesTrial, UsesTrial(booking));
-        Assert.False(UsesTrial(new Booking { IsTrial = false, Status = status, CancelledBy = cancelledBy }));
+        Assert.Equal(usesTrial, TrialRules.Consumes(booking));
+        Assert.False(TrialRules.Consumes(new Booking { IsTrial = false, Status = status, CancelledBy = cancelledBy }));
+    }
+
+    [Fact]
+    public void Status_changes_keep_the_stored_trial_flag_in_step()
+    {
+        var declined = PendingTrial();
+        Assert.True(declined.TrialConsumed);
+        BookingRules.Decline(declined);
+        Assert.False(declined.TrialConsumed);
+
+        var adminCancelled = PendingTrial();
+        BookingRules.AdminCancel(adminCancelled, "Instructor unwell", DateTimeOffset.UtcNow);
+        Assert.False(adminCancelled.TrialConsumed);
+
+        var customerCancelled = PendingTrial();
+        BookingRules.Cancel(customerCancelled, DateTimeOffset.UtcNow.AddDays(1), DateTimeOffset.UtcNow);
+        Assert.True(customerCancelled.TrialConsumed);
+
+        var noShow = PendingTrial();
+        BookingRules.Accept(noShow);
+        BookingRules.MarkNoShow(noShow);
+        Assert.True(noShow.TrialConsumed);
+    }
+
+    private static Booking PendingTrial()
+    {
+        var providerId = Guid.NewGuid();
+        var service = new Service { Id = Guid.NewGuid(), ProviderId = providerId };
+        var slot = new AvailabilitySlot { Id = Guid.NewGuid(), ProviderId = providerId, Mode = SessionMode.Online };
+        return BookingRules.CreateAfterPayment(
+            Guid.NewGuid(), service, slot, 0m, new BookingTerms(10m, 25m, 12, LateCancelFeeType.Percent, 50m), null, null, "https://meet.google.com/abc-defg-hij", null, isTrial: true);
     }
 
     [Fact]

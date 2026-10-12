@@ -7,12 +7,28 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    services:
+      # Throwaway server for the migration tests; the password only exists inside this job.
+      mssql:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: Ci-only-Passw0rd
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P Ci-only-Passw0rd -Q 'SELECT 1'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
       - run: dotnet test YogaMarketplace.sln -c Release
+        env:
+          YOGA_TEST_SQLSERVER: Server=localhost,1433;User Id=sa;Password=Ci-only-Passw0rd;TrustServerCertificate=True
 
   migrations:
     runs-on: ubuntu-latest

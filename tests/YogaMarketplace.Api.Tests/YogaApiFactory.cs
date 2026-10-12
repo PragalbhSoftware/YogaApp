@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -48,7 +49,9 @@ public sealed class YogaApiFactory : WebApplicationFactory<Program>
             foreach (var descriptor in toRemove)
                 services.Remove(descriptor);
 
-            services.AddDbContext<YogaDbContext>(options => options.UseSqlite($"Data Source={_dbPath}"));
+            services.AddDbContext<YogaDbContext>((provider, options) => options
+                .UseSqlite($"Data Source={_dbPath}")
+                .AddInterceptors(provider.GetServices<IInterceptor>()));
             services.AddHostedService<TestDatabaseStartup>();
         });
     }

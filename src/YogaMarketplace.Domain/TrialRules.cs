@@ -1,5 +1,3 @@
-using System.Linq.Expressions;
-
 namespace YogaMarketplace.Domain;
 
 /// <summary>
@@ -19,10 +17,16 @@ public static class TrialRules
         "This trial can't be booked right now. Ask the instructor to set a price of at least ₹1.";
 
     /// <summary>True when this booking uses up the customer's trial with the instructor.</summary>
-    public static readonly Expression<Func<Booking, bool>> UsesTrial = b =>
-        b.IsTrial
-        && b.Status != BookingStatus.Declined
-        && !(b.Status == BookingStatus.Cancelled && b.CancelledBy == CancelledBy.Admin);
+    public static bool Consumes(Booking booking) =>
+        booking.IsTrial
+        && booking.Status != BookingStatus.Declined
+        && !(booking.Status == BookingStatus.Cancelled && booking.CancelledBy == CancelledBy.Admin);
+
+    /// <summary>
+    /// Stores <see cref="Consumes"/> on the booking. Call it wherever the status changes so the flag is saved with the
+    /// status; the database keeps at most one consumed trial per customer and instructor.
+    /// </summary>
+    public static void Sync(Booking booking) => booking.TrialConsumed = Consumes(booking);
 
     public static bool Offers(Service service) =>
         service.IsActive && service.TrialEnabled && service.TrialPrice is not null;

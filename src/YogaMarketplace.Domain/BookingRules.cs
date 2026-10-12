@@ -42,7 +42,7 @@ public static class BookingRules
         EnsureSessionLocation(slot.Mode, homeAddress, landmark, meetLink, studioAddress);
 
         var now = DateTimeOffset.UtcNow;
-        return new Booking
+        var booking = new Booking
         {
             Id = Guid.NewGuid(),
             CustomerId = customerId,
@@ -65,6 +65,8 @@ public static class BookingRules
             CreatedAt = now,
             UpdatedAt = now
         };
+        TrialRules.Sync(booking);
+        return booking;
     }
 
     public static void EnsureSessionLocation(
@@ -87,6 +89,7 @@ public static class BookingRules
         if (booking.Status != BookingStatus.PendingAccept)
             throw new DomainException("Only a pending booking can be accepted.");
         booking.Status = BookingStatus.Upcoming;
+        TrialRules.Sync(booking);
         booking.UpdatedAt = DateTimeOffset.UtcNow;
     }
 
@@ -95,6 +98,7 @@ public static class BookingRules
         if (booking.Status != BookingStatus.PendingAccept)
             throw new DomainException("Only a pending booking can be declined.");
         booking.Status = BookingStatus.Declined;
+        TrialRules.Sync(booking);
         booking.UpdatedAt = DateTimeOffset.UtcNow;
     }
 
@@ -107,6 +111,7 @@ public static class BookingRules
 
         booking.Status = BookingStatus.Cancelled;
         booking.CancelledBy = CancelledBy.Customer;
+        TrialRules.Sync(booking);
         booking.UpdatedAt = now;
     }
 
@@ -124,6 +129,7 @@ public static class BookingRules
         booking.Status = BookingStatus.Cancelled;
         booking.CancelledBy = CancelledBy.Admin;
         booking.CancelReason = trimmed;
+        TrialRules.Sync(booking);
         booking.UpdatedAt = now;
     }
 
@@ -163,6 +169,7 @@ public static class BookingRules
         if (booking.Status != BookingStatus.Upcoming)
             throw new DomainException("Only an upcoming booking can be marked as a no-show.");
         booking.Status = BookingStatus.NoShow;
+        TrialRules.Sync(booking);
         booking.UpdatedAt = DateTimeOffset.UtcNow;
     }
 
@@ -171,6 +178,7 @@ public static class BookingRules
         if (booking.Status != BookingStatus.Upcoming)
             throw new DomainException("Only an upcoming booking can be completed.");
         booking.Status = BookingStatus.Completed;
+        TrialRules.Sync(booking);
         booking.UpdatedAt = DateTimeOffset.UtcNow;
     }
 

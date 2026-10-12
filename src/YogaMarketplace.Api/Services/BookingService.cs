@@ -579,7 +579,26 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
         catch (DbUpdateException ex)
         {
             _logger.LogWarning(ex, "Booking save conflict for Razorpay order {OrderId}.", orderId);
+            await tx.DisposeAsync();
+            _db.ChangeTracker.Clear();
+            await RefundIfTrialTakenAsync(orderId, paymentId, cancellationToken);
             throw new DomainException("That slot was just booked.", 409);
+        }
+    }
+
+    /// <summary>
+    /// A unique-index clash at capture means another request saved first: either the slot or this customer's trial with
+    /// the instructor (a double-click, for example). For the trial, take the same refund path as the check before saving.
+    /// </summary>
+    private async Task RefundIfTrialTakenAsync(string orderId, string paymentId, CancellationToken cancellationToken)
+    {
+        await using var tx = await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        var checkout = await _db.CheckoutIntents.SingleAsync(c => c.GatewayOrderId == orderId, cancellationToken);
+        if (checkout.IsTrial
+            && checkout.Status == CheckoutStatus.Open
+            && await TrialUsedAsync(checkout.CustomerId, checkout.ProviderId, cancellationToken))
+        {
+            await RefundDuplicateTrialAsync(checkout, paymentId, checkout.Amount + checkout.ConvenienceFee, tx, cancellationToken);
         }
     }
 
@@ -647,8 +666,7 @@ public class BookingService : IBookingService, IBookingHandshake, IRazorpayWebho
 
     private Task<bool> TrialUsedAsync(Guid customerId, Guid providerId, CancellationToken cancellationToken) =>
         _db.Bookings
-            .Where(b => b.CustomerId == customerId && b.ProviderId == providerId)
-            .AnyAsync(TrialRules.UsesTrial, cancellationToken);
+            .AnyAsync(b => b.CustomerId == customerId && b.ProviderId == providerId && b.TrialConsumed, cancellationToken);
 
     /// <summary>
     /// A second trial slipped past the checkout check (two tabs, for example). Marks the checkout refunded, refunds the
