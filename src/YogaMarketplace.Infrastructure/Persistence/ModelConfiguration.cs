@@ -26,6 +26,7 @@ internal static class ModelConfiguration
         ConfigurePayout(modelBuilder.Entity<PayoutPending>());
         ConfigureSettings(modelBuilder.Entity<PlatformSettings>());
         ConfigureSettingsAudit(modelBuilder.Entity<SettingsAudit>());
+        ConfigureContentPage(modelBuilder.Entity<ContentPage>());
         ConfigureBackgroundJob(modelBuilder.Entity<BackgroundJob>(), sqlite);
         ConfigureOtp(modelBuilder.Entity<OtpChallenge>());
     }
@@ -295,6 +296,17 @@ internal static class ModelConfiguration
         entity.Property(a => a.NewValue).HasMaxLength(PlatformSettingsRules.PolicyNoteMax);
         entity.HasIndex(a => a.ChangedAt);
         entity.HasOne<User>().WithMany().HasForeignKey(a => a.AdminUserId).OnDelete(DeleteBehavior.Restrict);
+    }
+
+    private static void ConfigureContentPage(EntityTypeBuilder<ContentPage> entity)
+    {
+        entity.HasKey(p => p.Slug);
+        entity.Property(p => p.Slug).HasMaxLength(ContentPageRules.SlugMax);
+        entity.Property(p => p.Title).HasMaxLength(ContentPageRules.TitleMax);
+        entity.Property(p => p.Body).HasMaxLength(ContentPageRules.BodyMax);
+        entity.Property(p => p.Version).HasDefaultValue(1).IsConcurrencyToken();
+        entity.HasOne<User>().WithMany().HasForeignKey(p => p.UpdatedByUserId).OnDelete(DeleteBehavior.Restrict);
+        entity.HasData(ContentPageDefaults.All());
     }
 
     private static void ConfigureBackgroundJob(EntityTypeBuilder<BackgroundJob> entity, bool sqlite)

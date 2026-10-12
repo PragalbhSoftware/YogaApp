@@ -131,6 +131,8 @@ public record ProviderMediaResponse(
 
 public record IntroVideoRequest(string? Url);
 
+public record ContentPageResponse(string Slug, string Title, string Body, int Version, DateTimeOffset UpdatedAt);
+
 public record ProviderSelf(
     Guid Id,
     Guid UserId,

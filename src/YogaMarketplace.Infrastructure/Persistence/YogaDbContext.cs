@@ -29,6 +29,7 @@ public class YogaDbContext : DbContext
     public DbSet<PayoutPending> PayoutsPending => Set<PayoutPending>();
     public DbSet<PlatformSettings> Settings => Set<PlatformSettings>();
     public DbSet<SettingsAudit> SettingsAudits => Set<SettingsAudit>();
+    public DbSet<ContentPage> ContentPages => Set<ContentPage>();
     public DbSet<BackgroundJob> BackgroundJobs => Set<BackgroundJob>();
     public DbSet<OtpChallenge> OtpChallenges => Set<OtpChallenge>();
 

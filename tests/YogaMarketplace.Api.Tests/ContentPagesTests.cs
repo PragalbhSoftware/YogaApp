@@ -1,0 +1,110 @@
+using System.Net;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Text.Json;
+using YogaMarketplace.Domain;
+using YogaMarketplace.Infrastructure.Persistence;
+
+namespace YogaMarketplace.Api.Tests;
+
+public class ContentPagesTests : IClassFixture<YogaApiFactory>
+{
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private readonly YogaApiFactory _factory;
+
+    public ContentPagesTests(YogaApiFactory factory)
+    {
+        _factory = factory;
+    }
+
+    [Theory]
+    [InlineData("refund-policy", "Refund policy")]
+    [InlineData("terms", "Terms of use")]
+    [InlineData("privacy", "Privacy policy")]
+    public async Task Signed_out_visitors_can_read_the_seeded_pages(string slug, string title)
+    {
+        var page = await _factory.CreateClient().GetFromJsonAsync<PageBody>($"/api/pages/{slug}", Json);
+        Assert.Equal(title, page!.Title);
+        Assert.NotEmpty(page.Body);
+        Assert.DoesNotContain("Mumbai", page.Body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Unknown_pages_are_404()
+    {
+        var anon = _factory.CreateClient();
+        Assert.Equal(HttpStatusCode.NotFound, (await anon.GetAsync("/api/pages/about")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Only_admins_edit_pages_and_a_stale_version_is_409()
+    {
+        var anon = _factory.CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anon.GetAsync("/api/admin/pages")).StatusCode);
+
+        var admin = await SignInAsync(SeedIds.AdminPhone);
+        var pages = await admin.GetFromJsonAsync<List<PageBody>>("/api/admin/pages", Json);
+        Assert.Equal(["refund-policy", "terms", "privacy"], pages!.Select(p => p.Slug));
+
+        var before = pages.Single(p => p.Slug == "terms");
+        try
+        {
+            var saved = await PutAsync(admin, "terms", new
+            {
+                title = "  Terms  ",
+                body = "Hello.\r\n\r\n## Section\r\n- One",
+                version = before.Version
+            });
+            Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
+            var after = (await saved.Content.ReadFromJsonAsync<PageBody>(Json))!;
+            Assert.Equal(before.Version + 1, after.Version);
+            Assert.Equal("Terms", after.Title);
+            Assert.Equal("Hello.\n\n## Section\n- One", after.Body);
+            Assert.Equal(after.Body, (await anon.GetFromJsonAsync<PageBody>("/api/pages/terms", Json))!.Body);
+
+            var stale = await PutAsync(admin, "terms", new { title = "Old tab", body = "Old text", version = before.Version });
+            Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
+            Assert.Contains("reloaded", await stale.Content.ReadAsStringAsync());
+
+            var empty = await PutAsync(admin, "terms", new { title = "Terms", body = "  ", version = after.Version });
+            Assert.Equal(HttpStatusCode.BadRequest, empty.StatusCode);
+
+            var unknown = await PutAsync(admin, "about", new { title = "About", body = "Text", version = 1 });
+            Assert.Equal(HttpStatusCode.NotFound, unknown.StatusCode);
+        }
+        finally
+        {
+            var current = (await anon.GetFromJsonAsync<PageBody>("/api/pages/terms", Json))!;
+            await PutAsync(admin, "terms", new { title = before.Title, body = before.Body, version = current.Version });
+        }
+    }
+
+    [Fact]
+    public void Saving_unchanged_text_keeps_the_version()
+    {
+        var page = new ContentPage { Slug = "terms", Title = "Terms", Body = "Text", Version = 3 };
+        Assert.False(ContentPageRules.Apply(page, "Terms", "Text\r\n", Guid.NewGuid(), DateTimeOffset.UtcNow));
+        Assert.Equal(3, page.Version);
+        Assert.Throws<DomainException>(() => ContentPageRules.Apply(page, "T", "Text", Guid.NewGuid(), DateTimeOffset.UtcNow));
+        Assert.Throws<DomainException>(() =>
+            ContentPageRules.Apply(page, "Terms", new string('a', ContentPageRules.BodyMax + 1), Guid.NewGuid(), DateTimeOffset.UtcNow));
+    }
+
+    private static Task<HttpResponseMessage> PutAsync(HttpClient client, string slug, object body) =>
+        client.PutAsJsonAsync($"/api/admin/pages/{slug}", body);
+
+    private async Task<HttpClient> SignInAsync(string phone)
+    {
+        var client = _factory.CreateClient();
+        var otp = await (await client.PostAsJsonAsync("/api/auth/otp/request", new { phone, isNewUser = false }))
+            .Content.ReadFromJsonAsync<OtpBody>(Json);
+        var auth = await (await client.PostAsJsonAsync("/api/auth/otp/verify", new { phone, code = otp!.DevCode }))
+            .Content.ReadFromJsonAsync<AuthBody>(Json);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth!.Token);
+        return client;
+    }
+
+    private sealed record OtpBody(string DevCode);
+    private sealed record AuthBody(string Token);
+    private sealed record PageBody(string Slug, string Title, string Body, int Version);
+}

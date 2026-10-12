@@ -46,6 +46,13 @@ public class RejectCertificateRequest
     public string? Reason { get; set; }
 }
 
+public class UpdateContentPageRequest
+{
+    public string? Title { get; set; }
+    public string? Body { get; set; }
+    public int? Version { get; set; }
+}
+
 public record AdminUserProvider(Guid Id, string DisplayName, string Status, string Area);
 
 public record AdminUserSummary(

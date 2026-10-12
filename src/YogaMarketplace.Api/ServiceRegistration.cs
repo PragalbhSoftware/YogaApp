@@ -33,6 +33,7 @@ public static class ServiceRegistration
         services.AddScoped<ProfileService>();
         services.AddScoped<ProviderMediaService>();
         services.AddScoped<ProviderTrialService>();
+        services.AddScoped<ContentPageService>();
         services.AddScoped<IAdminProviderService, AdminProviderService>();
         services.AddScoped<IAdminCertificateService, AdminCertificateService>();
         services.AddScoped<IAdminUserService, AdminUserService>();
