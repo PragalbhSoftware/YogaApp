@@ -100,6 +100,8 @@ Set in `appsettings.*.json`, user secrets, or environment variables (`Section__K
 | `Razorpay:UseFakeGateway` | Development and tests issue `order_fake_…` ids and capture locally (`/api/bookings/local-confirm`). Production refuses to start when this is on. |
 | `Database:AutoMigrate`, `Seed:DemoData` | Off in Production |
 | `Jobs:Enabled`, `Jobs:PollSeconds`, `Jobs:BatchSize`, `Jobs:LockMinutes` | Background job runner (defaults: on, 15 s, 10 jobs per poll, 5 min lock). Off in Testing. |
+| `DataProtection:KeysPath` | Folder for the data protection key ring, so keys survive app pool recycles and redeploys. Full path outside the site folder. **Required in Production.** |
+| `Storage:RootPath` | Folder for uploaded photos and certificates (default `App_Data/uploads`). Production should use a full path outside the site folder. |
 
 Environment variable form for an array: `Cors__AllowedOrigins__0=https://app.example.com`.
 
@@ -107,7 +109,9 @@ Environment variable form for an array: `Cors__AllowedOrigins__0=https://app.exa
 
 The build output is static (`npm run build` → `dist/`). Production has no Vite proxy, so choose one of:
 
-**Option A: same origin (recommended).** Serve `dist/` and reverse-proxy `/api` to the API from the same host. Build with `VITE_API_BASE_URL` empty. No CORS needed. Example Nginx:
+**Single site (IIS/Plesk).** `dotnet publish src/YogaMarketplace.Api` also builds the SPA and copies `dist/` into the API's `wwwroot`. The API then serves the app: files from `wwwroot`, `index.html` for client routes such as `/bookings/123`, and a JSON `404` for unknown `/api/*` routes. `index.html` is sent with `no-cache` and `/assets/*` (fingerprinted) with a one-year `immutable` cache. API responses keep the strict `default-src 'none'` CSP; the app's pages get a CSP that allows its own scripts and styles, Razorpay checkout and YouTube embeds. See [Deploy to Plesk (single site)](#deploy-to-plesk-single-site). Use `-p:SkipSpaBuild=true` to publish the API alone.
+
+**Option A: same origin behind a proxy.** Serve `dist/` and reverse-proxy `/api` to the API from the same host. Build with `VITE_API_BASE_URL` empty. No CORS needed. Example Nginx:
 
 ```nginx
 server {
@@ -331,7 +335,7 @@ Refund policy, Terms and Privacy are rows in `ContentPages`, seeded with starter
 
 ## Deploy guide
 
-The API and the SPA deploy separately. Any host works: a VPS with Nginx, IIS/Plesk, Azure App Service, AWS, or containers.
+The API and the SPA deploy separately, or as one site where the API serves the SPA (see [Deploy to Plesk (single site)](#deploy-to-plesk-single-site)). Any host works: a VPS with Nginx, IIS/Plesk, Azure App Service, AWS, or containers.
 
 ### What Production enforces
 
@@ -340,7 +344,8 @@ With `ASPNETCORE_ENVIRONMENT=Production` the API **refuses to start** when:
 - `Database:AutoMigrate` is true (apply migrations with the script below instead),
 - `Otp:ExposeCode` or `Otp:UseFixedCode` is true,
 - `Razorpay:UseFakeGateway` is true, or any of `Razorpay:KeyId`, `Razorpay:KeySecret`, `Razorpay:WebhookSecret` is empty,
-- `Cors:AllowedOrigins` is empty, or `Jwt:Key` is shorter than 32 bytes.
+- `Cors:AllowedOrigins` is empty, or `Jwt:Key` is shorter than 32 bytes,
+- `DataProtection:KeysPath` is empty or not a full path.
 
 It logs a warning (and still starts) when the key id is a `rzp_test_` key. It also turns off Swagger, returns `404` for `/api/bookings/local-confirm`, and writes one-line JSON logs to the console with UTC timestamps and the request trace id.
 
@@ -358,6 +363,7 @@ Use the host's secret store or environment variables. Never put live values in `
 | `Razorpay__KeyId`, `Razorpay__KeySecret` | Razorpay API keys (test keys for the QA run, then live keys) |
 | `Razorpay__WebhookSecret` | The secret set on the Razorpay webhook |
 | `Storage__RootPath` | Folder for uploaded photos and certificates. Use an absolute path on a persistent disk or volume that the app can write to. |
+| `DataProtection__KeysPath` | Folder for the data protection key ring. Absolute path outside the site folder, writable by the app. |
 | `ForwardedHeaders__KnownProxies__0` | IP of your reverse proxy, so rate limits see the real client IP |
 | `RefreshToken__CookieSameSite` | Leave `Strict` for same-site; `None` only for a cross-site API (HTTPS required) |
 
@@ -392,6 +398,8 @@ The proxy must set `X-Forwarded-For` and `X-Forwarded-Proto`, as the Nginx examp
 ```bash
 dotnet publish src/YogaMarketplace.Api -c Release -o ./publish
 ```
+
+This also builds the SPA into `./publish/wwwroot` (Node 22 required). When the SPA is hosted elsewhere, add `-p:SkipSpaBuild=true`.
 
 Run `./publish/YogaMarketplace.Api.dll` behind HTTPS (Nginx, IIS with the .NET 8 Hosting Bundle and an app pool set to **No Managed Code**, or a platform service). Health checks:
 
@@ -437,6 +445,89 @@ Upload `dist/` to any static host or CDN. Every unknown path must fall back to `
 3. Switch to live keys and the live webhook secret, restart, and check the log has no test-key warning.
 4. Wire a real SMS/WhatsApp OTP sender before public sign-in.
 5. Review the policy pages under **Settings → Pages**.
+
+## Deploy to Plesk (single site)
+
+One IIS site on `https://yogademo.psoftcs.com` runs the API and serves the SPA. The server needs the **.NET 8 Hosting Bundle** (ask the host if the Plesk "ASP.NET Core" component is not listed).
+
+### 1. Build
+
+```bash
+dotnet publish src/YogaMarketplace.Api -c Release -o publish
+```
+
+This needs the .NET 8 SDK and Node 22. It builds the SPA with `VITE_API_BASE_URL` empty (the app calls `/api` on its own origin) and puts it in `publish/wwwroot`. Every CI run also uploads the same folder as the `site-publish` artifact, and the database script as `migrations-sql`. `publish/web.config` runs the app in-process with `AspNetCoreModuleV2` and the stdout log off. Its comments show how to turn the log on for a startup failure.
+
+### 2. Subdomain and SSL
+
+1. **Websites & Domains → Add Subdomain**: `yogademo` on `psoftcs.com`. Note the document root (for example `yogademo.psoftcs.com`).
+2. **SSL/TLS Certificates**: issue a Let's Encrypt certificate for `yogademo.psoftcs.com`.
+3. **Hosting Settings**: turn on **Permanent SEO-safe 301 redirect from HTTP to HTTPS**. The app sends HSTS in Production, so HTTPS must work first.
+
+### 3. Folders outside the site
+
+Create two folders **outside** the document root, so deploys never overwrite them. For example, under the subscription's `private` folder:
+
+- `...\private\yogademo\keys` → `DataProtection__KeysPath`
+- `...\private\yogademo\uploads` → `Storage__RootPath`
+
+In File Manager, give the site's application pool user **Modify** rights on both. Use the full Windows path (for example `C:\Inetpub\vhosts\psoftcs.com\private\yogademo\keys`); Plesk shows the real root under Hosting Settings. Never put either folder under `wwwroot`. Certificates must only be reachable through the API.
+
+### 4. Application pool
+
+Under **Dedicated IIS Application Pool** (or ask the host):
+
+| Setting | Value |
+| --- | --- |
+| .NET CLR version | No Managed Code |
+| Load user profile | **On** |
+| Idle timeout | `0` (never sleep). If the plan does not allow it, have an uptime monitor call `https://yogademo.psoftcs.com/health` every 5 minutes. Background jobs, such as credit expiry, only run while the app is awake. |
+
+### 5. Database
+
+Create an MS SQL database and user in Plesk. Production never migrates on startup, so run the `migrations-sql` script yourself, from SSMS or `sqlcmd -I -b -i migrations.sql`. The script is idempotent, so you can run it on every release.
+
+### 6. Environment variables (Production)
+
+Set these in the **server copy** of `web.config`, inside `<environmentVariables>`. They must never be in the repo. Escape XML in values: `&` becomes `&amp;`, `<` becomes `&lt;`, and `"` becomes `&quot;`.
+
+| Variable | Required | Value |
+| --- | --- | --- |
+| `ASPNETCORE_ENVIRONMENT` | Yes | `Production` (already in `web.config`) |
+| `ConnectionStrings__Default` | Yes | `Server=<host>;Database=<db>;User Id=<user>;Password=<password>;TrustServerCertificate=True;MultipleActiveResultSets=true` |
+| `Jwt__Key` | Yes | Random string, 32+ bytes |
+| `Otp__Pepper` | Yes | Random string, 8+ characters. Changing it invalidates codes already sent. |
+| `Cors__AllowedOrigins__0` | Yes | `https://yogademo.psoftcs.com` |
+| `Razorpay__KeyId` | Yes | `rzp_test_…` for QA, then the live key (a test key logs a warning) |
+| `Razorpay__KeySecret` | Yes | Matching key secret |
+| `Razorpay__WebhookSecret` | Yes | The secret set on the Razorpay webhook (below) |
+| `DataProtection__KeysPath` | Yes | Full path of the `keys` folder from step 3. The app refuses to start without it. |
+| `Storage__RootPath` | Yes, for this deploy | Full path of the `uploads` folder from step 3. The default (`App_Data/uploads`) lives in the site folder and is lost on redeploy. |
+
+Leave `ForwardedHeaders__*` empty (IIS in-process has no proxy in front of the app) and `RefreshToken__CookieSameSite` at `Strict` (one site). The app refuses to start if a required value is missing or unsafe; see [What Production enforces](#what-production-enforces).
+
+### 7. Upload (FTP)
+
+**First deploy:** upload everything in `publish/` to the document root, then add the variables above to the server's `web.config`.
+
+**Every later deploy:**
+
+1. Upload `deploy/plesk/app_offline.htm` to the document root. IIS stops the app, unlocks its files and shows the maintenance page.
+2. Back up the database, then run the `migrations-sql` script if this release has new migrations.
+3. Upload the new `publish/` files, overwriting old ones, **except `web.config`**. The server copy holds your variables. If `web.config` itself changed, merge your `<environmentVariables>` into the new one. Never delete or overwrite the `keys` or `uploads` folders.
+4. Delete `app_offline.htm`. The app starts on the next request. Check that `https://yogademo.psoftcs.com/health/ready` returns `200`.
+
+Old files in `wwwroot/assets` are harmless (every build uses new file names), and they keep already-open tabs working. Clear them now and then.
+
+### 8. Razorpay webhook
+
+In the Razorpay dashboard, add a webhook:
+
+- **URL**: `https://yogademo.psoftcs.com/api/webhooks/razorpay`
+- **Event**: `payment.captured`
+- **Secret**: the same value as `Razorpay__WebhookSecret`
+
+Use the test-mode dashboard with test keys, and add the webhook again in live mode when you switch to live keys. Then follow the [Go-live checklist](#go-live-checklist).
 
 ## Out of scope
 
