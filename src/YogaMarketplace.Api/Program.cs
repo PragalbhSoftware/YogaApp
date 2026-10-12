@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using YogaMarketplace.Api;
+using YogaMarketplace.Api.Hosting;
 using YogaMarketplace.Api.Middleware;
 using YogaMarketplace.Api.Options;
 using YogaMarketplace.Api.Security;
@@ -94,8 +95,7 @@ foreach (var warning in productionWarnings)
     app.Logger.LogWarning("{ProductionWarning}", warning);
 
 app.UseForwardedHeaders();
-// Swagger UI needs scripts, so the strict policy only applies where Swagger is off.
-app.UseSecurityHeaders(strictContentPolicy: app.Environment.IsProduction());
+app.UseSecurityHeaders();
 if (app.Environment.IsProduction())
     app.UseHsts();
 app.UseApiErrorResponses();
@@ -106,6 +106,7 @@ if (!app.Environment.IsProduction())
     app.UseSwaggerUI();
 }
 
+app.UseSpaFiles();
 app.UseCors();
 app.UseRateLimiter();
 app.UseAuthentication();
@@ -116,6 +117,7 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
 {
     Predicate = check => check.Tags.Contains("ready")
 });
+app.MapSpaFallback();
 
 if (!app.Environment.IsEnvironment(DatabaseStartup.TestingEnvironment))
     await DatabaseStartup.InitializeAsync(app);
