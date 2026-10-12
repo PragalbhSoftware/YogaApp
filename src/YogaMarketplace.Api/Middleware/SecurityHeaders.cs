@@ -19,7 +19,7 @@ public static class SecurityHeaders
         "default-src 'self'; " +
         "script-src 'self' https://checkout.razorpay.com; " +
         "style-src 'self' 'unsafe-inline'; " +
-        "img-src 'self' data: blob:; " +
+        "img-src 'self' data: blob: https://cdn.razorpay.com; " +
         "font-src 'self' data:; " +
         $"connect-src 'self' {Razorpay} https://lumberjack.razorpay.com; " +
         $"frame-src {Razorpay} {YouTube}; " +

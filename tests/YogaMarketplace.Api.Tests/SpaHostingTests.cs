@@ -118,6 +118,7 @@ public class SpaHostingTests : IClassFixture<SpaYogaApiFactory>
         Assert.Contains("script-src 'self' https://checkout.razorpay.com", pagePolicy, StringComparison.Ordinal);
         Assert.Contains("https://api.razorpay.com", pagePolicy, StringComparison.Ordinal);
         Assert.Contains("https://www.youtube-nocookie.com", pagePolicy, StringComparison.Ordinal);
+        Assert.Contains("img-src 'self' data: blob: https://cdn.razorpay.com;", pagePolicy, StringComparison.Ordinal);
         Assert.Equal(SecurityHeaders.ApiContentSecurityPolicy, Header(api, "Content-Security-Policy"));
     }
 
