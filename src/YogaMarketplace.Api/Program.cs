@@ -94,6 +94,10 @@ foreach (var warning in productionWarnings)
     app.Logger.LogWarning("{ProductionWarning}", warning);
 
 app.UseForwardedHeaders();
+// Swagger UI needs scripts, so the strict policy only applies where Swagger is off.
+app.UseSecurityHeaders(strictContentPolicy: app.Environment.IsProduction());
+if (app.Environment.IsProduction())
+    app.UseHsts();
 app.UseApiErrorResponses();
 app.UseMiddleware<DomainExceptionMiddleware>();
 if (!app.Environment.IsProduction())
