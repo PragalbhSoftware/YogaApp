@@ -1,7 +1,8 @@
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { Button } from "@mui/material";
 import { ArrowLeft, ShieldCheck } from "lucide-react";
 import { routes } from "@/constants/routes";
+import { EmptyState } from "@/components/common/empty-state";
 import { ErrorState } from "@/components/common/error-state";
 import { PageLoader } from "@/components/common/page-loader";
 import { AvailabilitySection } from "@/features/marketplace/components/availability-section";
@@ -9,12 +10,14 @@ import { InstructorAbout } from "@/features/marketplace/components/instructor-ab
 import { ModeRateList } from "@/features/marketplace/components/mode-rate-list";
 import { ReviewList } from "@/features/marketplace/components/review-list";
 import { useInstructor, useInstructorReviews } from "@/features/marketplace/hooks/use-instructors";
+import { areaClosedDescription, areaClosedTitle } from "@/features/marketplace/utils/areas";
 import { usePageTitle } from "@/hooks/use-page-title";
 import { toUserMessage } from "@/services/http/api-error";
 import { initials } from "@/utils/initials";
 
 export function TeacherPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const instructor = useInstructor(id);
   const reviews = useInstructorReviews(id);
   usePageTitle(instructor.data?.displayName ?? "Instructor");
@@ -80,7 +83,16 @@ export function TeacherPage() {
             onRetry={() => void reviews.refetch()}
           />
 
-          <AvailabilitySection instructorId={instructor.data.id} modes={instructor.data.modes ?? []} />
+          {instructor.data.areaOpen ? (
+            <AvailabilitySection instructorId={instructor.data.id} modes={instructor.data.modes ?? []} />
+          ) : (
+            <EmptyState
+              title={areaClosedTitle}
+              description={areaClosedDescription}
+              actionLabel="Browse instructors"
+              onAction={() => navigate(routes.home)}
+            />
+          )}
         </article>
       ) : null}
     </main>

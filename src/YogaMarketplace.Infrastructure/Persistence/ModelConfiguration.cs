@@ -190,6 +190,10 @@ internal static class ModelConfiguration
         entity.Property(c => c.Status).HasConversion<string>().HasMaxLength(16);
         entity.Property(c => c.Amount).HasPrecision(10, 2);
         entity.Property(c => c.ConvenienceFee).HasPrecision(10, 2).HasDefaultValue(0m);
+        entity.Property(c => c.CommissionPercent).HasPrecision(5, 2).HasDefaultValue(0m);
+        entity.Property(c => c.CancelFreeWindowHours).HasDefaultValue(0);
+        entity.Property(c => c.LateCancelFeeType).HasConversion<string>().HasMaxLength(16).HasDefaultValue(LateCancelFeeType.Percent);
+        entity.Property(c => c.LateCancelFeeValue).HasPrecision(10, 2).HasDefaultValue(0m);
         entity.Property(c => c.Currency).HasMaxLength(8);
         entity.Property(c => c.HomeAddress).HasMaxLength(300);
         entity.Property(c => c.Landmark).HasMaxLength(160);

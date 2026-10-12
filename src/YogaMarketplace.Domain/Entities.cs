@@ -166,6 +166,7 @@ public class Booking
 /// <summary>
 /// Holds a Razorpay order until payment is captured. Not a booking.
 /// Abandoning checkout leaves this row and creates no <see cref="Booking"/>.
+/// The booking terms are locked here when checkout starts, so a settings change before capture does not apply.
 /// </summary>
 public class CheckoutIntent
 {
@@ -177,6 +178,10 @@ public class CheckoutIntent
     public SessionMode Mode { get; set; }
     public decimal Amount { get; set; }
     public decimal ConvenienceFee { get; set; }
+    public decimal CommissionPercent { get; set; }
+    public int CancelFreeWindowHours { get; set; }
+    public LateCancelFeeType LateCancelFeeType { get; set; } = LateCancelFeeType.Percent;
+    public decimal LateCancelFeeValue { get; set; }
     public string Currency { get; set; } = "INR";
     public string? HomeAddress { get; set; }
     public string? Landmark { get; set; }
@@ -186,6 +191,9 @@ public class CheckoutIntent
     public Guid? BookingId { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? CompletedAt { get; set; }
+
+    public BookingTerms ToTerms() =>
+        new(CommissionPercent, ConvenienceFee, CancelFreeWindowHours, LateCancelFeeType, LateCancelFeeValue);
 }
 
 public class Payment

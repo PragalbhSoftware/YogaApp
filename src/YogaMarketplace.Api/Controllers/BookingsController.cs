@@ -18,6 +18,13 @@ public class BookingsController : ControllerBase
         _handshake = handshake;
     }
 
+    [HttpGet("quote")]
+    public async Task<ActionResult<BookingQuoteResponse>> Quote(
+        [FromQuery] Guid slotId,
+        [FromQuery] Guid? serviceId,
+        CancellationToken cancellationToken) =>
+        Ok(await _bookings.QuoteAsync(slotId, serviceId, cancellationToken));
+
     [HttpPost("orders")]
     public async Task<ActionResult<CheckoutOrderResponse>> CreateOrder(
         [FromBody] CreateBookingOrderRequest? request,

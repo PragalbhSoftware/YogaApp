@@ -8,7 +8,7 @@ import { SettingsCard, SettingsIntro } from "@/features/admin/components/setting
 import { useAdminSettings, useUpdateSettings } from "@/features/admin/hooks/use-admin";
 import { bannerSchema, settingsLimits, type BannerValues } from "@/features/admin/schemas";
 import type { AdminSettings } from "@/features/admin/types";
-import { changedFields } from "@/features/admin/utils";
+import { changedFields, settingsSaveError } from "@/features/admin/utils";
 import { toUserMessage } from "@/services/http/api-error";
 
 export function BannerSettings() {
@@ -50,7 +50,7 @@ function BannerForm({ settings }: { settings: AdminSettings }) {
               { version: settings.version, ...changedFields(values, form.formState.dirtyFields) },
               {
                 onSuccess: () => toast.success("Banner saved."),
-                onError: (error) => toast.error(toUserMessage(error)),
+                onError: (error) => toast.error(settingsSaveError(error)),
               },
             );
           })}

@@ -193,7 +193,6 @@ export type UpdateSettingsInput = Partial<
     | "commissionPercent"
     | "convenienceFee"
     | "cancelFreeWindowHours"
-    | "rescheduleFreeWindowHours"
     | "lateCancelFeeType"
     | "lateCancelFeeValue"
     | "payoutCycle"

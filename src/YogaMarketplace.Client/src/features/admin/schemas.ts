@@ -82,7 +82,6 @@ export const feeSettingsSchema = z
     commissionPercent: percent,
     convenienceFee: flatAmount,
     cancelFreeWindowHours: windowHours,
-    rescheduleFreeWindowHours: windowHours,
     lateCancelFeeType: z.enum(lateCancelFeeTypes),
     lateCancelFeeValue: flatAmount,
     payoutCycle: z.enum(payoutCycles),

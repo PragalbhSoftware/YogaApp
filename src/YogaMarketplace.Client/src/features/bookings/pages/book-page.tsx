@@ -12,7 +12,12 @@ import { AddressCardSkeleton } from "@/components/common/loading-skeleton";
 import { PageLoader } from "@/components/common/page-loader";
 import { BookSummary } from "@/features/bookings/components/book-summary";
 import { HomeVisitForm } from "@/features/bookings/components/home-visit-form";
-import { useConfirmLocalPayment, useConfirmPayment, useCreateBookingOrder } from "@/features/bookings/hooks/use-bookings";
+import {
+  useBookingQuote,
+  useConfirmLocalPayment,
+  useConfirmPayment,
+  useCreateBookingOrder,
+} from "@/features/bookings/hooks/use-bookings";
 import {
   openRazorpayCheckout,
   RazorpayCheckoutCancelled,
@@ -22,7 +27,7 @@ import { isFakeOrder, type BookingRecord } from "@/features/bookings/types";
 import { toHomeVisitFormValues, type HomeVisitFormValues, type HomeVisitValues } from "@/features/bookings/schemas";
 import { digitsOnly } from "@/features/auth/utils/phone";
 import { useInstructor, useInstructorOpenSlots } from "@/features/marketplace/hooks/use-instructors";
-import { usePolicy } from "@/features/marketplace/hooks/use-site";
+import { areaClosedDescription, areaClosedTitle } from "@/features/marketplace/utils/areas";
 import { offeredSessionModes } from "@/features/marketplace/utils/modes";
 import { VisitAddressCard } from "@/features/profile/components/visit-address-card";
 import { useCustomerProfile, useSaveVisitAddress } from "@/features/profile/hooks/use-profile";
@@ -48,8 +53,8 @@ export function BookPage() {
   const today = kolkataToday();
   const slotsFrom = startOfMonth(today);
   const slotsTo = endOfMonth(addMonths(today, 2));
-  const slotsQuery = useInstructorOpenSlots(providerId, mode, slotsFrom, slotsTo, instructor.isSuccess);
-  const policy = usePolicy();
+  const areaOpen = instructor.data?.areaOpen ?? false;
+  const slotsQuery = useInstructorOpenSlots(providerId, mode, slotsFrom, slotsTo, instructor.isSuccess && areaOpen);
   const profile = useCustomerProfile();
   const saveAddress = useSaveVisitAddress();
   const createOrder = useCreateBookingOrder();
@@ -67,7 +72,7 @@ export function BookPage() {
     checkoutOpen;
 
   const slot = (slotsQuery.data?.slots ?? []).find((item) => item.id === slotId);
-  const rate = instructor.data?.modes?.find((item) => item.mode === mode)?.rate ?? 0;
+  const quote = useBookingQuote(slotId, Boolean(slot) && !booking);
   const savedAddress = profile.data?.visitAddress ?? null;
 
   async function pay(home?: HomeVisitValues) {
@@ -174,6 +179,19 @@ export function BookPage() {
     );
   }
 
+  if (instructor.data && !areaOpen) {
+    return (
+      <main className="mx-auto max-w-lg px-4 py-8">
+        <EmptyState
+          title={areaClosedTitle}
+          description={areaClosedDescription}
+          actionLabel="Browse instructors"
+          onAction={() => navigate(routes.home)}
+        />
+      </main>
+    );
+  }
+
   if (!instructor.data || !slot) {
     return (
       <main className="mx-auto max-w-lg px-4 py-8">
@@ -216,13 +234,10 @@ export function BookPage() {
         <p className="mt-1 text-sm text-brand-muted">Pay now with Razorpay. The instructor then accepts your request.</p>
       </header>
 
-      <BookSummary
-        instructor={instructor.data}
-        slot={slot}
-        rate={Number(rate)}
-        convenienceFee={policy.data?.convenienceFee}
-        feeLoading={policy.isLoading}
-      />
+      <BookSummary instructor={instructor.data} slot={slot} quote={quote.data} quoteLoading={quote.isLoading} />
+      {quote.isError ? (
+        <ErrorState message={toUserMessage(quote.error)} onRetry={() => void quote.refetch()} />
+      ) : null}
 
       {mode === "Home" ? (
         <HomeCheckout

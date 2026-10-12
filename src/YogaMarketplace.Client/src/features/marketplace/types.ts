@@ -40,6 +40,8 @@ export type InstructorSummary = {
 export type InstructorDetail = InstructorSummary & {
   age: number | null;
   studioAddress: string | null;
+  /** False when admin has closed the instructor's area. The profile stays viewable but cannot be booked. */
+  areaOpen: boolean;
 };
 
 export type OpenSlot = {

@@ -114,7 +114,7 @@ public class ProviderService
             throw new DomainException("Choose at least one session mode: Home, Studio, or Online.");
 
         var area = await _db.Areas.SingleOrDefaultAsync(a => a.Id == request.AreaId && a.IsActive, cancellationToken)
-            ?? throw new DomainException("Choose a Mumbai area.");
+            ?? throw new DomainException("Choose an open area.");
 
         var category = request.CategoryId is Guid categoryId
             ? await _db.Categories.SingleOrDefaultAsync(c => c.Id == categoryId && c.IsActive, cancellationToken)
@@ -242,7 +242,7 @@ public class ProviderService
             throw new DomainException("Choose at least one session mode: Home, Studio, or Online.");
 
         var area = await _db.Areas.SingleOrDefaultAsync(a => a.Id == request.AreaId && a.IsActive, cancellationToken)
-            ?? throw new DomainException("Choose a Mumbai area.");
+            ?? throw new DomainException("Choose an open area.");
 
         if (provider.OffersHome && !request.OffersHome
             && await HasLiveBookingsAsync(provider.Id, SessionMode.Home, cancellationToken))
@@ -581,7 +581,8 @@ public class ProviderService
             ModesOf(provider),
             provider.StudioAddress,
             rating.Count == 0 ? null : rating.Average,
-            rating.Count);
+            rating.Count,
+            provider.Area.IsActive);
     }
 
     private static ProviderSelf ToSelf(Provider provider, User user, string areaName) => new(

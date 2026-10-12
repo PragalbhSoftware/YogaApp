@@ -1,3 +1,13 @@
+/** What the server will charge for a slot right now. The client never adds these up itself. */
+export type BookingQuote = {
+  slotId: string;
+  serviceId: string;
+  sessionAmount: number;
+  convenienceFee: number;
+  total: number;
+  currency: string;
+};
+
 export type CheckoutOrder = {
   checkoutId: string;
   keyId: string;

@@ -1,5 +1,6 @@
 import { http } from "@/services/http/http-client";
 import type {
+  BookingQuote,
   BookingRecord,
   CancelQuote,
   CheckoutOrder,
@@ -9,6 +10,10 @@ import type {
 } from "@/features/bookings/types";
 
 export const bookingsApi = {
+  quote(slotId: string) {
+    return http.get<BookingQuote>("/api/bookings/quote", { params: { slotId } }).then((res) => res.data);
+  },
+
   createOrder(input: CreateOrderInput) {
     return http.post<CheckoutOrder>("/api/bookings/orders", input).then((res) => res.data);
   },

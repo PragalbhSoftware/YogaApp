@@ -101,7 +101,8 @@ public record ProviderDetail(
     IReadOnlyList<ModeRate> Modes,
     string? StudioAddress,
     decimal? RatingAverage,
-    int ReviewCount);
+    int ReviewCount,
+    bool AreaOpen);
 
 public record ProviderSelf(
     Guid Id,
@@ -216,6 +217,14 @@ public class CreateBookingOrderRequest
     public string? HomeAddress { get; set; }
     public string? Landmark { get; set; }
 }
+
+public record BookingQuoteResponse(
+    Guid SlotId,
+    Guid ServiceId,
+    decimal SessionAmount,
+    decimal ConvenienceFee,
+    decimal Total,
+    string Currency);
 
 public record CheckoutOrderResponse(
     Guid CheckoutId,

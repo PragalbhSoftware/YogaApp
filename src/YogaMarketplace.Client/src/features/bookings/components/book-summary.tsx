@@ -1,19 +1,17 @@
 import { Skeleton } from "@mui/material";
 import { PriceText } from "@/components/common/price-text";
+import type { BookingQuote } from "@/features/bookings/types";
 import type { InstructorDetail, OpenSlot } from "@/features/marketplace/types";
 import { formatSlotDay, formatTimeRange12 } from "@/utils/clock";
 
 type BookSummaryProps = {
   instructor: InstructorDetail;
   slot: OpenSlot;
-  rate: number;
-  convenienceFee: number | undefined;
-  feeLoading: boolean;
+  quote: BookingQuote | undefined;
+  quoteLoading: boolean;
 };
 
-export function BookSummary({ instructor, slot, rate, convenienceFee, feeLoading }: BookSummaryProps) {
-  const hasFee = (convenienceFee ?? 0) > 0;
-
+export function BookSummary({ instructor, slot, quote, quoteLoading }: BookSummaryProps) {
   return (
     <article className="rounded-3xl border border-brand-border bg-brand-surface p-5">
       <p className="font-heading text-lg font-medium">{instructor.displayName}</p>
@@ -32,30 +30,36 @@ export function BookSummary({ instructor, slot, rate, convenienceFee, feeLoading
             </span>
           </dd>
         </div>
-        <div className="flex justify-between gap-3">
-          <dt className="text-brand-muted">Fee</dt>
-          <dd>
-            <PriceText amount={rate} />
-          </dd>
-        </div>
-        {feeLoading ? <Skeleton variant="text" aria-label="Loading fees" /> : null}
-        {!feeLoading && hasFee ? (
-          <>
-            <div className="flex justify-between gap-3">
-              <dt className="text-brand-muted">Convenience fee</dt>
-              <dd>
-                <PriceText amount={convenienceFee ?? 0} />
-              </dd>
-            </div>
-            <div className="flex justify-between gap-3 border-t border-brand-border pt-2 font-medium">
-              <dt>Total</dt>
-              <dd>
-                <PriceText amount={rate + (convenienceFee ?? 0)} />
-              </dd>
-            </div>
-          </>
-        ) : null}
+        {quoteLoading ? <Skeleton variant="rounded" height={64} aria-label="Loading price" /> : null}
+        {quote ? <QuoteLines quote={quote} /> : null}
       </dl>
     </article>
+  );
+}
+
+function QuoteLines({ quote }: { quote: BookingQuote }) {
+  return (
+    <>
+      <div className="flex justify-between gap-3">
+        <dt className="text-brand-muted">Fee</dt>
+        <dd>
+          <PriceText amount={quote.sessionAmount} />
+        </dd>
+      </div>
+      {quote.convenienceFee > 0 ? (
+        <div className="flex justify-between gap-3">
+          <dt className="text-brand-muted">Convenience fee</dt>
+          <dd>
+            <PriceText amount={quote.convenienceFee} />
+          </dd>
+        </div>
+      ) : null}
+      <div className="flex justify-between gap-3 border-t border-brand-border pt-2 font-medium">
+        <dt>Total</dt>
+        <dd>
+          <PriceText amount={quote.total} />
+        </dd>
+      </div>
+    </>
   );
 }

@@ -220,6 +220,23 @@ public class BookingRulesTests
         Assert.Equal(paid, settlement.LateCancelFee + settlement.ConvenienceFeeKept + settlement.Refund);
     }
 
+    [Theory]
+    [InlineData(1)]
+    [InlineData(12)]
+    [InlineData(48)]
+    public void Cancel_exactly_N_hours_before_the_session_is_free(int window)
+    {
+        var start = new DateTimeOffset(2026, 9, 24, 1, 30, 0, TimeSpan.Zero);
+        var booking = Sample(BookingStatus.Upcoming, window: window, feeValue: 100m, convenienceFee: 30m);
+        var paid = booking.Amount + booking.ConvenienceFee;
+
+        var atBoundary = BookingRules.SettleCustomerCancel(booking, paid, start, start.AddHours(-window));
+        Assert.Equal(new CancelSettlement(0m, 0m, paid), atBoundary);
+
+        var justAfter = BookingRules.SettleCustomerCancel(booking, paid, start, start.AddHours(-window).AddSeconds(1));
+        Assert.Equal(new CancelSettlement(899m, 30m, 0m), justAfter);
+    }
+
     [Fact]
     public void Free_cancel_refunds_everything_including_the_convenience_fee()
     {
