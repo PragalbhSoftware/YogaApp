@@ -5,6 +5,13 @@ export const payBasisOptions: { value: CreditPayBasis; label: string }[] = [
   { value: "SessionPrice", label: "The instructor’s normal session price" },
 ];
 
+export function payBasisHint(value: CreditPayBasis) {
+  const commission = "Commission is taken from this amount, as for paid bookings.";
+  return value === "SessionPrice"
+    ? `Instructors may earn more per credit session than the customer paid. ${commission}`
+    : commission;
+}
+
 export const lateCancelOptions: { value: CreditLateCancel; label: string }[] = [
   { value: "PayInstructorShare", label: "Credit used; instructor gets the late-cancel share" },
   { value: "KeepCredit", label: "Credit used; instructor gets nothing" },

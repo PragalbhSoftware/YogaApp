@@ -1,5 +1,5 @@
 import { Button, FormControlLabel, MenuItem, Switch, TextField } from "@mui/material";
-import { Controller, useForm, type Control } from "react-hook-form";
+import { Controller, useForm, useWatch, type Control } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { ErrorState } from "@/components/common/error-state";
@@ -7,7 +7,7 @@ import { BookingListSkeleton } from "@/components/common/loading-skeleton";
 import { SettingsCard, SettingsIntro } from "@/features/admin/components/settings-card";
 import { useAdminSettings, useUpdateSettings } from "@/features/admin/hooks/use-admin";
 import { creditSettingsSchema, type CreditSettingsValues } from "@/features/admin/schemas";
-import { lateCancelOptions, payBasisOptions } from "@/features/admin/credit-labels";
+import { lateCancelOptions, payBasisHint, payBasisOptions } from "@/features/admin/credit-labels";
 import type { AdminSettings } from "@/features/admin/types";
 import { changedFields, settingsSaveError } from "@/features/admin/utils";
 import { toUserMessage } from "@/services/http/api-error";
@@ -47,6 +47,7 @@ function CreditRulesForm({ settings }: { settings: AdminSettings }) {
     values: toFormValues(settings),
   });
   const errors = form.formState.errors;
+  const payBasis = useWatch({ control: form.control, name: "creditPayBasis" });
 
   return (
     <div className="space-y-5">
@@ -87,7 +88,7 @@ function CreditRulesForm({ settings }: { settings: AdminSettings }) {
               name="creditPayBasis"
               label="Instructor is paid on"
               options={payBasisOptions}
-              hint="Commission is taken from this amount, as for paid bookings."
+              hint={payBasisHint(payBasis)}
             />
             <SelectField
               control={form.control}
