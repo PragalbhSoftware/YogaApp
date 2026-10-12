@@ -1,6 +1,8 @@
 import { lazy, Suspense } from "react";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { CircularProgress } from "@mui/material";
+import { AppErrorBoundary } from "@/app/router/app-error-boundary";
+import { NotFoundPage } from "@/app/router/not-found-page";
 import { AdminLayout } from "@/app/layouts/admin-layout";
 import { AuthLayout } from "@/app/layouts/auth-layout";
 import { CustomerLayout } from "@/app/layouts/customer-layout";
@@ -107,55 +109,57 @@ function RouteFallback() {
 export function AppRouter() {
   return (
     <BrowserRouter>
-      <Suspense fallback={<RouteFallback />}>
-        <Routes>
-          <Route element={<RedirectIfSignedIn />}>
-            <Route element={<AuthLayout />}>
-              <Route path={routes.login} element={<LoginPage />} />
+      <AppErrorBoundary>
+        <Suspense fallback={<RouteFallback />}>
+          <Routes>
+            <Route element={<RedirectIfSignedIn />}>
+              <Route element={<AuthLayout />}>
+                <Route path={routes.login} element={<LoginPage />} />
+              </Route>
             </Route>
-          </Route>
-          <Route element={<AllowGuestOr roles={["Customer"]} />}>
-            <Route element={<CustomerLayout />}>
-              <Route path={routes.home} element={<HomePage />} />
-              <Route path={routes.teacher} element={<TeacherPage />} />
-              <Route path={routes.refundPolicy} element={<RefundPolicyPage />} />
-              <Route path={routes.terms} element={<TermsPage />} />
-              <Route path={routes.privacy} element={<PrivacyPage />} />
-              <Route element={<RequireAuth />}>
-                <Route element={<RequireRole roles={["Customer"]} />}>
-                  <Route path={routes.book} element={<BookPage />} />
-                  <Route path={routes.bookings} element={<BookingsPage />} />
-                  <Route path={routes.profile} element={<ProfilePage />} />
-                  <Route path={routes.instructorRegister} element={<InstructorRegisterPage />} />
+            <Route element={<AllowGuestOr roles={["Customer"]} />}>
+              <Route element={<CustomerLayout />}>
+                <Route path={routes.home} element={<HomePage />} />
+                <Route path={routes.teacher} element={<TeacherPage />} />
+                <Route path={routes.refundPolicy} element={<RefundPolicyPage />} />
+                <Route path={routes.terms} element={<TermsPage />} />
+                <Route path={routes.privacy} element={<PrivacyPage />} />
+                <Route element={<RequireAuth />}>
+                  <Route element={<RequireRole roles={["Customer"]} />}>
+                    <Route path={routes.book} element={<BookPage />} />
+                    <Route path={routes.bookings} element={<BookingsPage />} />
+                    <Route path={routes.profile} element={<ProfilePage />} />
+                    <Route path={routes.instructorRegister} element={<InstructorRegisterPage />} />
+                  </Route>
                 </Route>
               </Route>
             </Route>
-          </Route>
-          <Route element={<RequireAuth />}>
-            <Route element={<RequireRole roles={["Provider"]} />}>
-              <Route element={<InstructorLayout />}>
-                <Route path={routes.instructor} element={<SchedulePage />} />
-                <Route path={routes.instructorBookings} element={<InstructorRequestsPage />} />
-                <Route path={routes.instructorEarnings} element={<InstructorEarningsPage />} />
-                <Route path={routes.instructorProfile} element={<InstructorProfilePage />} />
+            <Route element={<RequireAuth />}>
+              <Route element={<RequireRole roles={["Provider"]} />}>
+                <Route element={<InstructorLayout />}>
+                  <Route path={routes.instructor} element={<SchedulePage />} />
+                  <Route path={routes.instructorBookings} element={<InstructorRequestsPage />} />
+                  <Route path={routes.instructorEarnings} element={<InstructorEarningsPage />} />
+                  <Route path={routes.instructorProfile} element={<InstructorProfilePage />} />
+                </Route>
+              </Route>
+              <Route element={<RequireRole roles={["Admin"]} />}>
+                <Route element={<AdminLayout />}>
+                  <Route path={routes.admin} element={<DashboardPage />} />
+                  <Route path={routes.adminApprovals} element={<ApprovalsPage />} />
+                  <Route path={routes.adminUsers} element={<UsersPage />} />
+                  <Route path={routes.adminUser} element={<UserDetailPage />} />
+                  <Route path={routes.adminBookings} element={<AdminBookingsPage />} />
+                  <Route path={routes.adminBooking} element={<AdminBookingDetailPage />} />
+                  <Route path={routes.adminTransactions} element={<TransactionsPage />} />
+                  <Route path={routes.adminMasters} element={<SettingsPage />} />
+                </Route>
               </Route>
             </Route>
-            <Route element={<RequireRole roles={["Admin"]} />}>
-              <Route element={<AdminLayout />}>
-                <Route path={routes.admin} element={<DashboardPage />} />
-                <Route path={routes.adminApprovals} element={<ApprovalsPage />} />
-                <Route path={routes.adminUsers} element={<UsersPage />} />
-                <Route path={routes.adminUser} element={<UserDetailPage />} />
-                <Route path={routes.adminBookings} element={<AdminBookingsPage />} />
-                <Route path={routes.adminBooking} element={<AdminBookingDetailPage />} />
-                <Route path={routes.adminTransactions} element={<TransactionsPage />} />
-                <Route path={routes.adminMasters} element={<SettingsPage />} />
-              </Route>
-            </Route>
-          </Route>
-          <Route path="*" element={<Navigate to={routes.login} replace />} />
-        </Routes>
-      </Suspense>
+            <Route path="*" element={<NotFoundPage />} />
+          </Routes>
+        </Suspense>
+      </AppErrorBoundary>
     </BrowserRouter>
   );
 }
