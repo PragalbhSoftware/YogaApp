@@ -181,6 +181,11 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                         .HasMaxLength(300)
                         .HasColumnType("nvarchar(300)");
 
+                    b.Property<bool>("IsTrial")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
                     b.Property<string>("Landmark")
                         .HasMaxLength(160)
                         .HasColumnType("nvarchar(160)");
@@ -246,6 +251,8 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                     b.HasIndex("CustomerId", "Status");
 
                     b.HasIndex("ProviderId", "Status");
+
+                    b.HasIndex("CustomerId", "ProviderId", "IsTrial");
 
                     b.ToTable("Bookings");
                 });
@@ -334,6 +341,11 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                     b.Property<string>("HomeAddress")
                         .HasMaxLength(300)
                         .HasColumnType("nvarchar(300)");
+
+                    b.Property<bool>("IsTrial")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
 
                     b.Property<string>("Landmark")
                         .HasMaxLength(160)
@@ -897,6 +909,15 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(120)
                         .HasColumnType("nvarchar(120)");
+
+                    b.Property<bool>("TrialEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<decimal?>("TrialPrice")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)");
 
                     b.HasKey("Id");
 

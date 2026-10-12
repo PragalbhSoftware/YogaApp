@@ -598,7 +598,10 @@ public class ProviderService
                 .OrderBy(c => c.ReviewedAt)
                 .Select(c => c.Title)
                 .ToList(),
-            ProviderMediaRules.IsVerified(provider.Certificates));
+            ProviderMediaRules.IsVerified(provider.Certificates),
+            provider.Services.Where(TrialRules.Offers)
+                .Select(s => new TrialOfferResponse(s.Id, s.TrialPrice!.Value))
+                .FirstOrDefault());
     }
 
     private static ProviderSelf ToSelf(Provider provider, User user, string areaName) => new(

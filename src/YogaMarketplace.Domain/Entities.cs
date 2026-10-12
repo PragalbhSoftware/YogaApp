@@ -109,6 +109,13 @@ public class Provider
         SessionMode.Online => OnlineRate,
         _ => null
     };
+
+    public decimal? LowestOfferedRate() =>
+        Enum.GetValues<SessionMode>()
+            .Where(Offers)
+            .Select(RateFor)
+            .Where(rate => rate is > 0)
+            .Min();
 }
 
 public class Service
@@ -120,6 +127,11 @@ public class Service
     public Category? Category { get; set; }
     public string Title { get; set; } = "";
     public bool IsActive { get; set; } = true;
+
+    /// <summary>Offers one trial session per customer at <see cref="TrialPrice"/>. See <see cref="TrialRules"/>.</summary>
+    public bool TrialEnabled { get; set; }
+
+    public decimal? TrialPrice { get; set; }
 }
 
 public class AvailabilitySlot
@@ -148,6 +160,7 @@ public class Booking
     public SessionMode Mode { get; set; }
     public BookingStatus Status { get; set; }
     public decimal Amount { get; set; }
+    public bool IsTrial { get; set; }
     public string? HomeAddress { get; set; }
     public string? Landmark { get; set; }
     public string? MeetLinkSnapshot { get; set; }
@@ -181,6 +194,7 @@ public class CheckoutIntent
     public Guid SlotId { get; set; }
     public SessionMode Mode { get; set; }
     public decimal Amount { get; set; }
+    public bool IsTrial { get; set; }
     public decimal ConvenienceFee { get; set; }
     public decimal CommissionPercent { get; set; }
     public int CancelFreeWindowHours { get; set; }

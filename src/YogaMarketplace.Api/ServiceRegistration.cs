@@ -32,6 +32,7 @@ public static class ServiceRegistration
         services.AddScoped<BookingService>();
         services.AddScoped<ProfileService>();
         services.AddScoped<ProviderMediaService>();
+        services.AddScoped<ProviderTrialService>();
         services.AddScoped<IAdminProviderService, AdminProviderService>();
         services.AddScoped<IAdminCertificateService, AdminCertificateService>();
         services.AddScoped<IAdminUserService, AdminUserService>();

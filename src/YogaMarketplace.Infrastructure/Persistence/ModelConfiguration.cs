@@ -132,6 +132,8 @@ internal static class ModelConfiguration
     private static void ConfigureService(EntityTypeBuilder<Service> entity)
     {
         entity.Property(s => s.Title).HasMaxLength(120);
+        entity.Property(s => s.TrialEnabled).HasDefaultValue(false);
+        entity.Property(s => s.TrialPrice).HasPrecision(10, 2);
         entity.HasIndex(s => new { s.ProviderId, s.CategoryId }).IsUnique();
 
         entity.HasOne(s => s.Provider)
@@ -170,6 +172,8 @@ internal static class ModelConfiguration
         entity.Property(b => b.LateCancelFee).HasPrecision(10, 2);
         entity.Property(b => b.CommissionPercent).HasPrecision(5, 2).HasDefaultValue(0m);
         entity.Property(b => b.ConvenienceFee).HasPrecision(10, 2).HasDefaultValue(0m);
+        entity.Property(b => b.IsTrial).HasDefaultValue(false);
+        entity.HasIndex(b => new { b.CustomerId, b.ProviderId, b.IsTrial });
         entity.Property(b => b.CancelFreeWindowHours).HasDefaultValue(0);
         entity.Property(b => b.LateCancelFeeType).HasConversion<string>().HasMaxLength(16).HasDefaultValue(LateCancelFeeType.Percent);
         entity.Property(b => b.LateCancelFeeValue).HasPrecision(10, 2).HasDefaultValue(0m);
@@ -214,6 +218,7 @@ internal static class ModelConfiguration
         entity.Property(c => c.Status).HasConversion<string>().HasMaxLength(16);
         entity.Property(c => c.Amount).HasPrecision(10, 2);
         entity.Property(c => c.ConvenienceFee).HasPrecision(10, 2).HasDefaultValue(0m);
+        entity.Property(c => c.IsTrial).HasDefaultValue(false);
         entity.Property(c => c.CommissionPercent).HasPrecision(5, 2).HasDefaultValue(0m);
         entity.Property(c => c.CancelFreeWindowHours).HasDefaultValue(0);
         entity.Property(c => c.LateCancelFeeType).HasConversion<string>().HasMaxLength(16).HasDefaultValue(LateCancelFeeType.Percent);
