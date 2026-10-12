@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CancelQuote } from "@/features/bookings/types";
-import { cancelButtonLabel, quoteNote } from "@/features/bookings/utils/cancel-copy";
+import { cancelButtonLabel, creditOutcomeLabel, quoteNote } from "@/features/bookings/utils/cancel-copy";
 
 const base: CancelQuote = {
   amount: 929,
@@ -38,6 +38,21 @@ describe("credit booking cancel copy", () => {
     const late = { ...credit, creditReturned: false };
     expect(cancelButtonLabel(late)).toBe("Cancel and use the credit");
     expect(quoteNote(late)).toMatch(/credit counts as used/);
+  });
+
+  it("says no credit comes back when the pack was refunded, even before the late window", () => {
+    const refunded = { ...credit, creditReturned: false, creditNotReturnedReason: "PackRefunded" as const };
+    expect(quoteNote(refunded)).toBe("No credit will be returned (pack was refunded).");
+    expect(cancelButtonLabel(refunded)).toBe("Cancel booking");
+    expect(creditOutcomeLabel(refunded)).toBe("Not returned");
+    expect(quoteNote({ ...refunded, amount: 25, refund: 25 })).toBe(
+      "No credit will be returned (pack was refunded). Your ₹25 fee comes back.",
+    );
+  });
+
+  it("says no credit comes back when the pack has expired", () => {
+    const expired = { ...credit, creditReturned: false, creditNotReturnedReason: "PackExpired" as const };
+    expect(quoteNote(expired)).toBe("No credit will be returned (pack has expired).");
   });
 
   it("keeps the refund wording for paid bookings", () => {

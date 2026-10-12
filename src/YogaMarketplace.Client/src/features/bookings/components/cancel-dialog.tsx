@@ -2,7 +2,7 @@ import { Button, Dialog, DialogContent, Skeleton } from "@mui/material";
 import { ErrorState } from "@/components/common/error-state";
 import { useCancelQuote } from "@/features/bookings/hooks/use-bookings";
 import type { BookingRecord, CancelQuote } from "@/features/bookings/types";
-import { cancelButtonLabel, quoteNote } from "@/features/bookings/utils/cancel-copy";
+import { cancelButtonLabel, creditOutcomeLabel, quoteNote } from "@/features/bookings/utils/cancel-copy";
 import { toUserMessage } from "@/services/http/api-error";
 import { formatInr } from "@/utils/money";
 
@@ -110,7 +110,7 @@ function CreditQuoteSummary({ quote }: { quote: CancelQuote }) {
         </div>
         <div className="flex justify-between gap-3 border-t border-brand-border pt-2 font-medium">
           <dt>Credit</dt>
-          <dd>{quote.creditReturned ? "Returned" : "Used"}</dd>
+          <dd>{creditOutcomeLabel(quote)}</dd>
         </div>
         {quote.refund > 0 ? (
           <div className="flex justify-between gap-3 font-medium">

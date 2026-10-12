@@ -421,8 +421,9 @@ public record BookingResponse(
 /// <summary>
 /// <see cref="Amount"/> is what the customer paid (session plus convenience fee). A late cancel keeps the
 /// late fee and the convenience fee. Terms come from the booking, not from current settings.
-/// For a credit booking, <see cref="CreditReturned"/> says whether the credit comes back, and <see cref="Refund"/>
-/// covers only the convenience fee paid.
+/// For a credit booking, <see cref="CreditReturned"/> says whether a usable credit comes back, and <see cref="Refund"/>
+/// covers only the convenience fee paid. When it doesn't, <see cref="CreditNotReturnedReason"/> is LateCancel,
+/// PackRefunded or PackExpired.
 /// </summary>
 public record CancelQuoteResponse(
     decimal Amount,
@@ -436,4 +437,5 @@ public record CancelQuoteResponse(
     decimal LateCancelFeeValue,
     DateTimeOffset? FreeUntil,
     bool PaidWithCredit,
-    bool CreditReturned);
+    bool CreditReturned,
+    string? CreditNotReturnedReason = null);

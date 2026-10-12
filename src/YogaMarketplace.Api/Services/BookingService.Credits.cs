@@ -177,7 +177,9 @@ public partial class BookingService
         var batch = await BatchOfAsync(booking, cancellationToken);
         var paid = booking.Payment?.Amount ?? 0m;
         var start = SessionStartOf(booking);
-        var settlement = CreditRules.SettleCustomerCancel(booking, batch, paid, start, DateTimeOffset.UtcNow);
+        var now = DateTimeOffset.UtcNow;
+        var settlement = CreditRules.SettleCustomerCancel(booking, batch, paid, start, now);
+        var noCreditBack = CreditRules.NoCreditBackReason(batch, settlement, now);
         return new CancelQuoteResponse(
             paid,
             0m,
@@ -190,7 +192,8 @@ public partial class BookingService
             booking.LateCancelFeeValue,
             booking.Status == BookingStatus.Upcoming ? BookingRules.FreeCancelUntil(booking, start) : null,
             true,
-            settlement.ReturnCredit);
+            noCreditBack is null,
+            noCreditBack);
     }
 
     private async Task<BookingResponse> CancelCreditBookingAsync(Booking booking, string currency, CancellationToken cancellationToken)
