@@ -12,11 +12,13 @@ import { AddressCardSkeleton } from "@/components/common/loading-skeleton";
 import { PageLoader } from "@/components/common/page-loader";
 import { BookSummary } from "@/features/bookings/components/book-summary";
 import { HomeVisitForm } from "@/features/bookings/components/home-visit-form";
+import { TrialChoice } from "@/features/bookings/components/trial-choice";
 import {
   useBookingQuote,
   useConfirmLocalPayment,
   useConfirmPayment,
   useCreateBookingOrder,
+  useTrialStatus,
 } from "@/features/bookings/hooks/use-bookings";
 import {
   openRazorpayCheckout,
@@ -72,7 +74,12 @@ export function BookPage() {
     checkoutOpen;
 
   const slot = (slotsQuery.data?.slots ?? []).find((item) => item.id === slotId);
-  const quote = useBookingQuote(slotId, Boolean(slot) && !booking);
+  const offersTrial = Boolean(instructor.data?.trial) && areaOpen;
+  const trialStatus = useTrialStatus(providerId, offersTrial);
+  const trialAvailable = offersTrial && trialStatus.data?.offered === true && !trialStatus.data.used;
+  const [trialChoice, setTrialChoice] = useState<boolean | null>(null);
+  const bookTrial = trialAvailable && (trialChoice ?? true);
+  const quote = useBookingQuote(slotId, bookTrial, Boolean(slot) && !booking && !trialStatus.isLoading);
   const savedAddress = profile.data?.visitAddress ?? null;
 
   async function pay(home?: HomeVisitValues) {
@@ -80,6 +87,7 @@ export function BookPage() {
     try {
       const order = await createOrder.mutateAsync({
         slotId,
+        trial: bookTrial,
         homeAddress: home?.homeAddress,
         landmark: home?.landmark,
       });
@@ -97,7 +105,7 @@ export function BookPage() {
         orderId: order.orderId,
         amountPaise: order.amountPaise,
         currency: order.currency,
-        description: `${order.mode} session with ${order.providerName}`,
+        description: `${bookTrial ? "Trial" : order.mode} session with ${order.providerName}`,
         customerName: user?.name,
         customerPhone: digitsOnly(user?.phone ?? ""),
       });
@@ -234,7 +242,24 @@ export function BookPage() {
         <p className="mt-1 text-sm text-brand-muted">Pay now with Razorpay. The instructor then accepts your request.</p>
       </header>
 
-      <BookSummary instructor={instructor.data} slot={slot} quote={quote.data} quoteLoading={quote.isLoading} />
+      {trialAvailable && instructor.data.trial ? (
+        <TrialChoice
+          trialPrice={instructor.data.trial.price}
+          useTrial={bookTrial}
+          disabled={busy}
+          onChange={setTrialChoice}
+        />
+      ) : null}
+      {offersTrial && trialStatus.data?.used ? (
+        <p className="text-sm text-brand-muted">You’ve already had your trial class with {instructor.data.displayName}.</p>
+      ) : null}
+
+      <BookSummary
+        instructor={instructor.data}
+        slot={slot}
+        quote={quote.data}
+        quoteLoading={quote.isLoading || trialStatus.isLoading}
+      />
       {quote.isError ? (
         <ErrorState message={toUserMessage(quote.error)} onRetry={() => void quote.refetch()} />
       ) : null}

@@ -125,6 +125,18 @@ export type ProviderMedia = {
   isVerified: boolean;
 };
 
+export type ProviderTrial = {
+  enabled: boolean;
+  price: number | null;
+  lowestRegularRate: number | null;
+  convenienceFee: number;
+};
+
+export type UpdateProviderTrialInput = {
+  enabled: boolean;
+  price?: number;
+};
+
 export type AddCertificateInput = {
   title: string;
   file: File;

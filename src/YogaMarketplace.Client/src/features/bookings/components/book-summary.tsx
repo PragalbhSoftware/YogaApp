@@ -41,10 +41,8 @@ function QuoteLines({ quote }: { quote: BookingQuote }) {
   return (
     <>
       <div className="flex justify-between gap-3">
-        <dt className="text-brand-muted">Fee</dt>
-        <dd>
-          <PriceText amount={quote.sessionAmount} />
-        </dd>
+        <dt className="text-brand-muted">{quote.isTrial ? "Trial class fee" : "Fee"}</dt>
+        <dd>{quote.sessionAmount === 0 ? "Free" : <PriceText amount={quote.sessionAmount} />}</dd>
       </div>
       {quote.convenienceFee > 0 ? (
         <div className="flex justify-between gap-3">

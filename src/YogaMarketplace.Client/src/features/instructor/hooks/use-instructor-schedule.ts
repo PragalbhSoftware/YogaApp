@@ -8,6 +8,7 @@ import type {
   RegisterInstructorInput,
   UpdateInstructorProfileInput,
   UpdateInstructorRatesInput,
+  UpdateProviderTrialInput,
   UpdateSlotInput,
 } from "@/features/instructor/types";
 import { useAuthStore } from "@/stores/auth-store";
@@ -177,6 +178,24 @@ export function useUnblockSlot() {
     mutationFn: (id: string) => instructorApi.unblockSlot(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["instructor-slots"] });
+    },
+  });
+}
+
+export function useInstructorTrial() {
+  return useQuery({
+    queryKey: ["instructor-trial"],
+    queryFn: instructorApi.trial,
+  });
+}
+
+export function useUpdateInstructorTrial() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateProviderTrialInput) => instructorApi.updateTrial(input),
+    onSuccess: (trial) => {
+      queryClient.setQueryData(["instructor-trial"], trial);
+      void queryClient.invalidateQueries({ queryKey: ["instructor"] });
     },
   });
 }

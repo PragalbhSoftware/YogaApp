@@ -50,6 +50,13 @@ export type InstructorDetail = Omit<InstructorSummary, "photoUrl"> & {
   introVideoId: string | null;
   /** Titles of admin-approved certificates. The files themselves are never public. */
   certificates: string[];
+  /** One discounted or free first session per customer, when the instructor offers it. */
+  trial: TrialOffer | null;
+};
+
+export type TrialOffer = {
+  serviceId: string;
+  price: number;
 };
 
 export type OpenSlot = {

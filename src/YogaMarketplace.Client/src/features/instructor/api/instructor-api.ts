@@ -8,6 +8,8 @@ import type {
   ProviderCertificate,
   ProviderMedia,
   ProviderPhoto,
+  ProviderTrial,
+  UpdateProviderTrialInput,
   InstructorProfile,
   OwnedSlot,
   OwnedSlotList,
@@ -109,6 +111,14 @@ export const instructorApi = {
 
   markNoShow(id: string) {
     return http.post<BookingRecord>(`/api/bookings/${id}/noshow`, {}).then((res) => res.data);
+  },
+
+  trial() {
+    return http.get<ProviderTrial>("/api/providers/me/trial").then((res) => res.data);
+  },
+
+  updateTrial(input: UpdateProviderTrialInput) {
+    return http.put<ProviderTrial>("/api/providers/me/trial", input).then((res) => res.data);
   },
 
   media() {

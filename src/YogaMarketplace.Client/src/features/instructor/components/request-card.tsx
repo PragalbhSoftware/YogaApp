@@ -29,7 +29,9 @@ export function RequestCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="font-heading text-lg font-medium">{booking.serviceTitle}</h2>
-          <p className="text-sm text-brand-muted">{booking.mode} session</p>
+          <p className="text-sm text-brand-muted">
+            {booking.mode} {booking.isTrial ? "trial class" : "session"}
+          </p>
         </div>
         <Chip size="small" label={statusFilterLabel(booking.status)} />
       </div>

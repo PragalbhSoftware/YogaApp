@@ -13,6 +13,7 @@ import { InstructorGallery } from "@/features/marketplace/components/instructor-
 import { IntroVideo } from "@/features/marketplace/components/intro-video";
 import { ModeRateList } from "@/features/marketplace/components/mode-rate-list";
 import { ReviewList } from "@/features/marketplace/components/review-list";
+import { TrialOfferNote } from "@/features/marketplace/components/trial-offer-note";
 import { VerifiedBadge } from "@/features/marketplace/components/verified-badge";
 import { useInstructor, useInstructorReviews } from "@/features/marketplace/hooks/use-instructors";
 import { areaClosedDescription, areaClosedTitle } from "@/features/marketplace/utils/areas";
@@ -86,6 +87,10 @@ export function TeacherPage() {
             error={reviews.error}
             onRetry={() => void reviews.refetch()}
           />
+
+          {instructor.data.areaOpen && instructor.data.trial ? (
+            <TrialOfferNote name={instructor.data.displayName} trial={instructor.data.trial} />
+          ) : null}
 
           {instructor.data.areaOpen ? (
             <AvailabilitySection instructorId={instructor.data.id} modes={instructor.data.modes ?? []} />

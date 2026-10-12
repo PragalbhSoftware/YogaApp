@@ -7,11 +7,18 @@ import type {
   CreateOrderInput,
   CreateReviewInput,
   ReviewRecord,
+  TrialStatus,
 } from "@/features/bookings/types";
 
 export const bookingsApi = {
-  quote(slotId: string) {
-    return http.get<BookingQuote>("/api/bookings/quote", { params: { slotId } }).then((res) => res.data);
+  quote(slotId: string, trial: boolean) {
+    return http
+      .get<BookingQuote>("/api/bookings/quote", { params: trial ? { slotId, trial } : { slotId } })
+      .then((res) => res.data);
+  },
+
+  trialStatus(providerId: string) {
+    return http.get<TrialStatus>("/api/bookings/trial", { params: { providerId } }).then((res) => res.data);
   },
 
   createOrder(input: CreateOrderInput) {

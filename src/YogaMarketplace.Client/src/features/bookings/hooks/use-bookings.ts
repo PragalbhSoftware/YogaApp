@@ -14,11 +14,20 @@ export function invalidateBookingLists(queryClient: ReturnType<typeof useQueryCl
   void queryClient.invalidateQueries({ queryKey: ["instructor-open-slots"] });
 }
 
-export function useBookingQuote(slotId: string | undefined, enabled: boolean) {
+export function useBookingQuote(slotId: string | undefined, trial: boolean, enabled: boolean) {
   return useQuery({
-    queryKey: ["booking-quote", slotId],
-    queryFn: () => bookingsApi.quote(slotId ?? ""),
+    queryKey: ["booking-quote", slotId, trial],
+    queryFn: () => bookingsApi.quote(slotId ?? "", trial),
     enabled: enabled && Boolean(slotId),
+    staleTime: 0,
+  });
+}
+
+export function useTrialStatus(providerId: string | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: ["trial-status", providerId],
+    queryFn: () => bookingsApi.trialStatus(providerId ?? ""),
+    enabled: enabled && Boolean(providerId),
     staleTime: 0,
   });
 }
@@ -27,8 +36,9 @@ export function useCreateBookingOrder() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: CreateOrderInput) => bookingsApi.createOrder(input),
-    onSuccess: (order) => {
-      queryClient.setQueryData<BookingQuote>(["booking-quote", order.slotId], (current) =>
+    onSuccess: (order, input) => {
+      void queryClient.invalidateQueries({ queryKey: ["trial-status"] });
+      queryClient.setQueryData<BookingQuote>(["booking-quote", order.slotId, Boolean(input.trial)], (current) =>
         current
           ? {
               ...current,

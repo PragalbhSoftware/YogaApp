@@ -6,6 +6,14 @@ export type BookingQuote = {
   convenienceFee: number;
   total: number;
   currency: string;
+  isTrial: boolean;
+};
+
+/** The signed-in customer's trial with one instructor. */
+export type TrialStatus = {
+  offered: boolean;
+  price: number | null;
+  used: boolean;
 };
 
 export type CheckoutOrder = {
@@ -63,6 +71,7 @@ export type BookingRecord = {
   lateCancelFee: number | null;
   cancelledBy: "Customer" | "Admin" | null;
   cancelReason: string | null;
+  isTrial: boolean;
 };
 
 export type CancelQuote = {
@@ -81,6 +90,7 @@ export type CancelQuote = {
 
 export type CreateOrderInput = {
   slotId: string;
+  trial?: boolean;
   homeAddress?: string;
   landmark?: string;
 };
