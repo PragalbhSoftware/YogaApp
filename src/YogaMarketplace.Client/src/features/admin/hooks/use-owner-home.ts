@@ -1,18 +1,17 @@
-import { useAdminBookings, useAdminPayouts, useAdminProviders, useAdminSettings, useAdminSummary } from "@/features/admin/hooks/use-admin";
-import { bookingStatusCount, sumPayoutFees } from "@/features/admin/utils";
+import { useAdminBookings, useAdminSettings, useAdminSummary } from "@/features/admin/hooks/use-admin";
+import { bookingStatusCount } from "@/features/admin/utils";
 import { kolkataToday } from "@/utils/clock";
+
+/** The largest page the API serves; a day with more sessions links to the full list. */
+const TODAY_PAGE_SIZE = 100;
 
 export function useOwnerHome() {
   const today = kolkataToday();
   const summary = useAdminSummary();
   const settings = useAdminSettings();
-  const pendingInstructors = useAdminProviders("Pending");
-  const pendingPayouts = useAdminPayouts("Pending");
-  const exportedPayouts = useAdminPayouts("Exported");
-  const paidPayouts = useAdminPayouts("Paid");
-  const todayUpcoming = useAdminBookings({ status: "Upcoming", from: today, to: today });
+  const todayUpcoming = useAdminBookings({ status: "Upcoming", from: today, to: today, pageSize: TODAY_PAGE_SIZE });
 
-  const queries = [summary, settings, pendingInstructors, pendingPayouts, exportedPayouts, paidPayouts];
+  const queries = [summary, settings];
   const isLoading = queries.some((query) => query.isLoading);
   const firstError = queries.find((query) => query.isError);
 
@@ -23,12 +22,6 @@ export function useOwnerHome() {
     void todayUpcoming.refetch();
   }
 
-  const payouts = [
-    ...(pendingPayouts.data ?? []),
-    ...(exportedPayouts.data ?? []),
-    ...(paidPayouts.data ?? []),
-  ];
-
   const report = summary.data;
   const bookingsByStatus = report?.bookingsByStatus ?? [];
 
@@ -36,11 +29,12 @@ export function useOwnerHome() {
     isLoading,
     error: firstError?.error,
     refetch,
+    today,
     takeRate: settings.data?.commissionPercent ?? null,
-    yourFee: sumPayoutFees(payouts),
+    yourFee: report?.platformFees ?? 0,
     oweInstructors: report?.pendingPayouts.net ?? 0,
     gmvPaid: report?.gmvPaid ?? 0,
-    pendingInstructorCount: pendingInstructors.data?.length ?? 0,
+    pendingInstructorCount: report?.pendingInstructors ?? 0,
     pendingAcceptCount: bookingStatusCount(bookingsByStatus, "PendingAccept"),
     upcomingCount: bookingStatusCount(bookingsByStatus, "Upcoming"),
     payoutsToSend: report?.pendingPayouts.count ?? 0,

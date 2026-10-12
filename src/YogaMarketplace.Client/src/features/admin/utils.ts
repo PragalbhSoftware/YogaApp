@@ -55,14 +55,8 @@ export function modeRateLabel(mode: string, rate: number | null) {
   return rate == null ? mode : `${mode} ${formatInr(rate)}`;
 }
 
-export const listCap = "Lists show up to 100 rows.";
-
 export function bookingStatusCount(rows: { status: string; count: number }[], status: string) {
   return rows.find((row) => row.status === status)?.count ?? 0;
-}
-
-export function sumPayoutFees(rows: { feeAmount: number }[]) {
-  return rows.reduce((sum, row) => sum + row.feeAmount, 0);
 }
 
 /** Keeps only the fields the admin touched, so a save never overwrites values another admin changed. */

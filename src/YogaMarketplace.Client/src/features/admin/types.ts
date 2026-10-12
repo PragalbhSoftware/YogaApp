@@ -307,15 +307,35 @@ export type AdminReport = {
   gmvPaid: number;
   currency: string;
   pendingPayouts: { count: number; gross: number; net: number };
+  /** Fee kept on every payout so far, whatever its status. */
+  platformFees: number;
+  pendingInstructors: number;
 };
 
-export type BookingListQuery = {
+/** One page of an admin list. `page` is 1-based. */
+export type Paged<T> = {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
+export type PageQuery = {
+  page?: number;
+  pageSize?: number;
+};
+
+export type BookingListQuery = PageQuery & {
   status?: string;
   from?: string;
   to?: string;
 };
 
-export type UserListQuery = {
+export type UserListQuery = PageQuery & {
   q?: string;
   role?: string;
+};
+
+export type StatusListQuery = PageQuery & {
+  status?: string;
 };

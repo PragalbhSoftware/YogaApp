@@ -1,15 +1,14 @@
 import { toast } from "sonner";
-import { EmptyState } from "@/components/common/empty-state";
-import { ErrorState } from "@/components/common/error-state";
-import { BookingListSkeleton } from "@/components/common/loading-skeleton";
 import { adminApi } from "@/features/admin/api/admin-api";
 import { CertificateReviewCard } from "@/features/admin/components/certificate-review-card";
 import { FilterChips } from "@/features/admin/components/filter-chips";
+import { PagedList } from "@/features/admin/components/paged-list";
 import {
   useAdminCertificates,
   useApproveCertificate,
   useRejectCertificate,
 } from "@/features/admin/hooks/use-admin";
+import { REVIEW_PAGE_SIZE } from "@/features/admin/hooks/use-list-params";
 import type { AdminCertificate } from "@/features/admin/types";
 import { certificateFileName } from "@/features/instructor/media-rules";
 import { toUserMessage } from "@/services/http/api-error";
@@ -24,11 +23,13 @@ const filters = [
 
 type CertificateReviewListProps = {
   status: string;
+  page: number;
   onStatusChange: (status: string | null) => void;
+  onPageChange: (page: number) => void;
 };
 
-export function CertificateReviewList({ status, onStatusChange }: CertificateReviewListProps) {
-  const certificates = useAdminCertificates(status);
+export function CertificateReviewList({ status, page, onStatusChange, onPageChange }: CertificateReviewListProps) {
+  const certificates = useAdminCertificates({ status, page, pageSize: REVIEW_PAGE_SIZE });
   const approve = useApproveCertificate();
   const reject = useRejectCertificate();
   const busyId =
@@ -50,19 +51,18 @@ export function CertificateReviewList({ status, onStatusChange }: CertificateRev
     <>
       <FilterChips value={status} options={filters} onChange={onStatusChange} label="Certificate status" />
 
-      {certificates.isLoading ? <BookingListSkeleton /> : null}
-      {certificates.isError ? (
-        <ErrorState message={toUserMessage(certificates.error)} onRetry={() => void certificates.refetch()} />
-      ) : null}
-      {certificates.isSuccess && certificates.data.length === 0 ? (
-        <EmptyState
-          title="No certificates in this list"
-          description="Certificates show here after an instructor uploads one from their profile."
-        />
-      ) : null}
-      {certificates.isSuccess && certificates.data.length > 0 ? (
-        <div className="space-y-4">
-          {certificates.data.map((certificate) => (
+      <PagedList
+        query={certificates}
+        noun="certificates"
+        empty={{
+          title: "No certificates in this list",
+          description: "Certificates show here after an instructor uploads one from their profile.",
+        }}
+        onPageChange={onPageChange}
+      >
+        {(items, stale) => (
+        <div className={stale ? "grid gap-4 opacity-60 lg:grid-cols-2" : "grid gap-4 lg:grid-cols-2"}>
+          {items.map((certificate) => (
             <CertificateReviewCard
               key={certificate.id}
               certificate={certificate}
@@ -86,7 +86,8 @@ export function CertificateReviewList({ status, onStatusChange }: CertificateRev
             />
           ))}
         </div>
-      ) : null}
+        )}
+      </PagedList>
     </>
   );
 }

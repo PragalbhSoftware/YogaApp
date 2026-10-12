@@ -1,6 +1,11 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { adminApi } from "@/features/admin/api/admin-api";
-import type { BookingListQuery, UpdateSettingsInput, UserListQuery } from "@/features/admin/types";
+import type {
+  BookingListQuery,
+  StatusListQuery,
+  UpdateSettingsInput,
+  UserListQuery,
+} from "@/features/admin/types";
 import { ApiError } from "@/services/http/api-error";
 
 export function useAdminSummary() {
@@ -10,10 +15,11 @@ export function useAdminSummary() {
   });
 }
 
-export function useAdminProviders(status: string) {
+export function useAdminProviders(query: StatusListQuery) {
   return useQuery({
-    queryKey: ["admin-providers", status],
-    queryFn: () => adminApi.providers(status),
+    queryKey: ["admin-providers", query],
+    queryFn: ({ signal }) => adminApi.providers(query, signal),
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -23,6 +29,7 @@ export function useVerifyProvider() {
     mutationFn: (id: string) => adminApi.verifyProvider(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["admin-providers"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-summary"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-users"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-user"] });
       void queryClient.invalidateQueries({ queryKey: ["instructors"] });
@@ -36,6 +43,7 @@ export function useRejectProvider() {
     mutationFn: (input: { id: string; reason?: string }) => adminApi.rejectProvider(input.id, input.reason),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["admin-providers"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-summary"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-users"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-user"] });
       void queryClient.invalidateQueries({ queryKey: ["instructors"] });
@@ -43,10 +51,11 @@ export function useRejectProvider() {
   });
 }
 
-export function useAdminCertificates(status: string) {
+export function useAdminCertificates(query: StatusListQuery) {
   return useQuery({
-    queryKey: ["admin-certificates", status],
-    queryFn: () => adminApi.certificates(status),
+    queryKey: ["admin-certificates", query],
+    queryFn: ({ signal }) => adminApi.certificates(query, signal),
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -74,8 +83,9 @@ export function useRejectCertificate() {
 
 export function useAdminUsers(query: UserListQuery) {
   return useQuery({
-    queryKey: ["admin-users", query.q ?? "", query.role ?? ""],
-    queryFn: () => adminApi.users(query),
+    queryKey: ["admin-users", query],
+    queryFn: ({ signal }) => adminApi.searchUsers(query, signal),
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -103,8 +113,9 @@ export function useSetUserBlocked() {
 
 export function useAdminBookings(query: BookingListQuery) {
   return useQuery({
-    queryKey: ["admin-bookings", query.status ?? "", query.from ?? "", query.to ?? ""],
-    queryFn: () => adminApi.bookings(query),
+    queryKey: ["admin-bookings", query],
+    queryFn: ({ signal }) => adminApi.bookings(query, signal),
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -129,19 +140,19 @@ export function useAdminCancelBooking() {
   });
 }
 
-export function useAdminPayments(status?: string, enabled = true) {
+export function useAdminPayments(query: StatusListQuery) {
   return useQuery({
-    queryKey: ["admin-payments", status ?? ""],
-    queryFn: () => adminApi.payments(status),
-    enabled,
+    queryKey: ["admin-payments", query],
+    queryFn: ({ signal }) => adminApi.payments(query, signal),
+    placeholderData: keepPreviousData,
   });
 }
 
-export function useAdminPayouts(status?: string, enabled = true) {
+export function useAdminPayouts(query: StatusListQuery) {
   return useQuery({
-    queryKey: ["admin-payouts", status ?? ""],
-    queryFn: () => adminApi.payouts(status),
-    enabled,
+    queryKey: ["admin-payouts", query],
+    queryFn: ({ signal }) => adminApi.payouts(query, signal),
+    placeholderData: keepPreviousData,
   });
 }
 

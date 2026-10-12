@@ -4,6 +4,7 @@ import { CssBaseline, ThemeProvider } from "@mui/material";
 import { Toaster } from "sonner";
 import { AppRouter } from "@/app/router/app-router";
 import { theme } from "@/app/theme/theme";
+import { useUserSearchStore } from "@/features/admin/stores/user-search-store";
 import { useAuthStore } from "@/stores/auth-store";
 
 const queryClient = new QueryClient({
@@ -16,7 +17,10 @@ function useClearCacheOnSignOut() {
   useEffect(
     () =>
       useAuthStore.subscribe((state, previous) => {
-        if (previous.user && !state.user) queryClient.clear();
+        if (previous.user && !state.user) {
+          queryClient.clear();
+          useUserSearchStore.getState().setTerm("");
+        }
       }),
     [],
   );

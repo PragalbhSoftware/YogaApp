@@ -13,12 +13,21 @@ import type {
   AdminUserDetail,
   AdminUserSummary,
   BookingListQuery,
+  Paged,
   SettingsAuditEntry,
+  StatusListQuery,
   UpdateSettingsInput,
   UserListQuery,
 } from "@/features/admin/types";
 
 export type CsvFile = { blob: Blob; fileName: string };
+
+/** Drops empty filters so the request only carries what the admin chose. */
+export function listParams<T extends object>(query: T) {
+  return Object.fromEntries(
+    Object.entries(query).filter(([, value]) => value !== undefined && value !== null && value !== ""),
+  ) as Partial<T>;
+}
 
 const FALLBACK_CSV_NAME = "payouts.csv";
 
@@ -34,9 +43,9 @@ export const adminApi = {
     return http.get<AdminReport>("/api/admin/reports/summary").then((res) => res.data);
   },
 
-  providers(status?: string) {
+  providers(query: StatusListQuery, signal?: AbortSignal) {
     return http
-      .get<AdminProvider[]>("/api/admin/providers", { params: status ? { status } : undefined })
+      .get<Paged<AdminProvider>>("/api/admin/providers", { params: listParams(query), signal })
       .then((res) => res.data);
   },
 
@@ -50,9 +59,9 @@ export const adminApi = {
       .then((res) => res.data);
   },
 
-  certificates(status: string) {
+  certificates(query: StatusListQuery, signal?: AbortSignal) {
     return http
-      .get<AdminCertificate[]>("/api/admin/certificates", { params: { status } })
+      .get<Paged<AdminCertificate>>("/api/admin/certificates", { params: listParams(query), signal })
       .then((res) => res.data);
   },
 
@@ -72,14 +81,10 @@ export const adminApi = {
       .then((res) => res.data);
   },
 
-  users(query: UserListQuery) {
+  /** POST keeps the name or phone being searched out of URLs, proxy logs and browser history. */
+  searchUsers(query: UserListQuery, signal?: AbortSignal) {
     return http
-      .get<AdminUserSummary[]>("/api/admin/users", {
-        params: {
-          ...(query.q ? { q: query.q } : {}),
-          ...(query.role ? { role: query.role } : {}),
-        },
-      })
+      .post<Paged<AdminUserSummary>>("/api/admin/users/search", listParams(query), { signal })
       .then((res) => res.data);
   },
 
@@ -97,15 +102,9 @@ export const adminApi = {
       .then((res) => res.data);
   },
 
-  bookings(query: BookingListQuery) {
+  bookings(query: BookingListQuery, signal?: AbortSignal) {
     return http
-      .get<AdminBooking[]>("/api/admin/bookings", {
-        params: {
-          ...(query.status ? { status: query.status } : {}),
-          ...(query.from ? { from: query.from } : {}),
-          ...(query.to ? { to: query.to } : {}),
-        },
-      })
+      .get<Paged<AdminBooking>>("/api/admin/bookings", { params: listParams(query), signal })
       .then((res) => res.data);
   },
 
@@ -117,15 +116,15 @@ export const adminApi = {
     return http.post<AdminBooking>(`/api/admin/bookings/${id}/cancel`, { reason }).then((res) => res.data);
   },
 
-  payments(status?: string) {
+  payments(query: StatusListQuery, signal?: AbortSignal) {
     return http
-      .get<AdminPayment[]>("/api/admin/payments", { params: status ? { status } : undefined })
+      .get<Paged<AdminPayment>>("/api/admin/payments", { params: listParams(query), signal })
       .then((res) => res.data);
   },
 
-  payouts(status?: string) {
+  payouts(query: StatusListQuery, signal?: AbortSignal) {
     return http
-      .get<AdminPayout[]>("/api/admin/payouts", { params: status ? { status } : undefined })
+      .get<Paged<AdminPayout>>("/api/admin/payouts", { params: listParams(query), signal })
       .then((res) => res.data);
   },
 
