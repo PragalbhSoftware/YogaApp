@@ -2,6 +2,7 @@ import type { AxiosResponse } from "axios";
 import { http } from "@/services/http/http-client";
 import type {
   AdminArea,
+  AdminCertificate,
   AdminBooking,
   AdminCategory,
   AdminPayment,
@@ -46,6 +47,28 @@ export const adminApi = {
   rejectProvider(id: string, reason?: string) {
     return http
       .post<AdminProvider>(`/api/admin/providers/${id}/reject`, { reason: reason || null })
+      .then((res) => res.data);
+  },
+
+  certificates(status: string) {
+    return http
+      .get<AdminCertificate[]>("/api/admin/certificates", { params: { status } })
+      .then((res) => res.data);
+  },
+
+  certificateFile(id: string) {
+    return http
+      .get<Blob>(`/api/admin/certificates/${id}/file`, { responseType: "blob" })
+      .then((res) => res.data);
+  },
+
+  approveCertificate(id: string) {
+    return http.post<AdminCertificate>(`/api/admin/certificates/${id}/approve`, {}).then((res) => res.data);
+  },
+
+  rejectCertificate(id: string, reason: string) {
+    return http
+      .post<AdminCertificate>(`/api/admin/certificates/${id}/reject`, { reason })
       .then((res) => res.data);
   },
 

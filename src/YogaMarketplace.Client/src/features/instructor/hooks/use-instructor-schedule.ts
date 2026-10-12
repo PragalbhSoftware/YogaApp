@@ -3,6 +3,7 @@ import type { SessionMode } from "@/constants/catalog";
 import { invalidateBookingLists } from "@/features/bookings/hooks/use-bookings";
 import { instructorApi } from "@/features/instructor/api/instructor-api";
 import type {
+  AddCertificateInput,
   AddSlotInput,
   RegisterInstructorInput,
   UpdateInstructorProfileInput,
@@ -178,6 +179,47 @@ export function useUnblockSlot() {
       void queryClient.invalidateQueries({ queryKey: ["instructor-slots"] });
     },
   });
+}
+
+const mediaKey = ["instructor-media"] as const;
+
+export function useInstructorMedia() {
+  return useQuery({
+    queryKey: mediaKey,
+    queryFn: instructorApi.media,
+  });
+}
+
+function useMediaMutation<TInput, TResult>(mutationFn: (input: TInput) => Promise<TResult>) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: mediaKey });
+      void queryClient.invalidateQueries({ queryKey: ["instructors"] });
+      void queryClient.invalidateQueries({ queryKey: ["instructor"] });
+    },
+  });
+}
+
+export function useAddPhoto() {
+  return useMediaMutation((file: File) => instructorApi.addPhoto(file));
+}
+
+export function useDeletePhoto() {
+  return useMediaMutation((id: string) => instructorApi.deletePhoto(id));
+}
+
+export function useSetIntroVideo() {
+  return useMediaMutation((url: string) => instructorApi.setIntroVideo(url));
+}
+
+export function useAddCertificate() {
+  return useMediaMutation((input: AddCertificateInput) => instructorApi.addCertificate(input));
+}
+
+export function useDeleteCertificate() {
+  return useMediaMutation((id: string) => instructorApi.deleteCertificate(id));
 }
 
 export function useDeleteSlot() {

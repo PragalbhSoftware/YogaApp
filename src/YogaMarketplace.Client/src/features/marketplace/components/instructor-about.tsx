@@ -6,7 +6,7 @@ type InstructorAboutProps = {
 };
 
 export function InstructorAbout({ instructor }: InstructorAboutProps) {
-  const verified = instructor.status.toLowerCase() === "verified";
+  const verified = instructor.isVerified;
   const practice = practiceSummary(instructor.bio);
 
   return (

@@ -43,6 +43,35 @@ export function useRejectProvider() {
   });
 }
 
+export function useAdminCertificates(status: string) {
+  return useQuery({
+    queryKey: ["admin-certificates", status],
+    queryFn: () => adminApi.certificates(status),
+  });
+}
+
+function invalidateCertificateViews(queryClient: ReturnType<typeof useQueryClient>) {
+  void queryClient.invalidateQueries({ queryKey: ["admin-certificates"] });
+  void queryClient.invalidateQueries({ queryKey: ["instructors"] });
+  void queryClient.invalidateQueries({ queryKey: ["instructor"] });
+}
+
+export function useApproveCertificate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => adminApi.approveCertificate(id),
+    onSuccess: () => invalidateCertificateViews(queryClient),
+  });
+}
+
+export function useRejectCertificate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { id: string; reason: string }) => adminApi.rejectCertificate(input.id, input.reason),
+    onSuccess: () => invalidateCertificateViews(queryClient),
+  });
+}
+
 export function useAdminUsers(query: UserListQuery) {
   return useQuery({
     queryKey: ["admin-users", query.q ?? "", query.role ?? ""],

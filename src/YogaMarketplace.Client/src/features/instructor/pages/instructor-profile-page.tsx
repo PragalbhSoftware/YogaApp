@@ -6,6 +6,7 @@ import { ErrorState } from "@/components/common/error-state";
 import { PageLoader } from "@/components/common/page-loader";
 import { useAuth } from "@/features/auth/hooks/use-auth";
 import { useSignOut } from "@/features/auth/hooks/use-sign-out";
+import { ProfileMediaSection } from "@/features/instructor/components/profile-media-section";
 import { RegisterForm } from "@/features/instructor/components/register-form";
 import {
   useInstructorProfile,
@@ -77,6 +78,7 @@ export function InstructorProfilePage() {
           />
         </section>
       ) : null}
+      {profile.data ? <ProfileMediaSection displayName={profile.data.displayName} /> : null}
     </main>
   );
 }

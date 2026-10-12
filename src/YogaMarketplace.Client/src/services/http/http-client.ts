@@ -45,8 +45,15 @@ async function readApiError(error: AxiosError<ErrorBody | Blob>) {
   return new ApiError(body?.error ?? FALLBACK_MESSAGE, error.response.status);
 }
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
+
+/** Absolute URL for API paths used directly by the browser, such as `<img src>`. */
+export function apiUrl(path: string) {
+  return `${API_BASE_URL}${path}`;
+}
+
 export const http: AxiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL ?? "",
+  baseURL: API_BASE_URL,
   timeout: 15_000,
   headers: { "Content-Type": "application/json" },
   withCredentials: true,

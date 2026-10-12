@@ -1,8 +1,13 @@
+import type { AxiosRequestConfig } from "axios";
 import { http } from "@/services/http/http-client";
 import type { SessionMode } from "@/constants/catalog";
 import type { BookingRecord } from "@/features/bookings/types";
 import type {
+  AddCertificateInput,
   AddSlotInput,
+  ProviderCertificate,
+  ProviderMedia,
+  ProviderPhoto,
   InstructorProfile,
   OwnedSlot,
   OwnedSlotList,
@@ -13,6 +18,14 @@ import type {
   UpdateInstructorProfileInput,
   UpdateSlotInput,
 } from "@/features/instructor/types";
+
+const UPLOAD_TIMEOUT_MS = 120_000;
+
+/** Lets the browser set the multipart boundary and gives slow mobile uploads time to finish. */
+const uploadConfig: AxiosRequestConfig = {
+  headers: { "Content-Type": "multipart/form-data" },
+  timeout: UPLOAD_TIMEOUT_MS,
+};
 
 export const instructorApi = {
   me() {
@@ -96,5 +109,44 @@ export const instructorApi = {
 
   markNoShow(id: string) {
     return http.post<BookingRecord>(`/api/bookings/${id}/noshow`, {}).then((res) => res.data);
+  },
+
+  media() {
+    return http.get<ProviderMedia>("/api/providers/me/media").then((res) => res.data);
+  },
+
+  addPhoto(file: File) {
+    const form = new FormData();
+    form.append("file", file);
+    return http.post<ProviderPhoto>("/api/providers/me/photos", form, uploadConfig).then((res) => res.data);
+  },
+
+  deletePhoto(id: string) {
+    return http.delete(`/api/providers/me/photos/${id}`).then(() => undefined);
+  },
+
+  setIntroVideo(url: string) {
+    return http
+      .put<ProviderMedia>("/api/providers/me/intro-video", { url: url || null })
+      .then((res) => res.data);
+  },
+
+  addCertificate(input: AddCertificateInput) {
+    const form = new FormData();
+    form.append("title", input.title);
+    form.append("file", input.file);
+    return http
+      .post<ProviderCertificate>("/api/providers/me/certificates", form, uploadConfig)
+      .then((res) => res.data);
+  },
+
+  deleteCertificate(id: string) {
+    return http.delete(`/api/providers/me/certificates/${id}`).then(() => undefined);
+  },
+
+  certificateFile(id: string) {
+    return http
+      .get<Blob>(`/api/providers/me/certificates/${id}/file`, { responseType: "blob" })
+      .then((res) => res.data);
   },
 };

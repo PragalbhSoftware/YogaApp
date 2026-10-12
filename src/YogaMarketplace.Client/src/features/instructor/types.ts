@@ -98,6 +98,38 @@ export type UpdateSlotInput = {
   end: string;
 };
 
+export type ProviderPhoto = {
+  id: string;
+  /** API path; pass through `apiUrl` before using in `<img src>`. */
+  url: string;
+  sortOrder: number;
+};
+
+export type CertificateStatus = "Pending" | "Approved" | "Rejected";
+
+export type ProviderCertificate = {
+  id: string;
+  title: string;
+  contentType: string;
+  sizeBytes: number;
+  status: CertificateStatus;
+  rejectionReason: string | null;
+  createdAt: string;
+  reviewedAt: string | null;
+};
+
+export type ProviderMedia = {
+  photos: ProviderPhoto[];
+  introVideoId: string | null;
+  certificates: ProviderCertificate[];
+  isVerified: boolean;
+};
+
+export type AddCertificateInput = {
+  title: string;
+  file: File;
+};
+
 const occupying = new Set(["PendingAccept", "Upcoming", "Completed", "NoShow"]);
 
 export function bookingOccupiesSlot(status: string) {

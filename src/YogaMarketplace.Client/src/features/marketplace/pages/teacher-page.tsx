@@ -1,19 +1,23 @@
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Button } from "@mui/material";
-import { ArrowLeft, ShieldCheck } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { routes } from "@/constants/routes";
 import { EmptyState } from "@/components/common/empty-state";
 import { ErrorState } from "@/components/common/error-state";
 import { PageLoader } from "@/components/common/page-loader";
 import { AvailabilitySection } from "@/features/marketplace/components/availability-section";
 import { InstructorAbout } from "@/features/marketplace/components/instructor-about";
+import { InstructorAvatar } from "@/features/marketplace/components/instructor-avatar";
+import { InstructorCredentials } from "@/features/marketplace/components/instructor-credentials";
+import { InstructorGallery } from "@/features/marketplace/components/instructor-gallery";
+import { IntroVideo } from "@/features/marketplace/components/intro-video";
 import { ModeRateList } from "@/features/marketplace/components/mode-rate-list";
 import { ReviewList } from "@/features/marketplace/components/review-list";
+import { VerifiedBadge } from "@/features/marketplace/components/verified-badge";
 import { useInstructor, useInstructorReviews } from "@/features/marketplace/hooks/use-instructors";
 import { areaClosedDescription, areaClosedTitle } from "@/features/marketplace/utils/areas";
 import { usePageTitle } from "@/hooks/use-page-title";
 import { toUserMessage } from "@/services/http/api-error";
-import { initials } from "@/utils/initials";
 
 export function TeacherPage() {
   const { id } = useParams();
@@ -45,21 +49,15 @@ export function TeacherPage() {
       {instructor.data ? (
         <article className="space-y-6">
           <header className="flex gap-4 rounded-3xl bg-brand-surface p-5 shadow-[0_8px_24px_rgba(37,49,39,0.06)]">
-            <div
-              className="flex size-16 shrink-0 items-center justify-center rounded-full bg-brand-primary/10 font-heading text-xl text-brand-primary"
-              aria-hidden="true"
-            >
-              {initials(instructor.data.displayName)}
-            </div>
+            <InstructorAvatar
+              name={instructor.data.displayName}
+              photoUrl={instructor.data.photoUrls[0]}
+              size="lg"
+            />
             <div className="space-y-1">
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="font-heading text-2xl font-medium">{instructor.data.displayName}</h1>
-                {instructor.data.status.toLowerCase() === "verified" ? (
-                  <span className="inline-flex items-center gap-1 text-xs font-medium text-brand-primary">
-                    <ShieldCheck className="size-3.5" aria-hidden="true" />
-                    Verified
-                  </span>
-                ) : null}
+                {instructor.data.isVerified ? <VerifiedBadge /> : null}
               </div>
               <p className="text-sm text-brand-muted">{instructor.data.area}</p>
               {instructor.data.reviewCount > 0 && instructor.data.ratingAverage != null ? (
@@ -71,7 +69,13 @@ export function TeacherPage() {
             </div>
           </header>
 
+          <InstructorGallery name={instructor.data.displayName} photoUrls={instructor.data.photoUrls} />
+
           <InstructorAbout instructor={instructor.data} />
+
+          <IntroVideo name={instructor.data.displayName} videoId={instructor.data.introVideoId} />
+
+          <InstructorCredentials certificates={instructor.data.certificates} />
 
           <ModeRateList modes={instructor.data.modes ?? []} heading="Session fees" />
 
