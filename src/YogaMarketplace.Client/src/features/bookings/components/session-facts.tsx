@@ -6,9 +6,11 @@ import { formatSlotDay, formatTimeRange12 } from "@/utils/clock";
 
 type SessionFactsProps = {
   booking: BookingRecord;
+  /** The customer sees "1 credit" for a credit booking; the instructor sees what they earn. */
+  customerView?: boolean;
 };
 
-export function SessionFacts({ booking }: SessionFactsProps) {
+export function SessionFacts({ booking, customerView = false }: SessionFactsProps) {
   const meet = joinMeetHref(booking);
   const locationFacts = [
     ...(booking.homeAddress ? [{ label: "Address", value: booking.homeAddress }] : []),
@@ -35,7 +37,7 @@ export function SessionFacts({ booking }: SessionFactsProps) {
         <div className="flex justify-between gap-3">
           <dt className="text-brand-muted">Fee</dt>
           <dd>
-            <PriceText amount={Number(booking.amount)} />
+            {customerView && booking.paidWithCredit ? "1 credit" : <PriceText amount={Number(booking.amount)} />}
           </dd>
         </div>
         {booking.convenienceFee > 0 ? (

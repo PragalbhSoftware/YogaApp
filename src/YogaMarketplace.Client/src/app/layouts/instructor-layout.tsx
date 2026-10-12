@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { CalendarDays, Inbox, User, Wallet } from "lucide-react";
+import { CalendarDays, Inbox, Layers, User, Wallet } from "lucide-react";
 import { PageLoader } from "@/components/common/page-loader";
 import { routes } from "@/constants/routes";
 import { cn } from "@/utils/cn";
@@ -9,6 +9,7 @@ const navItems = [
   { to: routes.instructor, label: "Schedule", icon: CalendarDays },
   { to: routes.instructorBookings, label: "Requests", icon: Inbox },
   { to: routes.instructorEarnings, label: "Earnings", icon: Wallet },
+  { to: routes.instructorServices, label: "Services", icon: Layers },
   { to: routes.instructorProfile, label: "Profile", icon: User },
 ];
 
@@ -67,7 +68,7 @@ export function InstructorLayout() {
         aria-label="Instructor"
         className="fixed inset-x-0 bottom-0 z-20 border-t border-brand-border bg-brand-surface/95 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur md:hidden"
       >
-        <div className="mx-auto grid max-w-md grid-cols-4">
+        <div className="mx-auto grid max-w-md grid-cols-5">
           {navItems.map((item) => {
             const Icon = item.icon;
             const active = isNavActive(pathname, item.to);

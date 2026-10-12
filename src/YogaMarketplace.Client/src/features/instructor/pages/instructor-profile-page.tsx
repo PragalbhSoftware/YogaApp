@@ -8,7 +8,6 @@ import { useAuth } from "@/features/auth/hooks/use-auth";
 import { useSignOut } from "@/features/auth/hooks/use-sign-out";
 import { ProfileMediaSection } from "@/features/instructor/components/profile-media-section";
 import { RegisterForm } from "@/features/instructor/components/register-form";
-import { TrialSettings } from "@/features/instructor/components/trial-settings";
 import {
   useInstructorProfile,
   useUpdateInstructorProfile,
@@ -79,7 +78,6 @@ export function InstructorProfilePage() {
           />
         </section>
       ) : null}
-      {profile.data ? <TrialSettings /> : null}
       {profile.data ? <ProfileMediaSection displayName={profile.data.displayName} /> : null}
     </main>
   );

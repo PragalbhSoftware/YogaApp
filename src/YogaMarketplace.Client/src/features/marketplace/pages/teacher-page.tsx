@@ -18,7 +18,11 @@ import { VerifiedBadge } from "@/features/marketplace/components/verified-badge"
 import { useInstructor, useInstructorReviews } from "@/features/marketplace/hooks/use-instructors";
 import { areaClosedDescription, areaClosedTitle } from "@/features/marketplace/utils/areas";
 import { usePageTitle } from "@/hooks/use-page-title";
-import { toUserMessage } from "@/services/http/api-error";
+import { ApiError, toUserMessage } from "@/services/http/api-error";
+
+function isNotFound(error: unknown) {
+  return error instanceof ApiError && error.status === 404;
+}
 
 export function TeacherPage() {
   const { id } = useParams();
@@ -40,7 +44,15 @@ export function TeacherPage() {
       </Button>
 
       {instructor.isLoading ? <PageLoader /> : null}
-      {instructor.isError ? (
+      {instructor.isError && isNotFound(instructor.error) ? (
+        <EmptyState
+          title="This instructor isn’t taking bookings right now"
+          description="They may be away or no longer listed. Browse other instructors near you."
+          actionLabel="Browse instructors"
+          onAction={() => navigate(routes.home)}
+        />
+      ) : null}
+      {instructor.isError && !isNotFound(instructor.error) ? (
         <ErrorState
           title="Instructor unavailable"
           message={toUserMessage(instructor.error)}

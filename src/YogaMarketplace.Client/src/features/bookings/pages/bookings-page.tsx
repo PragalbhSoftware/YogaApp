@@ -16,8 +16,20 @@ import {
   useRescheduleBooking,
 } from "@/features/bookings/hooks/use-bookings";
 import type { BookingRecord, CreateReviewInput } from "@/features/bookings/types";
+import { CreditsPanel } from "@/features/credits/components/credits-panel";
 import { toUserMessage } from "@/services/http/api-error";
 import { formatInr } from "@/utils/money";
+
+function cancelledMessage(result: BookingRecord) {
+  if (result.paidWithCredit) {
+    return result.refundedAmount > 0
+      ? `Cancelled. ${formatInr(result.refundedAmount)} fee refunded; your credits are updated.`
+      : "Cancelled. Your credits are updated.";
+  }
+  return result.lateCancelFee
+    ? `Cancelled. ${formatInr(result.refundedAmount)} is on its way back to you.`
+    : "Cancelled. Your full refund is on its way.";
+}
 
 export function BookingsPage() {
   usePageTitle("My bookings");
@@ -33,11 +45,7 @@ export function BookingsPage() {
     try {
       const result = await cancel.mutateAsync(id);
       setCancelling(null);
-      toast.success(
-        result.lateCancelFee
-          ? `Cancelled. ${formatInr(result.refundedAmount)} is on its way back to you.`
-          : "Cancelled. Your full refund is on its way.",
-      );
+      toast.success(cancelledMessage(result));
     } catch (error) {
       toast.error(toUserMessage(error));
     }
@@ -46,9 +54,13 @@ export function BookingsPage() {
   async function onReschedule(slotId: string) {
     if (!moving) return;
     try {
-      await reschedule.mutateAsync({ bookingId: moving.id, slotId });
+      const moved = await reschedule.mutateAsync({ bookingId: moving.id, slotId });
       setMoving(null);
-      toast.success("Rescheduled. The session moved. Payment stays paid.");
+      toast.success(
+        moved.paidWithCredit
+          ? "Rescheduled. No extra credit was used."
+          : "Rescheduled. The session moved. Payment stays paid.",
+      );
     } catch (error) {
       toast.error(toUserMessage(error));
     }
@@ -81,6 +93,8 @@ export function BookingsPage() {
           is complete, you can leave one rating. Times are India Standard Time.
         </p>
       </header>
+
+      <CreditsPanel showWhenEmpty />
 
       {bookings.isLoading ? <BookingListSkeleton /> : null}
       {bookings.isError ? (

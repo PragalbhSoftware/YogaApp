@@ -126,6 +126,8 @@ export type ProviderMedia = {
 };
 
 export type ProviderTrial = {
+  /** The service that carries the trial; null until one is picked. */
+  serviceId: string | null;
   enabled: boolean;
   price: number | null;
   lowestRegularRate: number | null;
@@ -133,8 +135,18 @@ export type ProviderTrial = {
 };
 
 export type UpdateProviderTrialInput = {
+  serviceId?: string;
   enabled: boolean;
   price?: number;
+};
+
+export type ProviderService = {
+  id: string;
+  title: string;
+  category: string;
+  isActive: boolean;
+  trialEnabled: boolean;
+  trialPrice: number | null;
 };
 
 export type AddCertificateInput = {

@@ -51,6 +51,7 @@ export function statusDetail(status: string) {
 }
 
 export function bookingDetail(booking: BookingRecord) {
+  if (booking.paidWithCredit) return creditBookingDetail(booking);
   if (booking.status !== "Cancelled") return statusDetail(booking.status);
   if (booking.cancelledBy === "Admin") {
     return `Cancelled by Yoga Marketplace${booking.cancelReason ? `: ${booking.cancelReason}` : ""}. Full refund issued.`;
@@ -59,6 +60,20 @@ export function bookingDetail(booking: BookingRecord) {
     return `Cancelled late. ${formatInr(booking.refundedAmount)} refunded; ${formatInr(booking.lateCancelFee)} late-cancel fee kept.`;
   }
   return "Cancelled. Full refund issued.";
+}
+
+function creditBookingDetail(booking: BookingRecord) {
+  if (booking.status === "Declined") return "Declined. The credit went back to the pack.";
+  if (booking.status !== "Cancelled") return statusDetail(booking.status);
+  if (booking.cancelledBy === "Admin") {
+    return `Cancelled by Yoga Marketplace${booking.cancelReason ? `: ${booking.cancelReason}` : ""}. The credit went back to the pack.`;
+  }
+  return booking.lateCancelFee ? "Cancelled late. The credit was used." : "Cancelled.";
+}
+
+/** A finished booking can be booked again with the same instructor and mode. */
+export function canBookAgain(booking: BookingRecord) {
+  return ["Completed", "Cancelled", "Declined", "NoShow"].includes(booking.status);
 }
 
 export function canCancel(booking: BookingRecord) {

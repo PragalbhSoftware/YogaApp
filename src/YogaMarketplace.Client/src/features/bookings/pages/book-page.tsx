@@ -12,22 +12,19 @@ import { AddressCardSkeleton } from "@/components/common/loading-skeleton";
 import { PageLoader } from "@/components/common/page-loader";
 import { BookSummary } from "@/features/bookings/components/book-summary";
 import { HomeVisitForm } from "@/features/bookings/components/home-visit-form";
+import { PaymentChoice } from "@/features/bookings/components/payment-choice";
 import { TrialChoice } from "@/features/bookings/components/trial-choice";
-import {
-  useBookingQuote,
-  useConfirmLocalPayment,
-  useConfirmPayment,
-  useCreateBookingOrder,
-  useTrialStatus,
-} from "@/features/bookings/hooks/use-bookings";
-import {
-  openRazorpayCheckout,
-  RazorpayCheckoutCancelled,
-  RazorpayCheckoutFailed,
-} from "@/features/bookings/lib/razorpay-checkout";
-import { isFakeOrder, type BookingRecord } from "@/features/bookings/types";
+import { useBookCheckout } from "@/features/bookings/hooks/use-book-checkout";
+import { useBookingQuote, useTrialStatus } from "@/features/bookings/hooks/use-bookings";
+import type { BookingRecord } from "@/features/bookings/types";
 import { toHomeVisitFormValues, type HomeVisitFormValues, type HomeVisitValues } from "@/features/bookings/schemas";
-import { digitsOnly } from "@/features/auth/utils/phone";
+import {
+  payButtonLabel,
+  resolvePayMethod,
+  showCreditChoice,
+  type PayMethod,
+} from "@/features/bookings/utils/pay-method";
+import { CreditsPanel } from "@/features/credits/components/credits-panel";
 import { useInstructor, useInstructorOpenSlots } from "@/features/marketplace/hooks/use-instructors";
 import { areaClosedDescription, areaClosedTitle } from "@/features/marketplace/utils/areas";
 import { offeredSessionModes } from "@/features/marketplace/utils/modes";
@@ -35,7 +32,6 @@ import { VisitAddressCard } from "@/features/profile/components/visit-address-ca
 import { useCustomerProfile, useSaveVisitAddress } from "@/features/profile/hooks/use-profile";
 import type { VisitAddress } from "@/features/profile/types";
 import { toUserMessage } from "@/services/http/api-error";
-import { useAuthStore } from "@/stores/auth-store";
 import { slotHasEnded, addMonths, endOfMonth, kolkataToday, startOfMonth } from "@/utils/clock";
 
 function readMode(value: string | null, allowed: SessionMode[]): SessionMode {
@@ -59,19 +55,9 @@ export function BookPage() {
   const slotsQuery = useInstructorOpenSlots(providerId, mode, slotsFrom, slotsTo, instructor.isSuccess && areaOpen);
   const profile = useCustomerProfile();
   const saveAddress = useSaveVisitAddress();
-  const createOrder = useCreateBookingOrder();
-  const confirmLocal = useConfirmLocalPayment();
-  const confirmPayment = useConfirmPayment();
   const [booking, setBooking] = useState<BookingRecord | null>(null);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [changingAddress, setChangingAddress] = useState(false);
-  const user = useAuthStore((state) => state.user);
-  const busy =
-    createOrder.isPending ||
-    confirmLocal.isPending ||
-    confirmPayment.isPending ||
-    saveAddress.isPending ||
-    checkoutOpen;
 
   const slot = (slotsQuery.data?.slots ?? []).find((item) => item.id === slotId);
   const offersTrial = Boolean(instructor.data?.trial) && areaOpen;
@@ -80,56 +66,24 @@ export function BookPage() {
   const [trialChoice, setTrialChoice] = useState<boolean | null>(null);
   const bookTrial = trialAvailable && (trialChoice ?? true);
   const quote = useBookingQuote(slotId, bookTrial, Boolean(slot) && !booking && !trialStatus.isLoading);
+  const [payChoice, setPayChoice] = useState<PayMethod | null>(null);
+  const method = resolvePayMethod(quote.data?.credit, payChoice);
   const savedAddress = profile.data?.visitAddress ?? null;
-
-  async function pay(home?: HomeVisitValues) {
-    if (!slotId) return;
-    try {
-      const order = await createOrder.mutateAsync({
-        slotId,
-        trial: bookTrial,
-        homeAddress: home?.homeAddress,
-        landmark: home?.landmark,
-      });
-
-      if (order.localCapture || isFakeOrder(order.orderId)) {
-        const booked = await confirmLocal.mutateAsync(order.orderId);
-        setBooking(booked);
-        toast.success("Booked. The instructor will accept your request.");
-        return;
-      }
-
-      setCheckoutOpen(true);
-      const paid = await openRazorpayCheckout({
-        keyId: order.keyId,
-        orderId: order.orderId,
-        amountPaise: order.amountPaise,
-        currency: order.currency,
-        description: `${bookTrial ? "Trial" : order.mode} session with ${order.providerName}`,
-        customerName: user?.name,
-        customerPhone: digitsOnly(user?.phone ?? ""),
-      });
-      const booked = await confirmPayment.mutateAsync({
-        orderId: paid.orderId,
-        paymentId: paid.paymentId,
-        signature: paid.signature,
-      });
-      setBooking(booked);
-      toast.success("Booked. The instructor will accept your request.");
-    } catch (error) {
-      if (error instanceof RazorpayCheckoutCancelled) {
-        toast.message(error.message);
-        return;
-      }
-      if (error instanceof RazorpayCheckoutFailed) {
-        toast.error(error.message);
-        return;
-      }
-      toast.error(toUserMessage(error));
-    } finally {
-      setCheckoutOpen(false);
-    }
-  }
+  const { checkout: pay, pending } = useBookCheckout({
+    slotId,
+    trial: bookTrial,
+    method,
+    quote: quote.data,
+    onBooked: setBooking,
+    onLostCredit: () => {
+      setPayChoice("pay");
+      void quote.refetch();
+    },
+    onCheckoutOpenChange: setCheckoutOpen,
+  });
+  const busy = pending || saveAddress.isPending || checkoutOpen;
+  const payLabel = payButtonLabel(method, quote.data);
+  const busyLabel = method === "credit" && !quote.data?.credit.total ? "Booking…" : "Opening payment…";
 
   async function payWithSaved() {
     if (!savedAddress) return;
@@ -239,7 +193,9 @@ export function BookPage() {
       <header>
         <p className="text-[11px] font-medium tracking-[0.22em] text-brand-muted uppercase">Book</p>
         <h1 className="font-heading text-2xl font-medium">Book this session</h1>
-        <p className="mt-1 text-sm text-brand-muted">Pay now with Razorpay. The instructor then accepts your request.</p>
+        <p className="mt-1 text-sm text-brand-muted">
+          Pay now or use a pack credit. The instructor then accepts your request.
+        </p>
       </header>
 
       {trialAvailable && instructor.data.trial ? (
@@ -259,10 +215,16 @@ export function BookPage() {
         slot={slot}
         quote={quote.data}
         quoteLoading={quote.isLoading || trialStatus.isLoading}
+        withCredit={method === "credit"}
       />
       {quote.isError ? (
         <ErrorState message={toUserMessage(quote.error)} onRetry={() => void quote.refetch()} />
       ) : null}
+
+      {quote.data && showCreditChoice(quote.data.credit) ? (
+        <PaymentChoice quote={quote.data} method={method} disabled={busy} onChange={setPayChoice} />
+      ) : null}
+      {!bookTrial ? <CreditsPanel /> : null}
 
       {mode === "Home" ? (
         <HomeCheckout
@@ -273,6 +235,8 @@ export function BookPage() {
           savedAddress={savedAddress}
           changingAddress={changingAddress}
           busy={busy}
+          payLabel={payLabel}
+          busyLabel={busyLabel}
           onChangeAddress={() => setChangingAddress(true)}
           onCancelChange={() => setChangingAddress(false)}
           onPayWithSaved={() => void payWithSaved()}
@@ -287,7 +251,7 @@ export function BookPage() {
           onClick={() => void pay()}
           sx={{ minHeight: 48, borderRadius: "14px" }}
         >
-          {busy ? "Opening payment…" : "Pay with Razorpay"}
+          {busy ? busyLabel : payLabel}
         </Button>
       )}
     </main>
@@ -302,6 +266,8 @@ type HomeCheckoutProps = {
   savedAddress: VisitAddress | null;
   changingAddress: boolean;
   busy: boolean;
+  payLabel: string;
+  busyLabel: string;
   onChangeAddress: () => void;
   onCancelChange: () => void;
   onPayWithSaved: () => void;
@@ -317,6 +283,8 @@ function HomeCheckout({
   savedAddress,
   changingAddress,
   busy,
+  payLabel,
+  busyLabel,
   onChangeAddress,
   onCancelChange,
   onPayWithSaved,
@@ -337,7 +305,7 @@ function HomeCheckout({
             onClick={onPayWithSaved}
             sx={{ minHeight: 48, borderRadius: "14px" }}
           >
-            {busy ? "Opening payment…" : "Pay with Razorpay"}
+            {busy ? busyLabel : payLabel}
           </Button>
           <Button type="button" variant="text" fullWidth disabled={busy} onClick={onChangeAddress}>
             Change address
@@ -357,8 +325,8 @@ function HomeCheckout({
           ? "Update the visit address. This becomes your default for the next booking."
           : "Home sessions need a full address so the instructor can reach you. We’ll keep it for next time."
       }
-      submitLabel={savedAddress ? "Save address" : "Pay with Razorpay"}
-      busyLabel={savedAddress ? "Saving…" : "Opening payment…"}
+      submitLabel={savedAddress ? "Save address" : payLabel}
+      busyLabel={savedAddress ? "Saving…" : busyLabel}
       cancelLabel="Cancel"
       onCancel={savedAddress ? onCancelChange : undefined}
       onSubmit={savedAddress ? onSaveChangedAddress : onSubmitAddress}

@@ -8,6 +8,7 @@ import { AddressCardSkeleton } from "@/components/common/loading-skeleton";
 import { useAuth } from "@/features/auth/hooks/use-auth";
 import { useSignOut } from "@/features/auth/hooks/use-sign-out";
 import { HomeVisitForm } from "@/features/bookings/components/home-visit-form";
+import { CreditsPanel } from "@/features/credits/components/credits-panel";
 import { toHomeVisitFormValues, type HomeVisitFormValues } from "@/features/bookings/schemas";
 import { VisitAddressCard } from "@/features/profile/components/visit-address-card";
 import { AccountForm } from "@/features/profile/components/account-form";
@@ -45,6 +46,8 @@ export function ProfilePage() {
         role={user?.role}
         onSignOut={signOut}
       />
+
+      <CreditsPanel showWhenEmpty />
 
       {profile.isSuccess ? (
         <AccountForm

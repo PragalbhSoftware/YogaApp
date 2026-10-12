@@ -6,9 +6,11 @@ import type {
   CreateOrderInput,
   CreateReviewInput,
 } from "@/features/bookings/types";
+import { myCreditsKey } from "@/features/credits/hooks/use-credits";
 
 export function invalidateBookingLists(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({ queryKey: ["bookings-me"] });
+  void queryClient.invalidateQueries({ queryKey: myCreditsKey });
   void queryClient.invalidateQueries({ queryKey: ["instructor-bookings"] });
   void queryClient.invalidateQueries({ queryKey: ["instructor-slots"] });
   void queryClient.invalidateQueries({ queryKey: ["instructor-open-slots"] });
@@ -38,6 +40,7 @@ export function useCreateBookingOrder() {
     mutationFn: (input: CreateOrderInput) => bookingsApi.createOrder(input),
     onSuccess: (order, input) => {
       void queryClient.invalidateQueries({ queryKey: ["trial-status"] });
+      if (input.useCredit) return;
       queryClient.setQueryData<BookingQuote>(["booking-quote", order.slotId, Boolean(input.trial)], (current) =>
         current
           ? {
@@ -50,6 +53,14 @@ export function useCreateBookingOrder() {
           : current,
       );
     },
+  });
+}
+
+export function useBookWithCredit() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateOrderInput) => bookingsApi.bookWithCredit(input),
+    onSuccess: () => invalidateBookingLists(queryClient),
   });
 }
 

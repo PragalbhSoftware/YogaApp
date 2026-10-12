@@ -9,9 +9,10 @@ type BookSummaryProps = {
   slot: OpenSlot;
   quote: BookingQuote | undefined;
   quoteLoading: boolean;
+  withCredit: boolean;
 };
 
-export function BookSummary({ instructor, slot, quote, quoteLoading }: BookSummaryProps) {
+export function BookSummary({ instructor, slot, quote, quoteLoading, withCredit }: BookSummaryProps) {
   return (
     <article className="rounded-3xl border border-brand-border bg-brand-surface p-5">
       <p className="font-heading text-lg font-medium">{instructor.displayName}</p>
@@ -31,9 +32,33 @@ export function BookSummary({ instructor, slot, quote, quoteLoading }: BookSumma
           </dd>
         </div>
         {quoteLoading ? <Skeleton variant="rounded" height={64} aria-label="Loading price" /> : null}
-        {quote ? <QuoteLines quote={quote} /> : null}
+        {quote && withCredit ? <CreditLines quote={quote} /> : null}
+        {quote && !withCredit ? <QuoteLines quote={quote} /> : null}
       </dl>
     </article>
+  );
+}
+
+function CreditLines({ quote }: { quote: BookingQuote }) {
+  return (
+    <>
+      <div className="flex justify-between gap-3">
+        <dt className="text-brand-muted">Fee</dt>
+        <dd>1 credit</dd>
+      </div>
+      {quote.credit.convenienceFee > 0 ? (
+        <div className="flex justify-between gap-3">
+          <dt className="text-brand-muted">Convenience fee</dt>
+          <dd>
+            <PriceText amount={quote.credit.convenienceFee} />
+          </dd>
+        </div>
+      ) : null}
+      <div className="flex justify-between gap-3 border-t border-brand-border pt-2 font-medium">
+        <dt>To pay</dt>
+        <dd>{quote.credit.total === 0 ? "Nothing" : <PriceText amount={quote.credit.total} />}</dd>
+      </div>
+    </>
   );
 }
 
