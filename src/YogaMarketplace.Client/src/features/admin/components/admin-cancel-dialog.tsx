@@ -14,7 +14,13 @@ type AdminCancelDialogProps = {
 };
 
 export function AdminCancelDialog({ booking, open, busy, onClose, onConfirm }: AdminCancelDialogProps) {
-  const paid = booking.amount + booking.convenienceFee;
+  const paid = booking.paidWithCredit ? booking.convenienceFee : booking.amount + booking.convenienceFee;
+  const refundText = booking.paidWithCredit
+    ? paid > 0
+      ? `gets the credit back and a refund of ${formatInr(paid)}`
+      : "gets the credit back"
+    : `gets a full refund of ${formatInr(paid)}`;
+  const confirmLabel = booking.paidWithCredit ? "Cancel and return the credit" : `Cancel and refund ${formatInr(paid)}`;
   const form = useForm<AdminCancelValues>({
     resolver: zodResolver(adminCancelSchema),
     defaultValues: { reason: "" },
@@ -43,8 +49,7 @@ export function AdminCancelDialog({ booking, open, busy, onClose, onConfirm }: A
           <div>
             <h2 className="font-heading text-lg font-medium">Cancel on the customer’s behalf?</h2>
             <p className="mt-1 text-sm leading-relaxed text-brand-muted">
-              {booking.customerName ?? "The customer"} gets a full refund of {formatInr(paid)}, whatever the
-              timing. {booking.providerName} earns nothing for this session and the slot opens up again.
+              {booking.customerName ?? "The customer"} {refundText}, whatever the timing. {booking.providerName} earns nothing for this session and the slot opens up again.
             </p>
           </div>
 
@@ -68,7 +73,7 @@ export function AdminCancelDialog({ booking, open, busy, onClose, onConfirm }: A
               disabled={busy}
               sx={{ minHeight: 48, borderRadius: "14px" }}
             >
-              {busy ? "Cancelling…" : `Cancel and refund ${formatInr(paid)}`}
+              {busy ? "Cancelling…" : confirmLabel}
             </Button>
             <Button variant="text" disabled={busy} onClick={close} sx={{ minHeight: 44 }}>
               Keep booking

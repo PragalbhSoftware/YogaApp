@@ -9,6 +9,7 @@ import { routes } from "@/constants/routes";
 import { AdminPage } from "@/features/admin/components/admin-page";
 import { AccountStatusCard } from "@/features/admin/components/account-status-card";
 import { ProviderReviewCard } from "@/features/admin/components/provider-review-card";
+import { UserCreditsCard } from "@/features/admin/components/user-credits-card";
 import {
   useAdminUser,
   useRejectProvider,
@@ -105,6 +106,8 @@ export function UserDetailPage() {
           );
         }}
       />
+
+      {account.role === "Customer" ? <UserCreditsCard userId={account.id} /> : null}
 
       {account.provider ? (
         <ProviderReviewCard

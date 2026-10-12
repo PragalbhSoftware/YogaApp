@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { lateCancelFeeTypes, payoutCycles } from "@/features/admin/types";
+import { creditLateCancelRules, creditPayBases, lateCancelFeeTypes, payoutCycles } from "@/features/admin/types";
 
 const nameSchema = z
   .string()
@@ -100,6 +100,44 @@ export const feeSettingsSchema = z
     message: "A percent fee must be between 0 and 100.",
   });
 
+export const creditSettingsSchema = z.object({
+  creditConvenienceFee: z.boolean(),
+  creditPayBasis: z.enum(creditPayBases),
+  creditLateCancel: z.enum(creditLateCancelRules),
+  creditBookingStandsAfterExpiry: z.boolean(),
+  packRefundsEnabled: z.boolean(),
+  packReferenceSessionPrice: flatAmount,
+  packRefundFee: flatAmount,
+});
+
+export const packLimits = {
+  maxSessions: 100,
+  maxPrice: 500_000,
+  maxValidityDays: 730,
+} as const;
+
+const rupees = (max: number) =>
+  z.coerce
+    .number({ invalid_type_error: "Enter an amount." })
+    .min(1, `Must be between ₹1 and ₹${max.toLocaleString("en-IN")}.`)
+    .max(max, `Must be between ₹1 and ₹${max.toLocaleString("en-IN")}.`)
+    .refine(twoDecimals, "Use at most 2 decimal places.");
+
+const wholeNumber = (label: string, max: number) =>
+  z.coerce
+    .number({ invalid_type_error: `Enter the number of ${label}.` })
+    .int(`Enter a whole number of ${label}.`)
+    .min(1, `Must be between 1 and ${max} ${label}.`)
+    .max(max, `Must be between 1 and ${max} ${label}.`);
+
+export const packSchema = z.object({
+  name: nameSchema,
+  sessions: wholeNumber("sessions", packLimits.maxSessions),
+  price: rupees(packLimits.maxPrice),
+  validityDays: wholeNumber("days", packLimits.maxValidityDays),
+  priceCap: rupees(packLimits.maxPrice),
+});
+
 export const bannerSchema = z.object({
   bannerTitle: z
     .string()
@@ -124,3 +162,5 @@ export type AreaEditValues = z.infer<typeof areaEditSchema>;
 export type RenameFormValues = z.infer<typeof renameSchema>;
 export type FeeSettingsValues = z.infer<typeof feeSettingsSchema>;
 export type BannerValues = z.infer<typeof bannerSchema>;
+export type CreditSettingsValues = z.infer<typeof creditSettingsSchema>;
+export type PackFormValues = z.infer<typeof packSchema>;
