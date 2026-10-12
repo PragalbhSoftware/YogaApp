@@ -353,7 +353,11 @@ dotnet tool restore
 dotnet ef migrations script --idempotent --project src/YogaMarketplace.Infrastructure --startup-project src/YogaMarketplace.Infrastructure -o artifacts/migrations.sql
 ```
 
-Release order: back up the database, run the script (for example `sqlcmd -S <server> -d <db> -i migrations.sql`), then deploy the new API build.
+Release order: back up the database, run the script, then deploy the new API build. With `sqlcmd`, pass `-I` (some indexes need `QUOTED_IDENTIFIER ON`) and `-b` to stop on the first error:
+
+```bash
+sqlcmd -S <server> -d <db> -I -b -i migrations.sql
+```
 
 ### Backups
 
