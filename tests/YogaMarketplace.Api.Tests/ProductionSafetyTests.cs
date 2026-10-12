@@ -28,7 +28,8 @@ public class ProductionSafetyTests : IClassFixture<YogaApiFactory>
         ["Razorpay:KeyId"] = "rzp_live_example",
         ["Razorpay:KeySecret"] = "live-secret",
         ["Razorpay:WebhookSecret"] = "webhook-secret",
-        ["Razorpay:UseFakeGateway"] = "false"
+        ["Razorpay:UseFakeGateway"] = "false",
+        ["DataProtection:KeysPath"] = Path.Combine(Path.GetTempPath(), "yoga-keys")
     };
 
     [Fact]
@@ -45,10 +46,30 @@ public class ProductionSafetyTests : IClassFixture<YogaApiFactory>
     [InlineData("Razorpay:KeyId", "", "Razorpay:KeyId")]
     [InlineData("Razorpay:KeySecret", " ", "Razorpay:KeyId")]
     [InlineData("Razorpay:WebhookSecret", "", "Razorpay:KeyId")]
+    [InlineData("Otp:DemoCode", "246810", "Otp:DemoCode is set without Otp:DemoPhones")]
+    [InlineData("DataProtection:KeysPath", "", "DataProtection:KeysPath is required")]
+    [InlineData("DataProtection:KeysPath", "App_Data/keys", "DataProtection:KeysPath must be a full path")]
     public void Unsafe_production_settings_stop_startup(string key, string value, string expected)
     {
         var error = Assert.Throws<InvalidOperationException>(() =>
             ProductionSafety.Check(Config((key, value)), isProduction: true));
+        Assert.Contains(expected, error.Message);
+    }
+
+    [Fact]
+    public void Demo_mode_with_phones_and_a_code_is_allowed_in_production()
+    {
+        Assert.Empty(ProductionSafety.Check(
+            Config(("Otp:DemoPhones", "+919811100001,+919811100002"), ("Otp:DemoCode", "246810")), isProduction: true));
+    }
+
+    [Theory]
+    [InlineData("+919811100001", "12ab56", "Otp:DemoCode must be 6 digits")]
+    [InlineData("+919811100001,not-a-phone", "246810", "Otp:DemoPhones has an entry")]
+    public void A_malformed_demo_setup_stops_startup(string phones, string code, string expected)
+    {
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            ProductionSafety.Check(Config(("Otp:DemoPhones", phones), ("Otp:DemoCode", code)), isProduction: true));
         Assert.Contains(expected, error.Message);
     }
 

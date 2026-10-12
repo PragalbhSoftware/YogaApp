@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using YogaMarketplace.Api;
+using YogaMarketplace.Api.Hosting;
 using YogaMarketplace.Api.Middleware;
 using YogaMarketplace.Api.Options;
 using YogaMarketplace.Api.Security;
@@ -92,8 +93,14 @@ var app = builder.Build();
 
 foreach (var warning in productionWarnings)
     app.Logger.LogWarning("{ProductionWarning}", warning);
+var otpDemo = OtpDemoMode.From(builder.Configuration.GetSection(OtpOptions.Section).Get<OtpOptions>() ?? new OtpOptions());
+if (otpDemo.StartupWarning() is string demoWarning)
+    app.Logger.LogWarning("{OtpDemoWarning}", demoWarning);
 
 app.UseForwardedHeaders();
+app.UseSecurityHeaders();
+if (app.Environment.IsProduction())
+    app.UseHsts();
 app.UseApiErrorResponses();
 app.UseMiddleware<DomainExceptionMiddleware>();
 if (!app.Environment.IsProduction())
@@ -102,6 +109,7 @@ if (!app.Environment.IsProduction())
     app.UseSwaggerUI();
 }
 
+app.UseSpaFiles();
 app.UseCors();
 app.UseRateLimiter();
 app.UseAuthentication();
@@ -112,6 +120,7 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
 {
     Predicate = check => check.Tags.Contains("ready")
 });
+app.MapSpaFallback();
 
 if (!app.Environment.IsEnvironment(DatabaseStartup.TestingEnvironment))
     await DatabaseStartup.InitializeAsync(app);

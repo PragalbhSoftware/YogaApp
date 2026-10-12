@@ -49,6 +49,26 @@ jobs:
           name: migrations-sql
           path: artifacts/migrations.sql
 
+  # The single-site build (API + SPA in wwwroot) that deploys to IIS/Plesk.
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/YogaMarketplace.Client/package-lock.json
+      - run: dotnet publish src/YogaMarketplace.Api -c Release -o publish
+      - run: test -f publish/wwwroot/index.html && test -f publish/web.config
+      - uses: actions/upload-artifact@v4
+        with:
+          name: site-publish
+          path: publish/
+
   client:
     runs-on: ubuntu-latest
     defaults:

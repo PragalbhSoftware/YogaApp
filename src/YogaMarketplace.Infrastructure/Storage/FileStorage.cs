@@ -19,8 +19,8 @@ public class StorageOptions
     public const string Section = "Storage";
 
     /// <summary>
-    /// Folder for uploads. Relative paths resolve from the app folder. Keep it outside any web root and on a
-    /// persistent volume in containers. Env: Storage__RootPath.
+    /// Folder for uploads. Relative paths resolve from the app folder, which a redeploy replaces, so production
+    /// uses an absolute folder outside the site and its wwwroot. Env: Storage__RootPath.
     /// </summary>
     public string RootPath { get; set; } = "App_Data/uploads";
 }
@@ -35,7 +35,8 @@ public sealed class LocalFileStorage : IFileStorage
         var configured = options.Value.RootPath;
         if (string.IsNullOrWhiteSpace(configured))
             throw new InvalidOperationException("Storage:RootPath is required.");
-        _root = Path.GetFullPath(Path.IsPathRooted(configured) ? configured : Path.Combine(environment.ContentRootPath, configured));
+        _root = Path.TrimEndingDirectorySeparator(
+            Path.GetFullPath(Path.IsPathRooted(configured) ? configured : Path.Combine(environment.ContentRootPath, configured)));
     }
 
     public async Task SaveAsync(string key, Stream content, CancellationToken cancellationToken)
