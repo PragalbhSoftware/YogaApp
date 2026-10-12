@@ -31,7 +31,7 @@ export function AdminLayout() {
 
   return (
     <div className="min-h-svh bg-brand-background lg:flex">
-      <aside className="hidden lg:flex lg:w-64 lg:shrink-0 lg:flex-col lg:border-r lg:border-brand-border lg:bg-brand-surface">
+      <aside className="hidden lg:sticky lg:top-0 lg:flex lg:h-svh lg:w-64 lg:shrink-0 lg:flex-col lg:self-start lg:overflow-y-auto lg:border-r lg:border-brand-border lg:bg-brand-surface">
         <div className="px-5 py-6">
           <p className="font-heading text-lg text-brand-primary">Yoga Marketplace</p>
           <p className="mt-0.5 text-xs font-medium tracking-[0.16em] text-brand-muted uppercase">Owner</p>
