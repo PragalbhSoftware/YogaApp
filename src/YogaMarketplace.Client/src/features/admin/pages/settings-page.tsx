@@ -5,8 +5,9 @@ import { AreaSettings } from "@/features/admin/components/area-settings";
 import { BannerSettings } from "@/features/admin/components/banner-settings";
 import { CategorySettings } from "@/features/admin/components/category-settings";
 import { FeeSettings } from "@/features/admin/components/fee-settings";
+import { PageSettings } from "@/features/admin/components/page-settings";
 
-const tabs = ["earnings", "areas", "banner", "catalog"] as const;
+const tabs = ["earnings", "areas", "banner", "catalog", "pages"] as const;
 type SettingsTab = (typeof tabs)[number];
 
 function readTab(value: string | null): SettingsTab {
@@ -21,7 +22,7 @@ export function SettingsPage() {
     <AdminPage
       kicker="Owner"
       title="Settings"
-      lead="Fees and payouts, the neighbourhoods customers can pick, the home banner, and the yoga label on browse."
+      lead="Fees and payouts, the neighbourhoods customers can pick, the home banner, the yoga label on browse, and the policy pages."
     >
       <Tabs
         value={tab}
@@ -42,12 +43,14 @@ export function SettingsPage() {
         <Tab value="areas" label="Areas" />
         <Tab value="banner" label="Banner" />
         <Tab value="catalog" label="Catalog" />
+        <Tab value="pages" label="Pages" />
       </Tabs>
 
       {tab === "earnings" ? <FeeSettings /> : null}
       {tab === "areas" ? <AreaSettings /> : null}
       {tab === "banner" ? <BannerSettings /> : null}
       {tab === "catalog" ? <CategorySettings /> : null}
+      {tab === "pages" ? <PageSettings /> : null}
     </AdminPage>
   );
 }

@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { CalendarDays, Home, LogIn, User } from "lucide-react";
 import { PageLoader } from "@/components/common/page-loader";
+import { SiteFooter } from "@/components/common/site-footer";
 import { routes } from "@/constants/routes";
 import { useAuth } from "@/features/auth/hooks/use-auth";
 import { cn } from "@/utils/cn";
@@ -69,6 +70,7 @@ export function CustomerLayout() {
         <Suspense fallback={<PageLoader />}>
           <Outlet />
         </Suspense>
+        <SiteFooter />
       </div>
 
       <nav

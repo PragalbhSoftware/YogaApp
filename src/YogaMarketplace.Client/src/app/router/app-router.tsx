@@ -86,6 +86,16 @@ const InstructorRegisterPage = lazy(() =>
   })),
 );
 
+const RefundPolicyPage = lazy(() =>
+  import("@/features/content/pages/content-page").then((module) => ({ default: module.RefundPolicyPage })),
+);
+const TermsPage = lazy(() =>
+  import("@/features/content/pages/content-page").then((module) => ({ default: module.TermsPage })),
+);
+const PrivacyPage = lazy(() =>
+  import("@/features/content/pages/content-page").then((module) => ({ default: module.PrivacyPage })),
+);
+
 function RouteFallback() {
   return (
     <div className="flex min-h-svh items-center justify-center bg-brand-background">
@@ -108,6 +118,9 @@ export function AppRouter() {
             <Route element={<CustomerLayout />}>
               <Route path={routes.home} element={<HomePage />} />
               <Route path={routes.teacher} element={<TeacherPage />} />
+              <Route path={routes.refundPolicy} element={<RefundPolicyPage />} />
+              <Route path={routes.terms} element={<TermsPage />} />
+              <Route path={routes.privacy} element={<PrivacyPage />} />
               <Route element={<RequireAuth />}>
                 <Route element={<RequireRole roles={["Customer"]} />}>
                   <Route path={routes.book} element={<BookPage />} />

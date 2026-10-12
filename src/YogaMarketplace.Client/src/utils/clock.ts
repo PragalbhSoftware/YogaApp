@@ -29,6 +29,15 @@ export function formatWhenKolkata(value: string) {
   }).format(new Date(value));
 }
 
+export function formatDayKolkata(value: string) {
+  return new Intl.DateTimeFormat("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
 export function toHHmm(value: string) {
   return value.slice(0, 5);
 }
