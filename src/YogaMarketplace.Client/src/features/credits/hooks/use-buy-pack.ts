@@ -17,7 +17,7 @@ import {
 } from "@/features/credits/hooks/use-credits";
 import type { Pack, PackOrderStatus } from "@/features/credits/types";
 import { purchaseStage } from "@/features/credits/utils/purchase-stage";
-import { ApiError, toUserMessage } from "@/services/http/api-error";
+import { isRetryable, toUserMessage } from "@/services/http/api-error";
 import { useAuthStore } from "@/stores/auth-store";
 
 /**
@@ -66,7 +66,7 @@ export function useBuyPack() {
       try {
         setConfirmed(await confirm.mutateAsync(paid));
       } catch (error) {
-        if (error instanceof ApiError && !error.unreachable && error.status < 500) {
+        if (!isRetryable(error)) {
           reset();
           throw error;
         }

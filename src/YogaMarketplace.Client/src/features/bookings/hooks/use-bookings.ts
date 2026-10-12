@@ -7,6 +7,7 @@ import type {
   CreateReviewInput,
 } from "@/features/bookings/types";
 import { myCreditsKey } from "@/features/credits/hooks/use-credits";
+import { withRetry } from "@/services/http/retry";
 
 export function invalidateBookingLists(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({ queryKey: ["bookings-me"] });
@@ -72,11 +73,16 @@ export function useConfirmLocalPayment() {
   });
 }
 
+const CONFIRM_RETRY_MS = [1000, 3000, 6000] as const;
+
+/** Confirm is idempotent per payment, so a dropped connection after the customer has paid is retried. */
 export function useConfirmPayment() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: ConfirmPaymentInput) => bookingsApi.confirm(input.orderId, input.paymentId, input.signature),
+    mutationFn: (input: ConfirmPaymentInput) =>
+      withRetry(() => bookingsApi.confirm(input.orderId, input.paymentId, input.signature), CONFIRM_RETRY_MS),
     onSuccess: () => invalidateBookingLists(queryClient),
+    onError: () => invalidateBookingLists(queryClient),
   });
 }
 

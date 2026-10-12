@@ -14,8 +14,11 @@ import {
 import { isFakeOrder, type BookingQuote, type BookingRecord } from "@/features/bookings/types";
 import type { HomeVisitValues } from "@/features/bookings/schemas";
 import { isLostCredit, type PayMethod } from "@/features/bookings/utils/pay-method";
-import { toUserMessage } from "@/services/http/api-error";
+import { isRetryable, toUserMessage } from "@/services/http/api-error";
 import { useAuthStore } from "@/stores/auth-store";
+
+const PAID_NOT_CONFIRMED =
+  "Your payment went through. We're still confirming the booking, so check My Bookings in a few minutes and don't pay again.";
 
 type BookCheckoutOptions = {
   slotId: string | undefined;
@@ -82,13 +85,12 @@ export function useBookCheckout({
         customerName: user?.name,
         customerPhone: digitsOnly(user?.phone ?? ""),
       });
-      booked(
-        await confirmPayment.mutateAsync({
-          orderId: paid.orderId,
-          paymentId: paid.paymentId,
-          signature: paid.signature,
-        }),
-      );
+      try {
+        booked(await confirmPayment.mutateAsync(paid));
+      } catch (error) {
+        if (!isRetryable(error)) throw error;
+        toast.warning(PAID_NOT_CONFIRMED, { duration: 12000 });
+      }
     } catch (error) {
       if (error instanceof RazorpayCheckoutCancelled) {
         toast.message(error.message);

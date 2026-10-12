@@ -204,13 +204,11 @@ public sealed class RazorpayHttpClient : IRazorpayClient
         CancellationToken cancellationToken)
     {
         EnsureConfigured();
-        using var response = await _http.PostAsJsonAsync("v1/orders", new
-        {
-            amount = amountPaise,
-            currency,
-            receipt,
-            notes
-        }, cancellationToken);
+        using var response = await SendAsync(
+            "create order",
+            "Could not start the payment. Try again.",
+            () => _http.PostAsJsonAsync("v1/orders", new { amount = amountPaise, currency, receipt, notes }, cancellationToken),
+            cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
@@ -261,9 +259,13 @@ public sealed class RazorpayHttpClient : IRazorpayClient
         if (string.IsNullOrWhiteSpace(paymentId) || amountPaise <= 0 || string.IsNullOrWhiteSpace(receipt))
             throw new DomainException("This payment cannot be refunded.");
 
-        using var response = await _http.PostAsJsonAsync(
-            $"v1/payments/{Uri.EscapeDataString(paymentId)}/refund",
-            new { amount = amountPaise, receipt },
+        using var response = await SendAsync(
+            "refund payment",
+            "Could not reach Razorpay to refund. Try again.",
+            () => _http.PostAsJsonAsync(
+                $"v1/payments/{Uri.EscapeDataString(paymentId)}/refund",
+                new { amount = amountPaise, receipt },
+                cancellationToken),
             cancellationToken);
 
         if (!response.IsSuccessStatusCode)
@@ -273,22 +275,70 @@ public sealed class RazorpayHttpClient : IRazorpayClient
         }
     }
 
+    /// <summary>A read, so a dropped connection or a Razorpay 5xx is retried before giving up.</summary>
     private async Task<PaymentWire?> FetchPaymentAsync(string paymentId, CancellationToken cancellationToken)
     {
-        using var response = await _http.GetAsync($"v1/payments/{Uri.EscapeDataString(paymentId)}", cancellationToken);
-        if (response.StatusCode == HttpStatusCode.NotFound)
-            return null;
-        if (!response.IsSuccessStatusCode)
+        for (var attempt = 1; ; attempt++)
         {
-            await LogFailureAsync("fetch payment", response, cancellationToken);
-            throw new DomainException("Could not verify the payment. Try again.", 502);
-        }
+            var last = attempt > FetchRetryDelays.Length;
+            try
+            {
+                using var response = await _http.GetAsync($"v1/payments/{Uri.EscapeDataString(paymentId)}", cancellationToken);
+                if (response.StatusCode == HttpStatusCode.NotFound)
+                    return null;
+                if ((int)response.StatusCode >= 500 && !last)
+                {
+                    await LogFailureAsync("fetch payment", response, cancellationToken);
+                }
+                else if (!response.IsSuccessStatusCode)
+                {
+                    await LogFailureAsync("fetch payment", response, cancellationToken);
+                    throw new DomainException(VerifyUnavailableMessage, 502);
+                }
+                else
+                {
+                    var payment = await response.Content.ReadFromJsonAsync<PaymentWire>(cancellationToken: cancellationToken);
+                    if (payment is null || string.IsNullOrWhiteSpace(payment.Id) || string.IsNullOrWhiteSpace(payment.OrderId))
+                        return null;
+                    return payment;
+                }
+            }
+            catch (Exception ex) when (IsUnreachable(ex, cancellationToken))
+            {
+                _logger.LogWarning(ex, "Razorpay fetch payment {PaymentId} could not connect (attempt {Attempt}).", paymentId, attempt);
+                if (last)
+                    throw new DomainException(VerifyUnavailableMessage, 503);
+            }
 
-        var payment = await response.Content.ReadFromJsonAsync<PaymentWire>(cancellationToken: cancellationToken);
-        if (payment is null || string.IsNullOrWhiteSpace(payment.Id) || string.IsNullOrWhiteSpace(payment.OrderId))
-            return null;
-        return payment;
+            await Task.Delay(FetchRetryDelays[attempt - 1], cancellationToken);
+        }
     }
+
+    private const string VerifyUnavailableMessage =
+        "Your payment went through, but we couldn't confirm it with Razorpay yet. Don't pay again; try again in a moment.";
+
+    private static readonly TimeSpan[] FetchRetryDelays = [TimeSpan.FromMilliseconds(500), TimeSpan.FromSeconds(2)];
+
+    /// <summary>Writes are not retried: Razorpay may have acted on a request whose reply was lost.</summary>
+    private async Task<HttpResponseMessage> SendAsync(
+        string action,
+        string unreachableMessage,
+        Func<Task<HttpResponseMessage>> send,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await send();
+        }
+        catch (Exception ex) when (IsUnreachable(ex, cancellationToken))
+        {
+            _logger.LogWarning(ex, "Razorpay {Action} could not connect.", action);
+            throw new DomainException(unreachableMessage, 503);
+        }
+    }
+
+    private static bool IsUnreachable(Exception ex, CancellationToken cancellationToken) =>
+        ex is HttpRequestException || (ex is TaskCanceledException && !cancellationToken.IsCancellationRequested);
 
     private void EnsureConfigured()
     {
