@@ -290,6 +290,8 @@ public record ReconciliationItemResponse(
     string? ResolvedByName,
     string? ResolutionNote);
 
+public record PagedResponse<T>(IReadOnlyList<T> Items, int Total, int Page, int PageSize);
+
 public class ResolveReconciliationItemRequest
 {
     public string? Note { get; set; }

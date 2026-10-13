@@ -1,12 +1,17 @@
 import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppRouter } from "@/app/router/app-router";
 import { routes } from "@/constants/routes";
+import { authApi } from "@/features/auth/api/auth-api";
 import { useAuthStore } from "@/stores/auth-store";
 
 describe("policy pages", () => {
-  beforeEach(() => useAuthStore.getState().signOut());
+  beforeEach(() => {
+    useAuthStore.getState().signOut();
+    vi.spyOn(authApi, "me").mockImplementation(() => new Promise(() => {}));
+  });
+  afterEach(() => vi.restoreAllMocks());
 
   it.each([
     [null, routes.terms],

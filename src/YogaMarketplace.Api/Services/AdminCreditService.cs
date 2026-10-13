@@ -167,9 +167,12 @@ public class AdminCreditService : IAdminCreditService
 
         // Once Razorpay is called the request must not be cancelled before the commit records it.
         if (amount > 0)
-            await _razorpay.RefundPaymentAsync(batch.GatewayPaymentId, RazorpayMoney.ToPaise(amount), batch.Id.ToString("N"), CancellationToken.None);
+            batch.GatewayRefundId = await _razorpay.RefundPaymentAsync(
+                batch.GatewayPaymentId, RazorpayMoney.ToPaise(amount), batch.Id.ToString("N"), CancellationToken.None);
         try
         {
+            if (batch.GatewayRefundId is not null)
+                await _db.SaveChangesAsync(CancellationToken.None);
             await transaction.CommitAsync(CancellationToken.None);
         }
         catch (Exception ex)

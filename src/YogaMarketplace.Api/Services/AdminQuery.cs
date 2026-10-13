@@ -6,6 +6,10 @@ internal static class AdminQuery
 {
     public const int PageSize = 100;
 
+    /// <summary>Page number from 1 and a page size capped at <see cref="PageSize"/>; missing values mean page 1 at the cap.</summary>
+    public static (int Page, int PageSize) Paging(int? page, int? pageSize) =>
+        (Math.Max(1, page ?? 1), Math.Clamp(pageSize ?? PageSize, 1, PageSize));
+
     public static TEnum? ParseOptional<TEnum>(string? value, string unknownMessage) where TEnum : struct, Enum
     {
         if (string.IsNullOrWhiteSpace(value))

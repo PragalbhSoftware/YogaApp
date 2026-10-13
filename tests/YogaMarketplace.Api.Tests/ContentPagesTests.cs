@@ -2,9 +2,13 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Migrations.Operations;
 using Microsoft.Extensions.DependencyInjection;
 using YogaMarketplace.Domain;
 using YogaMarketplace.Infrastructure.Persistence;
+using YogaMarketplace.Infrastructure.Persistence.Migrations;
 
 namespace YogaMarketplace.Api.Tests;
 
@@ -28,6 +32,41 @@ public class ContentPagesTests : IClassFixture<YogaApiFactory>
         Assert.Equal(title, page!.Title);
         Assert.NotEmpty(page.Body);
         Assert.DoesNotContain("Mumbai", page.Body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Legal_text_migration_updates_only_unedited_pages_both_ways_on_sqlite()
+    {
+        await using var factory = new YogaApiFactory();
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<YogaDbContext>();
+        const string edited = "Terms written by the admin, with an 'apostrophe'.";
+        await SetBodyAsync(db, "refund-policy", RefreshLegalPageDefaults.OldRefund);
+        await SetBodyAsync(db, "terms", edited);
+
+        await RunAsync(db, m => m.UpOperations);
+        Assert.Equal((RefreshLegalPageDefaults.NewRefund, edited), await BodiesAsync(db));
+        await RunAsync(db, m => m.UpOperations);
+        Assert.Equal((RefreshLegalPageDefaults.NewRefund, edited), await BodiesAsync(db));
+
+        await RunAsync(db, m => m.DownOperations);
+        Assert.Equal((RefreshLegalPageDefaults.OldRefund, edited), await BodiesAsync(db));
+
+        static Task SetBodyAsync(YogaDbContext db, string slug, string body) =>
+            db.ContentPages.Where(p => p.Slug == slug).ExecuteUpdateAsync(s => s.SetProperty(p => p.Body, body));
+
+        static async Task<(string Refund, string Terms)> BodiesAsync(YogaDbContext db)
+        {
+            var bodies = await db.ContentPages.AsNoTracking().ToDictionaryAsync(p => p.Slug, p => p.Body);
+            return (bodies["refund-policy"], bodies["terms"]);
+        }
+
+        static async Task RunAsync(YogaDbContext db, Func<Migration, IReadOnlyList<MigrationOperation>> operations)
+        {
+            var migration = new RefreshLegalPageDefaults { ActiveProvider = db.Database.ProviderName };
+            foreach (var operation in operations(migration).Cast<SqlOperation>())
+                await db.Database.ExecuteSqlRawAsync(operation.Sql);
+        }
     }
 
     [Fact]

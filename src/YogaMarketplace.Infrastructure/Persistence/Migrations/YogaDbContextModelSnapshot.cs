@@ -586,6 +586,10 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                         .HasMaxLength(80)
                         .HasColumnType("nvarchar(80)");
 
+                    b.Property<string>("GatewayRefundId")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
                     b.Property<string>("LateCancel")
                         .IsRequired()
                         .HasMaxLength(24)
@@ -1347,6 +1351,10 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("MarketDate");
+
+                    b.HasIndex(new[] { "MarketDate" }, "IX_ReconciliationRuns_MarketDate_Completed")
+                        .IsUnique()
+                        .HasFilter("[Status] = 'Completed'");
 
                     b.ToTable("ReconciliationRuns");
                 });

@@ -20,12 +20,14 @@ public interface IAdminTransactionService
 
     Task<PayoutCsv> ExportPendingPayoutsAsync(CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<ReconciliationRunResponse>> ListReconciliationRunsAsync(CancellationToken cancellationToken);
+    Task<PagedResponse<ReconciliationRunResponse>> ListReconciliationRunsAsync(int? page, int? pageSize, CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<ReconciliationItemResponse>> ListReconciliationItemsAsync(
+    Task<PagedResponse<ReconciliationItemResponse>> ListReconciliationItemsAsync(
         Guid? runId,
         string? type,
         string? status,
+        int? page,
+        int? pageSize,
         CancellationToken cancellationToken);
 
     Task<ReconciliationItemResponse> ResolveReconciliationItemAsync(Guid id, string? note, CancellationToken cancellationToken);
@@ -68,29 +70,43 @@ public class AdminTransactionService : IAdminTransactionService
         _logger = logger;
     }
 
-    public async Task<IReadOnlyList<ReconciliationRunResponse>> ListReconciliationRunsAsync(CancellationToken cancellationToken)
+    public async Task<PagedResponse<ReconciliationRunResponse>> ListReconciliationRunsAsync(
+        int? page,
+        int? pageSize,
+        CancellationToken cancellationToken)
     {
-        var runs = await _db.ReconciliationRuns.AsNoTracking().ToListAsync(cancellationToken);
+        var (pageNumber, size) = AdminQuery.Paging(page, pageSize);
+        var query = _db.ReconciliationRuns.AsNoTracking();
+        var total = await query.CountAsync(cancellationToken);
+        var runs = await query
+            .OrderByDescending(r => r.StartedAt)
+            .ThenBy(r => r.Id)
+            .Skip((pageNumber - 1) * size)
+            .Take(size)
+            .ToListAsync(cancellationToken);
+        var runIds = runs.Select(r => r.Id).ToList();
         var open = await _db.ReconciliationItems.AsNoTracking()
-            .Where(i => i.Status == ReconciliationItemStatus.Open)
+            .Where(i => i.Status == ReconciliationItemStatus.Open && runIds.Contains(i.RunId))
             .GroupBy(i => i.RunId)
             .Select(g => new { RunId = g.Key, Count = g.Count() })
             .ToDictionaryAsync(g => g.RunId, g => g.Count, cancellationToken);
-        return runs
-            .OrderByDescending(r => r.StartedAt)
-            .Take(AdminQuery.PageSize)
+        var items = runs
             .Select(r => new ReconciliationRunResponse(
                 r.Id, r.MarketDate, r.WindowStart, r.WindowEnd, r.StartedAt, r.CompletedAt, r.Status.ToString(),
                 r.GatewayCompared, r.ItemCount, open.GetValueOrDefault(r.Id), r.Error))
             .ToList();
+        return new PagedResponse<ReconciliationRunResponse>(items, total, pageNumber, size);
     }
 
-    public async Task<IReadOnlyList<ReconciliationItemResponse>> ListReconciliationItemsAsync(
+    public async Task<PagedResponse<ReconciliationItemResponse>> ListReconciliationItemsAsync(
         Guid? runId,
         string? type,
         string? status,
+        int? page,
+        int? pageSize,
         CancellationToken cancellationToken)
     {
+        var (pageNumber, size) = AdminQuery.Paging(page, pageSize);
         var parsedType = AdminQuery.ParseOptional<ReconciliationItemType>(type, "Unknown reconciliation item type.");
         var parsedStatus = AdminQuery.ParseOptional<ReconciliationItemStatus>(status, "Status must be Open or Resolved.");
         var query = _db.ReconciliationItems.AsNoTracking();
@@ -101,13 +117,15 @@ public class AdminTransactionService : IAdminTransactionService
         if (parsedStatus is not null)
             query = query.Where(i => i.Status == parsedStatus);
 
-        var rows = await ReconciliationRows(query).ToListAsync(cancellationToken);
-        return rows
-            .OrderByDescending(r => r.Item.CreatedAt)
-            .ThenBy(r => r.Item.Type)
-            .Take(AdminQuery.PageSize)
-            .Select(ToReconciliationItem)
-            .ToList();
+        var total = await query.CountAsync(cancellationToken);
+        var paged = query
+            .OrderByDescending(i => i.CreatedAt)
+            .ThenBy(i => i.Type)
+            .ThenBy(i => i.Id)
+            .Skip((pageNumber - 1) * size)
+            .Take(size);
+        var rows = await ReconciliationRows(paged).ToListAsync(cancellationToken);
+        return new PagedResponse<ReconciliationItemResponse>(rows.Select(ToReconciliationItem).ToList(), total, pageNumber, size);
     }
 
     public async Task<ReconciliationItemResponse> ResolveReconciliationItemAsync(Guid id, string? note, CancellationToken cancellationToken)

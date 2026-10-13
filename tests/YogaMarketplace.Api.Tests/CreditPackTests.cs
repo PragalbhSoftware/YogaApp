@@ -313,6 +313,7 @@ public class CreditPackTests : IClassFixture<YogaApiFactory>
         await AssertStatusAsync(await admin.PostAsJsonAsync($"/api/admin/credit-batches/{batch.Id}/refund", new { }), HttpStatusCode.Conflict);
         var gatewayRefund = Assert.Single(RefundsFor(listed.GatewayPaymentId));
         Assert.Equal(389_500, gatewayRefund.AmountPaise);
+        Assert.Equal(gatewayRefund.RefundId, await QueryAsync(db => db.CreditBatches.Where(b => b.Id == batch.Id).Select(b => b.GatewayRefundId).SingleAsync()));
         Assert.Equal(1, await QueryAsync(db => db.CreditLedger.CountAsync(e => e.BatchId == batch.Id && e.Kind == CreditEntryKind.Refund)));
     }
 

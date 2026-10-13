@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { PolicyLinks } from "@/features/auth/components/policy-links";
 import { useAuth } from "@/features/auth/hooks/use-auth";
 import { useAcceptConsent } from "@/features/auth/hooks/use-auth-mutations";
+import { useCurrentUserSync } from "@/features/auth/hooks/use-current-user-sync";
 import { useSignOut } from "@/features/auth/hooks/use-sign-out";
 import { toUserMessage } from "@/services/http/api-error";
 
@@ -11,6 +12,7 @@ export function ConsentPrompt() {
   const { user, token, signIn } = useAuth();
   const accept = useAcceptConsent();
   const signOut = useSignOut();
+  useCurrentUserSync();
 
   if (!user?.consentRequired || !token) return null;
 

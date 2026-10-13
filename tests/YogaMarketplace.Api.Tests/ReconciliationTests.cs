@@ -6,6 +6,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Migrations.Operations;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -14,6 +15,7 @@ using YogaMarketplace.Api.Options;
 using YogaMarketplace.Api.Services;
 using YogaMarketplace.Domain;
 using YogaMarketplace.Infrastructure.Persistence;
+using YogaMarketplace.Infrastructure.Persistence.Migrations;
 
 namespace YogaMarketplace.Api.Tests;
 
@@ -266,12 +268,12 @@ public class ReconciliationTests
         var run = await host.ReconcileAsync(Day);
         var admin = await host.AdminClientAsync();
 
-        var runs = await admin.GetFromJsonAsync<List<RunBody>>("/api/admin/reconciliation/runs", Json);
-        var listed = Assert.Single(runs!);
+        var runs = await admin.GetFromJsonAsync<PageBody<RunBody>>("/api/admin/reconciliation/runs", Json);
+        var listed = Assert.Single(runs!.Items);
         Assert.Equal((run.Id, 2, 2, "Completed"), (listed.Id, listed.ItemCount, listed.OpenCount, listed.Status));
 
-        var orphans = await admin.GetFromJsonAsync<List<ItemBody>>($"/api/admin/reconciliation/items?runId={run.Id}&type=MissingInDatabase", Json);
-        var orphan = Assert.Single(orphans!);
+        var orphans = await admin.GetFromJsonAsync<PageBody<ItemBody>>($"/api/admin/reconciliation/items?runId={run.Id}&type=MissingInDatabase", Json);
+        var orphan = Assert.Single(orphans!.Items);
         Assert.Equal("pay_admin_orphan", orphan.GatewayPaymentId);
 
         var blank = await admin.PostAsJsonAsync($"/api/admin/reconciliation/items/{orphan.Id}/resolve", new { note = "" });
@@ -282,12 +284,173 @@ public class ReconciliationTests
         Assert.Equal(("Resolved", "Test payment, refunded in dashboard."), (body.Status, body.ResolutionNote));
         Assert.False(string.IsNullOrWhiteSpace(body.ResolvedByName));
 
-        var open = await admin.GetFromJsonAsync<List<ItemBody>>("/api/admin/reconciliation/items?status=Open", Json);
-        Assert.Equal("AmountMismatch", Assert.Single(open!).Type);
+        var open = await admin.GetFromJsonAsync<PageBody<ItemBody>>("/api/admin/reconciliation/items?status=Open", Json);
+        Assert.Equal("AmountMismatch", Assert.Single(open!.Items).Type);
         var badType = await admin.GetAsync("/api/admin/reconciliation/items?type=Nope");
         Assert.Equal(HttpStatusCode.BadRequest, badType.StatusCode);
         var customer = host.CreateClient();
         Assert.Equal(HttpStatusCode.Unauthorized, (await customer.GetAsync("/api/admin/reconciliation/runs")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Admin_lists_are_paged_newest_first_and_the_page_size_is_capped()
+    {
+        await using var host = new Host();
+        host.Gateway.Payments.Add(Captured("pay_paged_orphan", 100m));
+        var now = DateTimeOffset.UtcNow;
+        var runs = new List<ReconciliationRun>();
+        for (var i = 0; i < 3; i++)
+            runs.Add(await host.ReconcileAsync(Day.AddDays(i), now.AddMinutes(i)));
+        var admin = await host.AdminClientAsync();
+
+        var newestRun = await admin.GetFromJsonAsync<PageBody<RunBody>>("/api/admin/reconciliation/runs?page=1&pageSize=1", Json);
+        Assert.Equal((3, 1, 1), (newestRun!.Total, newestRun.Page, newestRun.PageSize));
+        Assert.Equal(runs[2].Id, Assert.Single(newestRun.Items).Id);
+        var oldestRun = await admin.GetFromJsonAsync<PageBody<RunBody>>("/api/admin/reconciliation/runs?page=3&pageSize=1", Json);
+        Assert.Equal(runs[0].Id, Assert.Single(oldestRun!.Items).Id);
+
+        var first = await admin.GetFromJsonAsync<PageBody<ItemBody>>("/api/admin/reconciliation/items?pageSize=2", Json);
+        var second = await admin.GetFromJsonAsync<PageBody<ItemBody>>("/api/admin/reconciliation/items?pageSize=2&page=2", Json);
+        Assert.Equal((3, 2, 1), (first!.Total, first.Items.Count, second!.Items.Count));
+        Assert.Equal(new[] { runs[2].Id, runs[1].Id, runs[0].Id }, first.Items.Concat(second.Items).Select(i => i.RunId));
+
+        var capped = await admin.GetFromJsonAsync<PageBody<ItemBody>>("/api/admin/reconciliation/items?pageSize=100000&page=0", Json);
+        Assert.Equal((1, AdminQuery.PageSize, 3), (capped!.Page, capped.PageSize, capped.Items.Count));
+    }
+
+    [Fact]
+    public async Task A_second_run_for_a_completed_day_returns_the_saved_one_without_a_second_report()
+    {
+        await using var host = new Host();
+        host.Gateway.Payments.Add(Captured("pay_twice_orphan", 100m));
+
+        var first = await host.ReconcileAsync(Day);
+        var second = await host.ReconcileAsync(Day);
+
+        Assert.Equal(first.Id, second.Id);
+        Assert.Equal(first.Id, Assert.Single(await host.RunsAsync()).Id);
+        Assert.Single(await host.ItemsAsync());
+        Assert.Single(host.Logs.Errors);
+        Assert.Single(host.Logs.Infos, line => line.Contains("already has completed run", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Two_runs_started_at_once_save_one_completed_run_and_one_report()
+    {
+        await using var host = new Host();
+        host.Gateway.Payments.Add(Captured("pay_race_orphan", 100m));
+
+        var both = await Task.WhenAll(host.ReconcileAsync(Day), host.ReconcileAsync(Day));
+
+        var saved = Assert.Single(await host.RunsAsync());
+        Assert.All(both, run => Assert.Equal(saved.Id, run.Id));
+        Assert.Equal(saved.Id, Assert.Single(await host.ItemsAsync()).RunId);
+        Assert.Single(host.Logs.Errors);
+    }
+
+    [Fact]
+    public async Task Unique_index_migration_keeps_the_latest_completed_run_per_day_and_down_restores_them()
+    {
+        await using var factory = new YogaApiFactory();
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<YogaDbContext>();
+        await db.Database.ExecuteSqlRawAsync($"DROP INDEX {ReconciliationRules.OneCompletedRunPerDayIndex};");
+        var (start, end) = ReconciliationRules.WindowFor(Day);
+        ReconciliationRun Run(DateOnly day, DateTimeOffset startedAt, ReconciliationRunStatus status) => new()
+        {
+            Id = Guid.NewGuid(), MarketDate = day, WindowStart = start, WindowEnd = end,
+            StartedAt = startedAt, CompletedAt = startedAt, Status = status
+        };
+        var older = Run(Day, InWindow, ReconciliationRunStatus.Completed);
+        var latest = Run(Day, InWindow.AddHours(1), ReconciliationRunStatus.Completed);
+        var failed = Run(Day, InWindow.AddHours(2), ReconciliationRunStatus.Failed);
+        var otherDay = Run(Day.AddDays(1), InWindow, ReconciliationRunStatus.Completed);
+        db.ReconciliationRuns.AddRange(older, latest, failed, otherDay);
+        await db.SaveChangesAsync();
+
+        var migration = new AddReconciliationRunUniqueAndPackRefundId { ActiveProvider = db.Database.ProviderName };
+        foreach (var operation in migration.UpOperations.OfType<SqlOperation>())
+            await db.Database.ExecuteSqlRawAsync(operation.Sql);
+        Assert.Equal(
+            [ReconciliationRunStatus.Superseded, ReconciliationRunStatus.Completed, ReconciliationRunStatus.Failed, ReconciliationRunStatus.Completed],
+            await StatusesAsync());
+
+        foreach (var operation in migration.DownOperations.OfType<SqlOperation>())
+            await db.Database.ExecuteSqlRawAsync(operation.Sql);
+        Assert.Equal(
+            [ReconciliationRunStatus.Completed, ReconciliationRunStatus.Completed, ReconciliationRunStatus.Failed, ReconciliationRunStatus.Completed],
+            await StatusesAsync());
+
+        async Task<ReconciliationRunStatus[]> StatusesAsync()
+        {
+            var statuses = await db.ReconciliationRuns.AsNoTracking().ToDictionaryAsync(r => r.Id, r => r.Status);
+            return [statuses[older.Id], statuses[latest.Id], statuses[failed.Id], statuses[otherDay.Id]];
+        }
+    }
+
+    [Fact]
+    public async Task Pack_refund_made_in_the_app_is_matched_by_id_and_a_same_amount_dashboard_refund_is_flagged()
+    {
+        await using var host = new Host();
+        await host.SeedPackAsync("pay_pack_twice", 2000m, BeforeWindow, refunded: 500m, refundId: "rfnd_pack_app");
+        host.Gateway.Refunds.Add(new RazorpayRefundRecord("rfnd_pack_app", "pay_pack_twice", 50000, "processed", null));
+        host.Gateway.Refunds.Add(new RazorpayRefundRecord("rfnd_pack_dash", "pay_pack_twice", 50000, "processed", null));
+
+        await host.ReconcileAsync(Day);
+
+        var item = Assert.Single(await host.ItemsAsync());
+        Assert.Equal((ReconciliationItemType.DashboardRefund, "rfnd_pack_dash"), (item.Type, item.GatewayRefundId));
+    }
+
+    [Fact]
+    public async Task Payment_captured_just_before_midnight_and_saved_just_after_is_clean_on_both_days()
+    {
+        await using var host = new Host();
+        var nextDay = Day.AddDays(1);
+        var savedAt = MumbaiClock.SessionStart(nextDay, new TimeOnly(0, 0, 5));
+        await host.SeedPaymentAsync("pay_midnight", 500m, PaymentStatus.Paid, savedAt);
+        // Razorpay lists it on the day it was captured (23:59:59); the next day only a direct fetch finds it.
+        host.Gateway.Payments.Add(Captured("pay_midnight", 500m));
+
+        var capturedDay = await host.ReconcileAsync(Day);
+        host.Gateway.Payments.Clear();
+        host.Gateway.Fetchable.Add(Captured("pay_midnight", 500m));
+        var savedDay = await host.ReconcileAsync(nextDay);
+
+        Assert.Equal((0, 0), (capturedDay.ItemCount, savedDay.ItemCount));
+        Assert.Empty(host.Logs.Errors);
+    }
+
+    [Fact]
+    public async Task A_failed_run_is_followed_by_a_completed_retry_for_the_same_day()
+    {
+        await using var host = new Host();
+        host.Gateway.Payments.Add(Captured("pay_retry_orphan", 100m));
+        host.Gateway.Failure = new DomainException("Could not read payments from Razorpay. Try again.", 502);
+        await Assert.ThrowsAsync<DomainException>(() => host.ReconcileAsync(Day));
+
+        host.Gateway.Failure = null;
+        var retry = await host.ReconcileAsync(Day);
+
+        var runs = await host.RunsAsync();
+        Assert.Equal(
+            new[] { ReconciliationRunStatus.Completed, ReconciliationRunStatus.Failed }.Order(),
+            runs.Select(r => r.Status).Order());
+        Assert.Equal(ReconciliationRunStatus.Completed, retry.Status);
+        Assert.Equal(retry.Id, Assert.Single(await host.ItemsAsync()).RunId);
+    }
+
+    [Fact]
+    public async Task Razorpay_rate_limit_halfway_through_paging_fails_the_run_with_no_partial_report()
+    {
+        var handler = new RazorpayListPagingTests.PagedHandler(total: 250, throttleAtSkip: 100);
+        await using var host = new Host(gateway: RazorpayListPagingTests.NewClient(handler));
+
+        await Assert.ThrowsAsync<DomainException>(() => host.ReconcileAsync(Day));
+
+        Assert.Equal(new[] { 0, 100 }, handler.Skips);
+        Assert.Equal(ReconciliationRunStatus.Failed, Assert.Single(await host.RunsAsync()).Status);
+        Assert.Empty(await host.ItemsAsync());
     }
 
     [Fact]
@@ -314,8 +477,9 @@ public class ReconciliationTests
     private static RazorpayPaymentRecord Captured(string id, decimal amount, decimal refunded = 0m) =>
         new(id, "order_" + id, refunded >= amount ? "refunded" : "captured", (long)(amount * 100), (long)(refunded * 100), "INR");
 
+    private sealed record PageBody<T>(List<T> Items, int Total, int Page, int PageSize);
     private sealed record RunBody(Guid Id, string Status, int ItemCount, int OpenCount);
-    private sealed record ItemBody(Guid Id, string Type, string Status, string? GatewayPaymentId, string? ResolutionNote, string? ResolvedByName);
+    private sealed record ItemBody(Guid Id, Guid RunId, string Type, string Status, string? GatewayPaymentId, string? ResolutionNote, string? ResolvedByName);
     private sealed record ReconciliationSettingsBody(string ReconciliationTime, int WebhookStuckMinutes, int RefundPendingHours);
     private sealed record OtpBody(string? DevCode);
     private sealed record AuthBody(string Token);
@@ -327,13 +491,13 @@ public class ReconciliationTests
         private readonly WebApplicationFactory<Program> _host;
         private int _slots;
 
-        public Host(bool useStub = true)
+        public Host(bool useStub = true, IRazorpayClient? gateway = null)
         {
             _host = _factory.WithWebHostBuilder(builder =>
             {
                 builder.ConfigureLogging(logging => logging.AddProvider(Logs));
                 if (useStub)
-                    builder.ConfigureServices(services => services.AddSingleton<IRazorpayClient>(Gateway));
+                    builder.ConfigureServices(services => services.AddSingleton<IRazorpayClient>(gateway ?? Gateway));
             });
         }
 
@@ -453,7 +617,7 @@ public class ReconciliationTests
         }
 
         /// <summary>Adds a pack sale paid through Razorpay. Returns the batch id, which a pack refund uses as receipt.</summary>
-        public async Task<Guid> SeedPackAsync(string paymentId, decimal price, DateTimeOffset purchasedAt)
+        public async Task<Guid> SeedPackAsync(string paymentId, decimal price, DateTimeOffset purchasedAt, decimal refunded = 0m, string? refundId = null)
         {
             var batchId = Guid.NewGuid();
             await WriteAsync(db =>
@@ -486,6 +650,8 @@ public class ReconciliationTests
                     ValidityDays = pack.ValidityDays,
                     PriceCap = pack.PriceCap,
                     GatewayPaymentId = paymentId,
+                    RefundedAmount = refunded,
+                    GatewayRefundId = refundId,
                     PurchasedAt = purchasedAt,
                     ExpiresAt = purchasedAt.AddDays(pack.ValidityDays),
                     Remaining = pack.Sessions
@@ -650,13 +816,17 @@ public class RazorpayListPagingTests
             timeout.ListRefundsAsync(DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch.AddDays(1), CancellationToken.None))).StatusCode);
     }
 
-    private static RazorpayHttpClient NewClient(HttpMessageHandler handler) => new(
+    internal static RazorpayHttpClient NewClient(HttpMessageHandler handler) => new(
         new HttpClient(handler) { BaseAddress = new Uri("https://api.razorpay.test/") },
         Microsoft.Extensions.Options.Options.Create(new RazorpayOptions { KeyId = "rzp_test_paging", KeySecret = "secret" }),
         NullLogger<RazorpayHttpClient>.Instance);
 
-    /// <summary>Serves <c>total</c> items in pages of the requested count, starting at the requested skip.</summary>
-    private sealed class PagedHandler(int total, HttpStatusCode status = HttpStatusCode.OK, bool timeout = false) : HttpMessageHandler
+    /// <summary>
+    /// Serves <c>total</c> items in pages of the requested count, starting at the requested skip.
+    /// <c>throttleAtSkip</c> answers that page with a Razorpay 429.
+    /// </summary>
+    internal sealed class PagedHandler(int total, HttpStatusCode status = HttpStatusCode.OK, bool timeout = false, int? throttleAtSkip = null)
+        : HttpMessageHandler
     {
         public List<int> Skips { get; } = [];
         public List<string> Paths { get; } = [];
@@ -671,6 +841,8 @@ public class RazorpayListPagingTests
             var skip = int.Parse(query["skip"]);
             var count = int.Parse(query["count"]);
             Skips.Add(skip);
+            if (skip == throttleAtSkip)
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.TooManyRequests) { Content = new StringContent("{}") });
             var items = Enumerable.Range(skip, Math.Max(0, Math.Min(count, total - skip))).Select(i => new
             {
                 id = $"item_{i}",

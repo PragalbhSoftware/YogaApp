@@ -34,8 +34,8 @@ internal static class ModelConfiguration
         ConfigureCreditBatch(modelBuilder.Entity<CreditBatch>(), sqlite);
         ConfigureCreditLedger(modelBuilder.Entity<CreditLedgerEntry>());
         ConfigureCreditAccount(modelBuilder.Entity<CreditAccount>());
-        ConfigureReconciliationRun(modelBuilder.Entity<ReconciliationRun>());
-        ConfigureReconciliationItem(modelBuilder.Entity<ReconciliationItem>());
+        ConfigureReconciliationRun(modelBuilder.Entity<ReconciliationRun>(), sqlite);
+        ConfigureReconciliationItem(modelBuilder.Entity<ReconciliationItem>(), sqlite);
         ConfigureConsent(modelBuilder.Entity<ConsentRecord>());
     }
 
@@ -47,15 +47,23 @@ internal static class ModelConfiguration
         entity.HasOne<User>().WithMany().HasForeignKey(c => c.UserId).OnDelete(DeleteBehavior.Cascade);
     }
 
-    private static void ConfigureReconciliationRun(EntityTypeBuilder<ReconciliationRun> entity)
+    private static void ConfigureReconciliationRun(EntityTypeBuilder<ReconciliationRun> entity, bool sqlite)
     {
         entity.Property(r => r.Status).HasConversion<string>().HasMaxLength(16);
         entity.Property(r => r.Error).HasMaxLength(1000);
         entity.HasIndex(r => r.MarketDate);
+        entity.HasIndex(r => r.MarketDate, ReconciliationRules.OneCompletedRunPerDayIndex)
+            .IsUnique()
+            .HasFilter("[Status] = 'Completed'");
+        if (sqlite)
+            // SQLite cannot compare DateTimeOffset text; the admin list sorts on this in SQL.
+            entity.Property(r => r.StartedAt).HasConversion<DateTimeOffsetToBinaryConverter>();
     }
 
-    private static void ConfigureReconciliationItem(EntityTypeBuilder<ReconciliationItem> entity)
+    private static void ConfigureReconciliationItem(EntityTypeBuilder<ReconciliationItem> entity, bool sqlite)
     {
+        if (sqlite)
+            entity.Property(i => i.CreatedAt).HasConversion<DateTimeOffsetToBinaryConverter>();
         entity.Property(i => i.Type).HasConversion<string>().HasMaxLength(24);
         entity.Property(i => i.Status).HasConversion<string>().HasMaxLength(16);
         entity.Property(i => i.GatewayPaymentId).HasMaxLength(80);
@@ -86,6 +94,7 @@ internal static class ModelConfiguration
         entity.Property(b => b.Price).HasPrecision(10, 2);
         entity.Property(b => b.PriceCap).HasPrecision(10, 2);
         entity.Property(b => b.Currency).HasMaxLength(8);
+        entity.Property(b => b.GatewayRefundId).HasMaxLength(80);
         entity.Property(b => b.PayBasis).HasConversion<string>().HasMaxLength(24);
         entity.Property(b => b.LateCancel).HasConversion<string>().HasMaxLength(24);
         entity.Property(b => b.ReferenceSessionPrice).HasPrecision(10, 2);

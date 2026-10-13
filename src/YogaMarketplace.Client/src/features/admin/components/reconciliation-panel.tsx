@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button } from "@mui/material";
+import { Button, Pagination } from "@mui/material";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/common/empty-state";
@@ -16,6 +16,7 @@ import {
   reconciliationItemStatuses,
   reconciliationItemTypes,
   type ReconciliationItem,
+  type PagedList,
   type ReconciliationItemType,
   type ReconciliationRun,
 } from "@/features/admin/types";
@@ -46,13 +47,20 @@ function pick<T extends string>(value: string | null, allowed: readonly T[]): T 
   return allowed.includes(value as T) ? (value as T) : undefined;
 }
 
+function pageParam(value: string | null) {
+  const page = Number(value);
+  return Number.isInteger(page) && page > 1 ? page : 1;
+}
+
 export function ReconciliationPanel() {
   const [searchParams, setSearchParams] = useSearchParams();
   const runId = searchParams.get("run") ?? undefined;
   const type = pick(searchParams.get("type"), reconciliationItemTypes);
   const status = pick(searchParams.get("state"), reconciliationItemStatuses) ?? "Open";
-  const runs = useReconciliationRuns();
-  const items = useReconciliationItems({ runId, type, status });
+  const runsPage = pageParam(searchParams.get("runsPage"));
+  const itemsPage = pageParam(searchParams.get("page"));
+  const runs = useReconciliationRuns(runsPage);
+  const items = useReconciliationItems({ runId, type, status, page: itemsPage });
   const resolve = useResolveReconciliationItem();
   const [resolving, setResolving] = useState<ReconciliationItem | null>(null);
 
@@ -60,7 +68,12 @@ export function ReconciliationPanel() {
     const params = new URLSearchParams(searchParams);
     if (value) params.set(key, value);
     else params.delete(key);
+    if (key !== "page" && key !== "runsPage") params.delete("page");
     setSearchParams(params, { replace: true });
+  }
+
+  function setPage(key: "page" | "runsPage", page: number) {
+    setParam(key, page > 1 ? String(page) : null);
   }
 
   return (
@@ -69,15 +82,15 @@ export function ReconciliationPanel() {
         <h2 className="font-heading text-lg font-medium">Daily runs</h2>
         {runs.isLoading ? <BookingListSkeleton /> : null}
         {runs.isError ? <ErrorState message={toUserMessage(runs.error)} onRetry={() => void runs.refetch()} /> : null}
-        {runs.isSuccess && runs.data.length === 0 ? (
+        {runs.isSuccess && runs.data.items.length === 0 ? (
           <EmptyState
             title="No runs yet"
             description="The first daily check runs at the time set under Settings › Fees and covers the day before."
           />
         ) : null}
-        {runs.isSuccess && runs.data.length > 0 ? (
+        {runs.isSuccess && runs.data.items.length > 0 ? (
           <div className="grid gap-3 sm:grid-cols-2">
-            {runs.data.map((run) => (
+            {runs.data.items.map((run) => (
               <RunCard
                 key={run.id}
                 run={run}
@@ -86,6 +99,9 @@ export function ReconciliationPanel() {
               />
             ))}
           </div>
+        ) : null}
+        {runs.isSuccess ? (
+          <ListPagination label="Daily runs pages" list={runs.data} onChange={(page) => setPage("runsPage", page)} />
         ) : null}
       </section>
 
@@ -100,15 +116,18 @@ export function ReconciliationPanel() {
         <FilterChips value={type ?? null} options={typeFilters} onChange={(next) => setParam("type", next)} label="Item type" />
         {items.isLoading ? <BookingListSkeleton /> : null}
         {items.isError ? <ErrorState message={toUserMessage(items.error)} onRetry={() => void items.refetch()} /> : null}
-        {items.isSuccess && items.data.length === 0 ? (
+        {items.isSuccess && items.data.items.length === 0 ? (
           <EmptyState
             title={status === "Open" ? "Nothing to check" : "Nothing resolved yet"}
             description="Razorpay and our records agree for the runs and filters selected."
           />
         ) : null}
         {items.isSuccess
-          ? items.data.map((item) => <ItemCard key={item.id} item={item} onResolve={() => setResolving(item)} />)
+          ? items.data.items.map((item) => <ItemCard key={item.id} item={item} onResolve={() => setResolving(item)} />)
           : null}
+        {items.isSuccess ? (
+          <ListPagination label="Items pages" list={items.data} onChange={(page) => setPage("page", page)} />
+        ) : null}
       </section>
 
       <ReconciliationResolveDialog
@@ -134,6 +153,30 @@ export function ReconciliationPanel() {
   );
 }
 
+function ListPagination({
+  label,
+  list,
+  onChange,
+}: {
+  label: string;
+  list: PagedList<unknown>;
+  onChange: (page: number) => void;
+}) {
+  const pages = Math.ceil(list.total / list.pageSize);
+  if (pages <= 1) return null;
+  return (
+    <nav aria-label={label} className="flex justify-center pt-2">
+      <Pagination count={pages} page={list.page} onChange={(_, page) => onChange(page)} shape="rounded" />
+    </nav>
+  );
+}
+
+function runSummary(run: ReconciliationRun) {
+  if (run.status === "Failed") return "Failed";
+  if (run.status === "Superseded") return "Replaced by a later run";
+  return run.itemCount === 0 ? "All clear" : `${run.openCount} open of ${run.itemCount}`;
+}
+
 function RunCard({ run, selected, onSelect }: { run: ReconciliationRun; selected: boolean; onSelect: () => void }) {
   const failed = run.status === "Failed";
   return (
@@ -143,9 +186,7 @@ function RunCard({ run, selected, onSelect }: { run: ReconciliationRun; selected
           <h3 className="font-heading text-base font-medium">{formatSlotDay(run.marketDate)}</h3>
           <p className="mt-1 text-sm text-brand-muted">Checked {formatAdminWhen(run.startedAt)}</p>
         </div>
-        <p className="text-[11px] font-semibold tracking-[0.14em] text-brand-primary uppercase">
-          {failed ? "Failed" : run.itemCount === 0 ? "All clear" : `${run.openCount} open of ${run.itemCount}`}
-        </p>
+        <p className="text-[11px] font-semibold tracking-[0.14em] text-brand-primary uppercase">{runSummary(run)}</p>
       </div>
       {failed && run.error ? <p className="mt-2 text-sm text-brand-muted">{run.error} It retries automatically.</p> : null}
       {!run.gatewayCompared ? (

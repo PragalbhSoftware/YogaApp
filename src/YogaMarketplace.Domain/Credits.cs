@@ -58,6 +58,7 @@ public class CreditBatch
     public int Remaining { get; set; }
     public decimal RefundedAmount { get; set; }
     public DateTimeOffset? RefundedAt { get; set; }
+    public string? GatewayRefundId { get; set; }
 
     public CreditTerms Terms => new(
         ChargeConvenienceFee, PayBasis, LateCancel, BookingStandsAfterExpiry, RefundsEnabled, ReferenceSessionPrice, RefundFee);

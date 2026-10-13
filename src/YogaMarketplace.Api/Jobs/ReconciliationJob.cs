@@ -118,7 +118,22 @@ public class ReconciliationJob : IBackgroundJobHandler
         run.CompletedAt = DateTimeOffset.UtcNow;
         _db.ReconciliationRuns.Add(run);
         _db.ReconciliationItems.AddRange(items);
-        await _db.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex)
+        {
+            _db.ChangeTracker.Clear();
+            var saved = await _db.ReconciliationRuns.AsNoTracking().SingleOrDefaultAsync(
+                r => r.MarketDate == marketDate && r.Status == ReconciliationRunStatus.Completed,
+                CancellationToken.None);
+            if (saved is null)
+                throw;
+            _logger.LogInformation(ex, "Reconciliation for {MarketDate} already has completed run {RunId}; this run's report was not saved.",
+                marketDate, saved.Id);
+            return saved;
+        }
 
         if (items.Count > 0)
             _logger.LogError("Reconciliation run {RunId} for {MarketDate} found {ItemCount} items to check.", run.Id, marketDate, items.Count);
@@ -254,7 +269,7 @@ public class ReconciliationJob : IBackgroundJobHandler
                 p.GatewayPaymentId!, "booking", p.BookingId.ToString(), p.Amount, p.RefundedAmount, p.Status, p.GatewayRefundId, p.CreatedAt))
             .ToListAsync(cancellationToken);
         var packs = await _db.CreditBatches.AsNoTracking()
-            .Select(b => new { b.GatewayPaymentId, b.Id, b.Price, b.RefundedAmount, b.PurchasedAt })
+            .Select(b => new { b.GatewayPaymentId, b.Id, b.Price, b.RefundedAmount, b.GatewayRefundId, b.PurchasedAt })
             .ToListAsync(cancellationToken);
         var checkouts = await _db.CheckoutIntents.AsNoTracking()
             .Where(c => c.Status == CheckoutStatus.Refunded && c.GatewayPaymentId != null)
@@ -263,7 +278,7 @@ public class ReconciliationJob : IBackgroundJobHandler
 
         var rows = payments
             .Concat(packs.Select(b => new LedgerRow(
-                b.GatewayPaymentId, "pack", b.Id.ToString(), b.Price, b.RefundedAmount, PackStatus(b.Price, b.RefundedAmount), null, b.PurchasedAt)))
+                b.GatewayPaymentId, "pack", b.Id.ToString(), b.Price, b.RefundedAmount, PackStatus(b.Price, b.RefundedAmount), b.GatewayRefundId, b.PurchasedAt)))
             .Concat(checkouts.Select(c => new LedgerRow(
                 c.GatewayPaymentId!, "checkout", c.Id.ToString(), c.Amount + c.ConvenienceFee, c.Amount + c.ConvenienceFee,
                 PaymentStatus.Refunded, null, c.CompletedAt ?? c.CreatedAt)));

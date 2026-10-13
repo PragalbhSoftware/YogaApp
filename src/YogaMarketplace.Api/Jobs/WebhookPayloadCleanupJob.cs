@@ -6,13 +6,14 @@ using YogaMarketplace.Infrastructure.Persistence;
 namespace YogaMarketplace.Api.Jobs;
 
 /// <summary>
-/// Blanks the raw payload of webhook events older than the admin retention period, at midnight market time. The row
-/// itself stays for the event log. Pending events keep their payload because they are replayed after the capture lands.
+/// Blanks the raw payload of processed webhook events older than the admin retention period, at midnight market time.
+/// The row itself stays for the event log. Received, Pending and Failed events keep their payload: they may still be
+/// handled, replayed or investigated.
 /// </summary>
 public class WebhookPayloadCleanupJob : IBackgroundJobHandler
 {
     public const string JobType = "webhooks.clear-payloads";
-    private const int BatchSize = 500;
+    internal const int BatchSize = 500;
 
     private readonly YogaDbContext _db;
     private readonly IPlatformSettingsService _settings;
@@ -59,7 +60,7 @@ public class WebhookPayloadCleanupJob : IBackgroundJobHandler
         // ponytail: dates are filtered in memory because SQLite cannot compare DateTimeOffset; only rows that still
         // hold a payload are read, so this stays near one retention period of events. Add a ReceivedAt index if it grows.
         var candidates = await _db.WebhookEvents.AsNoTracking()
-            .Where(e => e.Payload != "" && e.Status != WebhookEventStatus.Pending)
+            .Where(e => e.Payload != "" && e.Status == WebhookEventStatus.Processed)
             .Select(e => new { e.Id, e.ReceivedAt })
             .ToListAsync(cancellationToken);
         var due = candidates.Where(e => e.ReceivedAt < cutoff).Select(e => e.Id).ToList();
@@ -68,7 +69,7 @@ public class WebhookPayloadCleanupJob : IBackgroundJobHandler
         foreach (var batch in due.Chunk(BatchSize))
         {
             cleared += await _db.WebhookEvents
-                .Where(e => batch.Contains(e.Id) && e.Status != WebhookEventStatus.Pending)
+                .Where(e => batch.Contains(e.Id) && e.Status == WebhookEventStatus.Processed)
                 .ExecuteUpdateAsync(s => s.SetProperty(e => e.Payload, ""), cancellationToken);
         }
 

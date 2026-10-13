@@ -179,17 +179,17 @@ export function useMarkPayoutPaid() {
   });
 }
 
-export function useReconciliationRuns(enabled = true) {
+export function useReconciliationRuns(page = 1, enabled = true) {
   return useQuery({
-    queryKey: ["admin-reconciliation-runs"],
-    queryFn: adminApi.reconciliationRuns,
+    queryKey: ["admin-reconciliation-runs", page],
+    queryFn: () => adminApi.reconciliationRuns(page),
     enabled,
   });
 }
 
 export function useReconciliationItems(query: ReconciliationItemQuery, enabled = true) {
   return useQuery({
-    queryKey: ["admin-reconciliation-items", query.runId ?? "", query.type ?? "", query.status ?? ""],
+    queryKey: ["admin-reconciliation-items", query.runId ?? "", query.type ?? "", query.status ?? "", query.page ?? 1],
     queryFn: () => adminApi.reconciliationItems(query),
     enabled,
   });

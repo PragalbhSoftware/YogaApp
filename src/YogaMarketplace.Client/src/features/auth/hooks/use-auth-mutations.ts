@@ -1,5 +1,6 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { authApi } from "@/features/auth/api/auth-api";
+import { currentUserKey } from "@/features/auth/hooks/use-current-user-sync";
 
 export function useRequestOtp() {
   return useMutation({
@@ -14,8 +15,11 @@ export function useResendOtp() {
 }
 
 export function useAcceptConsent() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: authApi.acceptConsent,
+    onMutate: () => queryClient.cancelQueries({ queryKey: currentUserKey }),
+    onSuccess: (user) => queryClient.setQueryData([...currentUserKey, user.id], user),
   });
 }
 

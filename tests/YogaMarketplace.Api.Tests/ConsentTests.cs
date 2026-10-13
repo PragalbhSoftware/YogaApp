@@ -30,6 +30,9 @@ public class ConsentTests : IClassFixture<YogaApiFactory>
         var refused = await client.PostAsJsonAsync("/api/auth/otp/request", new { phone, name = "Asha Rao", gender = "Female", isNewUser = true });
         Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
         Assert.Contains("Terms", (await refused.Content.ReadFromJsonAsync<ErrorBody>(Json))!.Error, StringComparison.Ordinal);
+        var declined = await client.PostAsJsonAsync("/api/auth/otp/request", new { phone, name = "Asha Rao", gender = "Female", isNewUser = true, acceptedPolicies = false });
+        Assert.Equal(HttpStatusCode.BadRequest, declined.StatusCode);
+        Assert.Contains("Privacy Policy", (await declined.Content.ReadFromJsonAsync<ErrorBody>(Json))!.Error, StringComparison.Ordinal);
 
         await PostAsync<OtpBody>(client, "/api/auth/otp/request", new { phone, name = "Asha Rao", gender = "Female", isNewUser = true, acceptedPolicies = true });
         var resent = await PostAsync<OtpBody>(client, "/api/auth/otp/resend", new { phone });
@@ -124,7 +127,7 @@ public class ConsentTests : IClassFixture<YogaApiFactory>
     }
 
     [Fact]
-    public async Task Cleanup_blanks_only_payloads_older_than_the_retention_setting()
+    public async Task Cleanup_blanks_only_processed_payloads_strictly_older_than_the_retention_setting()
     {
         var admin = await SignInAsync(SeedIds.AdminPhone);
         var settings = await admin.GetFromJsonAsync<SettingsBody>("/api/admin/settings", Json);
@@ -133,35 +136,41 @@ public class ConsentTests : IClassFixture<YogaApiFactory>
         Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
 
         var now = DateTimeOffset.UtcNow;
-        var old = await SeedWebhookAsync(now.AddDays(-days - 1), WebhookEventStatus.Processed);
-        var oldFailed = await SeedWebhookAsync(now.AddDays(-days - 1), WebhookEventStatus.Failed);
-        var oldPending = await SeedWebhookAsync(now.AddDays(-days - 1), WebhookEventStatus.Pending);
-        var recent = await SeedWebhookAsync(now.AddDays(-days + 1), WebhookEventStatus.Processed);
+        var cutoff = now.AddDays(-days);
+        var old = cutoff.AddSeconds(-1);
+        var oldProcessed = await SeedWebhooksAsync(WebhookPayloadCleanupJob.BatchSize + 1, old, WebhookEventStatus.Processed);
+        var kept = new[]
+        {
+            (await SeedWebhooksAsync(1, old, WebhookEventStatus.Received))[0],
+            (await SeedWebhooksAsync(1, old, WebhookEventStatus.Pending))[0],
+            (await SeedWebhooksAsync(1, old, WebhookEventStatus.Failed))[0],
+            (await SeedWebhooksAsync(1, cutoff, WebhookEventStatus.Processed))[0],
+            (await SeedWebhooksAsync(1, now.AddDays(-1), WebhookEventStatus.Processed))[0]
+        };
 
         using (var scope = _factory.Services.CreateScope())
         {
             var job = scope.ServiceProvider.GetRequiredService<WebhookPayloadCleanupJob>();
-            await job.RunAsync(null, CancellationToken.None);
+            Assert.Equal(oldProcessed.Length, await job.ClearAsync(now, CancellationToken.None));
             Assert.Equal(0, await job.ClearAsync(now, CancellationToken.None));
+            await job.EnsureScheduledAsync(now, CancellationToken.None);
         }
 
-        var rows = await QueryAsync(db => db.WebhookEvents.AsNoTracking()
-            .Where(e => e.Id == old || e.Id == oldFailed || e.Id == oldPending || e.Id == recent)
-            .ToDictionaryAsync(e => e.Id));
-        Assert.Equal("", rows[old].Payload);
-        Assert.Equal("", rows[oldFailed].Payload);
-        Assert.Equal("{}", rows[oldPending].Payload);
-        Assert.Equal("{}", rows[recent].Payload);
-        Assert.Equal(WebhookEventStatus.Processed, rows[old].Status);
-        Assert.Equal("payment.captured", rows[old].EventType);
+        var ids = oldProcessed.Concat(kept).ToList();
+        var rows = await QueryAsync(db => db.WebhookEvents.AsNoTracking().Where(e => ids.Contains(e.Id)).ToDictionaryAsync(e => e.Id));
+        Assert.Equal(ids.Count, rows.Count);
+        Assert.All(oldProcessed, id => Assert.Equal("", rows[id].Payload));
+        Assert.All(kept, id => Assert.Equal("{}", rows[id].Payload));
+        Assert.All(rows.Values, row => Assert.Equal("evt_" + row.Id.ToString("N"), row.EventId));
+        Assert.All(oldProcessed, id => Assert.Equal(WebhookEventStatus.Processed, rows[id].Status));
         Assert.True(await QueryAsync(db => db.BackgroundJobs.AnyAsync(
             j => j.Type == WebhookPayloadCleanupJob.JobType && j.Status == BackgroundJobStatus.Pending)));
     }
 
-    private async Task<Guid> SeedWebhookAsync(DateTimeOffset receivedAt, WebhookEventStatus status)
+    private async Task<Guid[]> SeedWebhooksAsync(int count, DateTimeOffset receivedAt, WebhookEventStatus status)
     {
-        var id = Guid.NewGuid();
-        await WriteAsync(db => db.WebhookEvents.Add(new WebhookEvent
+        var ids = Enumerable.Range(0, count).Select(_ => Guid.NewGuid()).ToArray();
+        await WriteAsync(db => db.WebhookEvents.AddRange(ids.Select(id => new WebhookEvent
         {
             Id = id,
             Provider = PaymentGateways.Razorpay,
@@ -170,8 +179,8 @@ public class ConsentTests : IClassFixture<YogaApiFactory>
             Payload = "{}",
             ReceivedAt = receivedAt,
             Status = status
-        }));
-        return id;
+        })));
+        return ids;
     }
 
     private async Task<(HttpClient Client, string Phone)> SignUpAsync()

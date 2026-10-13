@@ -44,16 +44,21 @@ public class AdminTransactionsController : AdminControllerBase
         Ok(await _transactions.MarkPaidAsync(id, cancellationToken));
 
     [HttpGet("reconciliation/runs")]
-    public async Task<ActionResult<IReadOnlyList<ReconciliationRunResponse>>> ReconciliationRuns(CancellationToken cancellationToken) =>
-        Ok(await _transactions.ListReconciliationRunsAsync(cancellationToken));
+    public async Task<ActionResult<PagedResponse<ReconciliationRunResponse>>> ReconciliationRuns(
+        [FromQuery] int? page,
+        [FromQuery] int? pageSize,
+        CancellationToken cancellationToken) =>
+        Ok(await _transactions.ListReconciliationRunsAsync(page, pageSize, cancellationToken));
 
     [HttpGet("reconciliation/items")]
-    public async Task<ActionResult<IReadOnlyList<ReconciliationItemResponse>>> ReconciliationItems(
+    public async Task<ActionResult<PagedResponse<ReconciliationItemResponse>>> ReconciliationItems(
         [FromQuery] Guid? runId,
         [FromQuery] string? type,
         [FromQuery] string? status,
+        [FromQuery] int? page,
+        [FromQuery] int? pageSize,
         CancellationToken cancellationToken) =>
-        Ok(await _transactions.ListReconciliationItemsAsync(runId, type, status, cancellationToken));
+        Ok(await _transactions.ListReconciliationItemsAsync(runId, type, status, page, pageSize, cancellationToken));
 
     [HttpPost("reconciliation/items/{id:guid}/resolve")]
     public async Task<ActionResult<ReconciliationItemResponse>> ResolveReconciliationItem(

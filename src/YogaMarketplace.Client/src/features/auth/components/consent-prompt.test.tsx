@@ -22,16 +22,36 @@ describe("ConsentPrompt", () => {
   beforeEach(() => useAuthStore.getState().signOut());
   afterEach(() => vi.restoreAllMocks());
 
-  it("stays hidden when the user is up to date", () => {
+  it("stays hidden when the user is up to date", async () => {
+    const me = vi.spyOn(authApi, "me").mockResolvedValue({ ...user, consentRequired: false });
     useAuthStore.getState().signIn("token", { ...user, consentRequired: false });
     renderPrompt();
+    await waitFor(() => expect(me).toHaveBeenCalledTimes(1));
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
+  it("opens on load when the server says a stored session needs the new policies", async () => {
+    vi.spyOn(authApi, "me").mockResolvedValue({ ...user, name: "Renamed", consentRequired: true });
+    useAuthStore.getState().signIn("token", { ...user, consentRequired: false });
+    renderPrompt();
+
+    expect(await screen.findByRole("dialog")).toBeTruthy();
+    expect(useAuthStore.getState().user?.name).toBe("Renamed");
+    expect(useAuthStore.getState().token).toBe("token");
+  });
+
+  it("does not call the API without a session", () => {
+    const me = vi.spyOn(authApi, "me");
+    renderPrompt();
+    expect(me).not.toHaveBeenCalled();
+  });
+
   it("asks once after a policy bump and closes when accepted", async () => {
+    const me = vi.spyOn(authApi, "me").mockResolvedValue({ ...user, consentRequired: true });
     const accept = vi.spyOn(authApi, "acceptConsent").mockResolvedValue({ ...user, consentRequired: false });
     useAuthStore.getState().signIn("token", { ...user, consentRequired: true });
     renderPrompt();
+    await waitFor(() => expect(me).toHaveBeenCalledTimes(1));
 
     expect(screen.getByRole("link", { name: "Terms of use" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "I accept" }));

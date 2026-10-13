@@ -4,7 +4,9 @@ public enum ReconciliationRunStatus
 {
     Completed,
     /// <summary>Razorpay or the database failed mid-run. No items are kept; the job retries.</summary>
-    Failed
+    Failed,
+    /// <summary>An older completed run for a day that has a newer one. Only set when the one-per-day rule was added.</summary>
+    Superseded
 }
 
 public enum ReconciliationItemType
@@ -69,6 +71,7 @@ public static class ReconciliationRules
 {
     public const int NoteMax = 500;
     public const int DetailMax = 500;
+    public const string OneCompletedRunPerDayIndex = "IX_ReconciliationRuns_MarketDate_Completed";
 
     /// <summary>The run on <paramref name="marketDate"/> covers that whole market day, midnight to midnight.</summary>
     public static (DateTimeOffset Start, DateTimeOffset End) WindowFor(DateOnly marketDate) =>

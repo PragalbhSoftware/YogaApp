@@ -1,24 +1,26 @@
 import type { AxiosResponse } from "axios";
 import { http } from "@/services/http/http-client";
-import type {
-  AdminArea,
-  AdminCertificate,
-  AdminBooking,
-  AdminCategory,
-  AdminPayment,
-  AdminPayout,
-  AdminProvider,
-  AdminReport,
-  AdminSettings,
-  AdminUserDetail,
-  AdminUserSummary,
-  BookingListQuery,
-  ReconciliationItem,
-  ReconciliationItemQuery,
-  ReconciliationRun,
-  SettingsAuditEntry,
-  UpdateSettingsInput,
-  UserListQuery,
+import {
+  reconciliationPageSize,
+  type AdminArea,
+  type AdminCertificate,
+  type AdminBooking,
+  type AdminCategory,
+  type AdminPayment,
+  type AdminPayout,
+  type AdminProvider,
+  type AdminReport,
+  type AdminSettings,
+  type AdminUserDetail,
+  type AdminUserSummary,
+  type BookingListQuery,
+  type PagedList,
+  type ReconciliationItem,
+  type ReconciliationItemQuery,
+  type ReconciliationRun,
+  type SettingsAuditEntry,
+  type UpdateSettingsInput,
+  type UserListQuery,
 } from "@/features/admin/types";
 
 export type CsvFile = { blob: Blob; fileName: string };
@@ -146,17 +148,23 @@ export const adminApi = {
     return http.post<AdminPayout>(`/api/admin/payouts/${id}/paid`, {}).then((res) => res.data);
   },
 
-  reconciliationRuns() {
-    return http.get<ReconciliationRun[]>("/api/admin/reconciliation/runs").then((res) => res.data);
+  reconciliationRuns(page = 1) {
+    return http
+      .get<PagedList<ReconciliationRun>>("/api/admin/reconciliation/runs", {
+        params: { page, pageSize: reconciliationPageSize },
+      })
+      .then((res) => res.data);
   },
 
   reconciliationItems(query: ReconciliationItemQuery) {
     return http
-      .get<ReconciliationItem[]>("/api/admin/reconciliation/items", {
+      .get<PagedList<ReconciliationItem>>("/api/admin/reconciliation/items", {
         params: {
           ...(query.runId ? { runId: query.runId } : {}),
           ...(query.type ? { type: query.type } : {}),
           ...(query.status ? { status: query.status } : {}),
+          page: query.page ?? 1,
+          pageSize: reconciliationPageSize,
         },
       })
       .then((res) => res.data);

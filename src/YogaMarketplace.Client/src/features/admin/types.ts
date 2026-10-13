@@ -358,7 +358,8 @@ export type ReconciliationRun = {
   windowEnd: string;
   startedAt: string;
   completedAt: string | null;
-  status: "Completed" | "Failed";
+  /** `Superseded`: an older completed run for a day that has a newer one. */
+  status: "Completed" | "Failed" | "Superseded";
   gatewayCompared: boolean;
   itemCount: number;
   openCount: number;
@@ -387,7 +388,18 @@ export type ReconciliationItemQuery = {
   runId?: string;
   type?: ReconciliationItemType;
   status?: ReconciliationItemStatus;
+  page?: number;
 };
+
+/** One page of an admin list. `page` starts at 1; the server caps `pageSize`. */
+export type PagedList<T> = {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
+export const reconciliationPageSize = 20;
 
 export type BookingListQuery = {
   status?: string;
