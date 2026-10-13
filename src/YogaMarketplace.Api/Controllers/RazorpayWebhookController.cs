@@ -25,7 +25,8 @@ public class RazorpayWebhookController : ControllerBase
             body = await reader.ReadToEndAsync(cancellationToken);
 
         var signature = Request.Headers[RazorpayWire.SignatureHeader].ToString();
-        var result = await _webhooks.HandleWebhookAsync(body, signature, cancellationToken);
+        var eventId = Request.Headers[RazorpayWire.EventIdHeader].ToString();
+        var result = await _webhooks.HandleWebhookAsync(body, signature, eventId, cancellationToken);
         return Ok(new { received = true, booked = result.Booked, bookingId = result.BookingId, creditBatchId = result.CreditBatchId });
     }
 }

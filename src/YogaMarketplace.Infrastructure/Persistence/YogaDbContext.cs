@@ -25,6 +25,7 @@ public class YogaDbContext : DbContext
     public DbSet<ProviderCertificate> ProviderCertificates => Set<ProviderCertificate>();
     public DbSet<CheckoutIntent> CheckoutIntents => Set<CheckoutIntent>();
     public DbSet<Payment> Payments => Set<Payment>();
+    public DbSet<WebhookEvent> WebhookEvents => Set<WebhookEvent>();
     public DbSet<Review> Reviews => Set<Review>();
     public DbSet<PayoutPending> PayoutsPending => Set<PayoutPending>();
     public DbSet<PlatformSettings> Settings => Set<PlatformSettings>();

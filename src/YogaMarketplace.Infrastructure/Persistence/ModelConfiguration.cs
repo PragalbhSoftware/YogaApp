@@ -22,6 +22,7 @@ internal static class ModelConfiguration
         ConfigureBooking(modelBuilder.Entity<Booking>());
         ConfigureCheckout(modelBuilder.Entity<CheckoutIntent>(), sqlite);
         ConfigurePayment(modelBuilder.Entity<Payment>(), sqlite);
+        ConfigureWebhookEvent(modelBuilder.Entity<WebhookEvent>());
         ConfigureReview(modelBuilder.Entity<Review>());
         ConfigurePayout(modelBuilder.Entity<PayoutPending>());
         ConfigureSettings(modelBuilder.Entity<PlatformSettings>());
@@ -271,6 +272,8 @@ internal static class ModelConfiguration
         entity.Property(p => p.Gateway).HasMaxLength(40);
         entity.Property(p => p.GatewayOrderId).HasMaxLength(80);
         entity.Property(p => p.GatewayPaymentId).HasMaxLength(80);
+        entity.Property(p => p.GatewayRefundId).HasMaxLength(80);
+        entity.Property(p => p.RefundStatus).HasConversion<string>().HasMaxLength(16);
         entity.HasIndex(p => p.BookingId).IsUnique();
         // Payments are inserted only after capture, with a gateway id. The filter keeps
         // SQL Server able to store a row that has not been assigned an id yet.
@@ -282,6 +285,18 @@ internal static class ModelConfiguration
             .WithOne(b => b.Payment)
             .HasForeignKey<Payment>(p => p.BookingId)
             .OnDelete(DeleteBehavior.Restrict);
+    }
+
+    private static void ConfigureWebhookEvent(EntityTypeBuilder<WebhookEvent> entity)
+    {
+        entity.Property(e => e.Provider).HasMaxLength(40);
+        entity.Property(e => e.EventId).HasMaxLength(120);
+        entity.Property(e => e.EventType).HasMaxLength(80);
+        entity.Property(e => e.GatewayPaymentId).HasMaxLength(80);
+        entity.Property(e => e.Status).HasConversion<string>().HasMaxLength(16);
+        entity.Property(e => e.Error).HasMaxLength(500);
+        entity.HasIndex(e => new { e.Provider, e.EventId }).IsUnique();
+        entity.HasIndex(e => new { e.GatewayPaymentId, e.Status });
     }
 
     private static void ConfigureCheckout(EntityTypeBuilder<CheckoutIntent> entity, bool sqlite)

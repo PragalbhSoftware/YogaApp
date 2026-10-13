@@ -35,9 +35,10 @@ internal static class PaymentRefunds
         }
 
         // Once Razorpay is called the request must not be cancelled before the commit records it.
+        string? refundId = null;
         if (amount > 0)
         {
-            await razorpay.RefundPaymentAsync(
+            refundId = await razorpay.RefundPaymentAsync(
                 payment.GatewayPaymentId!,
                 RazorpayMoney.ToPaise(amount),
                 booking.Id.ToString("N"),
@@ -46,6 +47,12 @@ internal static class PaymentRefunds
 
         try
         {
+            if (amount > 0)
+            {
+                payment.GatewayRefundId = refundId;
+                payment.RefundStatus = RefundStatus.Pending;
+                await db.SaveChangesAsync(CancellationToken.None);
+            }
             await transaction.CommitAsync(CancellationToken.None);
         }
         catch (Exception ex)

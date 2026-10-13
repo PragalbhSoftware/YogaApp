@@ -57,7 +57,7 @@ public interface IBookingHandshake
 
 public interface IRazorpayWebhookHandler
 {
-    Task<WebhookResult> HandleWebhookAsync(string rawBody, string? signature, CancellationToken cancellationToken);
+    Task<WebhookResult> HandleWebhookAsync(string rawBody, string? signature, string? eventId, CancellationToken cancellationToken);
 }
 
 public partial class BookingService : IBookingService, IBookingHandshake, IRazorpayWebhookHandler
@@ -473,39 +473,6 @@ public partial class BookingService : IBookingService, IBookingHandshake, IRazor
         return new ReviewResponse(review.Id, review.BookingId, review.ProviderId, review.Rating, review.Comment, review.CreatedAt);
     }
 
-    public async Task<WebhookResult> HandleWebhookAsync(string rawBody, string? signature, CancellationToken cancellationToken)
-    {
-        if (!_razorpay.VerifyWebhookSignature(rawBody, signature))
-            throw new DomainException("Webhook signature is invalid.");
-
-        if (!RazorpayWebhookParser.TryReadCapturedPayment(rawBody, out var captured))
-            return WebhookResult.Ignored();
-
-        var kind = await _db.CheckoutIntents.AsNoTracking()
-            .Where(c => c.GatewayOrderId == captured.OrderId)
-            .Select(c => (CheckoutKind?)c.Kind)
-            .SingleOrDefaultAsync(cancellationToken);
-        if (kind == CheckoutKind.Pack)
-            return await _packs.HandleCapturedWebhookAsync(captured, cancellationToken);
-
-        try
-        {
-            var booking = await CaptureAsync(
-                captured.OrderId,
-                captured.PaymentId,
-                expectedCustomerId: null,
-                captured.AmountPaise,
-                captured.Currency,
-                cancellationToken);
-            return WebhookResult.ForBooking(booking.Id);
-        }
-        catch (DomainException ex) when (ex.StatusCode is 404 or 409)
-        {
-            _logger.LogWarning(ex, "Captured Razorpay payment {PaymentId} for order {OrderId} did not create a booking.", captured.PaymentId, captured.OrderId);
-            return WebhookResult.Ignored();
-        }
-    }
-
     private async Task<BookingResponse> CaptureAsync(
         string orderId,
         string paymentId,
@@ -552,22 +519,23 @@ public partial class BookingService : IBookingService, IBookingHandshake, IRazor
                 await RefundCheckoutAsync(checkout, paymentId, total, tx, TrialRefundedMessage, cancellationToken);
             }
 
-            var slot = await SlotsWithProvider()
-                .SingleOrDefaultAsync(s => s.Id == checkout.SlotId, cancellationToken)
-                ?? throw new DomainException("That slot is no longer available.", 409);
-
-            var provider = slot.Provider ?? throw new DomainException("Instructor not found.", 404);
-            if (!ProviderApproval.IsListedNow(provider) || slot.IsBlocked || !provider.Offers(slot.Mode))
-                throw new DomainException("That slot is no longer available.", 409);
-            EnsureAreaOpen(provider);
-            if (MumbaiClock.SessionStart(slot.Date, slot.EndTime) <= DateTimeOffset.UtcNow)
-                throw new DomainException("That slot has already ended.", 409);
-            if (await SlotIsTakenAsync(slot.Id, cancellationToken))
-                throw new DomainException("That slot was just booked.", 409);
-
-            var service = await _db.Services.SingleOrDefaultAsync(
-                s => s.Id == checkout.ServiceId && s.ProviderId == slot.ProviderId && s.IsActive,
-                cancellationToken) ?? throw new DomainException("This session is no longer available.", 409);
+            AvailabilitySlot slot;
+            Provider provider;
+            Service service;
+            try
+            {
+                (slot, provider, service) = await LoadCaptureTargetAsync(checkout, cancellationToken);
+            }
+            catch (DomainException ex) when (checkout.Status == CheckoutStatus.Failed)
+            {
+                _logger.LogError(
+                    ex,
+                    "Razorpay captured payment {PaymentId} after order {OrderId} failed, and the slot can no longer be booked. Refunding in full.",
+                    paymentId,
+                    orderId);
+                await RefundCheckoutAsync(checkout, paymentId, total, tx, LateCaptureRefundedMessage, cancellationToken);
+                throw;
+            }
 
             var batch = checkout.UsesCredit
                 ? await TakeCreditAtCaptureAsync(checkout, slot, paymentId, total, tx, cancellationToken)
@@ -615,6 +583,7 @@ public partial class BookingService : IBookingService, IBookingHandshake, IRazor
             _db.Bookings.Add(booking);
             await _db.SaveChangesAsync(cancellationToken);
             await tx.CommitAsync(cancellationToken);
+            await ApplyPendingRefundsAsync(paymentId, cancellationToken);
             return ToResponse(booking, payment, checkout.Currency);
         }
         catch (DbUpdateException ex)
@@ -636,9 +605,17 @@ public partial class BookingService : IBookingService, IBookingHandshake, IRazor
     {
         await using var tx = await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         var checkout = await _db.CheckoutIntents.SingleAsync(c => c.GatewayOrderId == orderId, cancellationToken);
+        var total = checkout.Amount + checkout.ConvenienceFee;
+        if (checkout.Status == CheckoutStatus.Failed)
+        {
+            _logger.LogError(
+                "Razorpay captured payment {PaymentId} after order {OrderId} failed, and the slot was just booked. Refunding in full.",
+                paymentId,
+                orderId);
+            await RefundCheckoutAsync(checkout, paymentId, total, tx, LateCaptureRefundedMessage, cancellationToken);
+        }
         if (checkout.Status != CheckoutStatus.Open)
             return;
-        var total = checkout.Amount + checkout.ConvenienceFee;
         if (checkout.UsesCredit)
         {
             var slot = await SlotsWithProvider().SingleAsync(s => s.Id == checkout.SlotId, cancellationToken);
@@ -648,6 +625,29 @@ public partial class BookingService : IBookingService, IBookingHandshake, IRazor
         }
         if (checkout.IsTrial && await TrialUsedAsync(checkout.CustomerId, checkout.ProviderId!.Value, cancellationToken))
             await RefundCheckoutAsync(checkout, paymentId, total, tx, TrialRefundedMessage, cancellationToken);
+    }
+
+    private async Task<(AvailabilitySlot Slot, Provider Provider, Service Service)> LoadCaptureTargetAsync(
+        CheckoutIntent checkout,
+        CancellationToken cancellationToken)
+    {
+        var slot = await SlotsWithProvider()
+            .SingleOrDefaultAsync(s => s.Id == checkout.SlotId, cancellationToken)
+            ?? throw new DomainException("That slot is no longer available.", 409);
+
+        var provider = slot.Provider ?? throw new DomainException("Instructor not found.", 404);
+        if (!ProviderApproval.IsListedNow(provider) || slot.IsBlocked || !provider.Offers(slot.Mode))
+            throw new DomainException("That slot is no longer available.", 409);
+        EnsureAreaOpen(provider);
+        if (MumbaiClock.SessionStart(slot.Date, slot.EndTime) <= DateTimeOffset.UtcNow)
+            throw new DomainException("That slot has already ended.", 409);
+        if (await SlotIsTakenAsync(slot.Id, cancellationToken))
+            throw new DomainException("That slot was just booked.", 409);
+
+        var service = await _db.Services.SingleOrDefaultAsync(
+            s => s.Id == checkout.ServiceId && s.ProviderId == slot.ProviderId && s.IsActive,
+            cancellationToken) ?? throw new DomainException("This session is no longer available.", 409);
+        return (slot, provider, service);
     }
 
     private IQueryable<AvailabilitySlot> SlotsWithProvider() =>

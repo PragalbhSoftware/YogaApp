@@ -75,7 +75,25 @@ public enum CheckoutStatus
     Open,
     Completed,
     /// <summary>Paid but refunded without a booking, for example a second trial with the same instructor.</summary>
-    Refunded
+    Refunded,
+    /// <summary>Razorpay reported the payment failed. A later capture of the same order still books, or is refunded.</summary>
+    Failed
+}
+
+public enum RefundStatus
+{
+    Pending,
+    Processed,
+    Failed
+}
+
+public enum WebhookEventStatus
+{
+    Received,
+    Processed,
+    /// <summary>Waiting for the payment it refers to; retried when that payment is captured.</summary>
+    Pending,
+    Failed
 }
 
 public enum PayoutStatus
