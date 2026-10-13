@@ -1,0 +1,84 @@
+{
+  "cities": [
+    { "name": "Mumbai", "areas": ["Bandra", "Andheri", "Powai"] },
+    { "name": "Pune", "areas": ["Koregaon Park", "Baner"] }
+  ],
+  "customers": [
+    { "phone": "+917000010001", "name": "Riya Kapoor", "gender": "Female" },
+    { "phone": "+917000010002", "name": "Arjun Mehta", "gender": "Male" }
+  ],
+  "instructors": [
+    {
+      "phone": "+917000020001",
+      "name": "Meera Iyer",
+      "gender": "Female",
+      "bio": "Vinyasa flow and breathwork for busy schedules.",
+      "age": 34,
+      "city": "Mumbai",
+      "area": "Powai",
+      "homeRate": null,
+      "studioRate": 799,
+      "onlineRate": 649,
+      "studioAddress": "Pranava Studio, Hiranandani Gardens, Powai",
+      "googleMeetLink": "https://meet.google.com/demo-meera-iyer",
+      "services": [{ "category": "yoga", "title": "Vinyasa flow" }]
+    },
+    {
+      "phone": "+917000020002",
+      "name": "Kabir Joshi",
+      "gender": "Male",
+      "bio": "Iyengar-trained teacher focused on alignment and back care.",
+      "age": 41,
+      "city": "Pune",
+      "area": "Koregaon Park",
+      "homeRate": 999,
+      "studioRate": 749,
+      "onlineRate": null,
+      "studioAddress": "Sthira Yoga Shala, Lane 6, Koregaon Park",
+      "googleMeetLink": null,
+      "services": [{ "category": "yoga", "title": "Alignment yoga" }]
+    }
+  ],
+  "packs": [
+    { "key": "starter-5", "name": "Starter 5", "sessions": 5, "price": 3500, "validityDays": 60, "priceCap": 900 },
+    { "key": "regular-10", "name": "Regular 10", "sessions": 10, "price": 6500, "validityDays": 120, "priceCap": 1000 }
+  ],
+  "bookings": [
+    {
+      "key": "riya-meera-online",
+      "customer": "+917000010001",
+      "instructor": "+917000020001",
+      "mode": "Online",
+      "dayOffset": 2,
+      "start": "18:00:00",
+      "end": "19:00:00",
+      "status": "PendingAccept",
+      "homeAddress": null,
+      "landmark": null
+    },
+    {
+      "key": "arjun-kabir-studio",
+      "customer": "+917000010002",
+      "instructor": "+917000020002",
+      "mode": "Studio",
+      "dayOffset": 3,
+      "start": "10:00:00",
+      "end": "11:00:00",
+      "status": "Upcoming",
+      "homeAddress": null,
+      "landmark": null
+    },
+    {
+      "key": "riya-kabir-home",
+      "customer": "+917000010001",
+      "instructor": "+917000020002",
+      "mode": "Home",
+      "dayOffset": -3,
+      "start": "07:00:00",
+      "end": "08:00:00",
+      "status": "Completed",
+      "homeAddress": "Flat 12, Sunrise Apartments, North Main Road",
+      "landmark": "Opposite the park gate"
+    }
+  ]
+}
