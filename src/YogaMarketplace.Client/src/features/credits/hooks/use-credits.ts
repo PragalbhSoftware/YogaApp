@@ -22,11 +22,11 @@ export function useMyCredits(enabled = true) {
  * Polls an order the server hasn't captured yet, and stops once it is Completed or Refunded. Failed keeps polling:
  * it only reflects an earlier attempt on the order, and the payment Razorpay just reported can still be captured.
  */
-export function usePackOrderStatus(orderId: string | null) {
+export function usePackOrderStatus(orderId: string | null, enabled = true) {
   return useQuery({
     queryKey: ["pack-order", orderId],
     queryFn: () => creditsApi.orderStatus(orderId ?? ""),
-    enabled: Boolean(orderId),
+    enabled: Boolean(orderId) && enabled,
     refetchInterval: (query) => {
       const status = query.state.data?.status;
       return !status || status === "Open" || status === "Failed" ? packOrderPollMs : false;

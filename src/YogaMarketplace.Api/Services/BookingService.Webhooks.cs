@@ -64,7 +64,7 @@ public partial class BookingService
                     // Razorpay would redeliver forever; answer 200 and leave the payment for reconciliation to report.
                     _logger.LogError(ex, "Captured Razorpay payment {PaymentId} does not match its order and was not applied.",
                         RazorpayWebhookParser.ReadEnvelope(rawBody).PaymentId);
-                    return (WebhookResult.Ignored(), WebhookEventStatus.Failed, ex.Message);
+                    return (WebhookResult.Ignored(), WebhookEventStatus.Rejected, ex.Message);
                 }
             case RazorpayWire.PaymentFailedEvent:
                 await HandlePaymentFailedAsync(rawBody, cancellationToken);

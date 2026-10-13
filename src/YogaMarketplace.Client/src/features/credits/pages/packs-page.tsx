@@ -55,6 +55,7 @@ export function PacksPage() {
         batch={purchase.batch}
         onFindInstructor={() => navigate(routes.home)}
         onDismiss={purchase.reset}
+        onRetry={purchase.retry}
       />
 
       {isAuthenticated && purchase.stage === "idle" ? <CreditsPanel /> : null}

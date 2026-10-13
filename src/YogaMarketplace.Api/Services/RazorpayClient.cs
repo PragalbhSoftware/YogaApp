@@ -275,13 +275,10 @@ public sealed class RazorpayHttpClient : IRazorpayClient
             throw new DomainException("Payment is not captured.");
         if (!string.Equals(remote.OrderId, orderId, StringComparison.Ordinal))
             throw new DomainException("Payment does not match this order.");
-        var currency = remote.Currency;
-        if (remote.Amount != expectedAmountPaise
-            || string.IsNullOrWhiteSpace(currency)
-            || !currency.Equals(expectedCurrency, StringComparison.OrdinalIgnoreCase))
-        {
+        if (remote.Amount != expectedAmountPaise)
             throw new DomainException("Payment amount does not match the slot price.");
-        }
+        if (string.IsNullOrWhiteSpace(remote.Currency) || !remote.Currency.Equals(expectedCurrency, StringComparison.OrdinalIgnoreCase))
+            throw new DomainException("Payment currency does not match.");
     }
 
     public bool VerifyWebhookSignature(string rawBody, string? signature) =>

@@ -263,7 +263,7 @@ public class BookingPaymentTests : IClassFixture<YogaApiFactory>
     }
 
     [Fact]
-    public async Task Captured_webhook_with_a_wrong_amount_or_currency_is_recorded_failed_answered_200_and_books_nothing()
+    public async Task Captured_webhook_with_a_wrong_amount_or_currency_is_recorded_rejected_answered_200_and_books_nothing()
     {
         var log = new ErrorLog();
         using var logged = _factory.WithWebHostBuilder(builder => builder.ConfigureLogging(logging => logging.AddProvider(log)));
@@ -292,14 +292,43 @@ public class BookingPaymentTests : IClassFixture<YogaApiFactory>
         var events = await CountAsync(db => db.WebhookEvents.AsNoTracking()
             .Where(e => e.GatewayPaymentId == wrongAmount || e.GatewayPaymentId == wrongCurrency)
             .ToDictionaryAsync(e => e.GatewayPaymentId!));
-        Assert.Equal((WebhookEventStatus.Failed, "Payment amount does not match the slot price."), (events[wrongAmount].Status, events[wrongAmount].Error));
-        Assert.Equal((WebhookEventStatus.Failed, "Payment currency does not match."), (events[wrongCurrency].Status, events[wrongCurrency].Error));
+        Assert.Equal((WebhookEventStatus.Rejected, "Payment amount does not match the slot price."), (events[wrongAmount].Status, events[wrongAmount].Error));
+        Assert.Equal((WebhookEventStatus.Rejected, "Payment currency does not match."), (events[wrongCurrency].Status, events[wrongCurrency].Error));
         Assert.Contains(log.Errors, line => line.Contains(wrongAmount, StringComparison.Ordinal));
         Assert.Contains(log.Errors, line => line.Contains(wrongCurrency, StringComparison.Ordinal));
 
         var paid = await ConfirmAsync(client, order.OrderId, "pay_right_" + Guid.NewGuid().ToString("N"));
         Assert.Equal("PendingAccept", paid.Status);
         Assert.Equal(before + 1, await CountBookingsAsync(slot.Id));
+    }
+
+    [Fact]
+    public async Task A_replayed_mismatched_webhook_with_the_same_event_id_is_not_processed_again()
+    {
+        var log = new ErrorLog();
+        using var logged = _factory.WithWebHostBuilder(builder => builder.ConfigureLogging(logging => logging.AddProvider(log)));
+        var client = logged.CreateClient();
+        var (token, _) = await SignUpAsync(client, "Tara Menon", "Female");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var slot = await FirstOpenSlotAsync(client, "Studio");
+        var order = await CreateOrderAsync(client, slot.Id, null, null);
+        var before = await CountBookingsAsync(slot.Id);
+        var paymentId = "pay_replayed_mismatch_" + Guid.NewGuid().ToString("N");
+        var eventId = "evt_replayed_mismatch_" + Guid.NewGuid().ToString("N");
+        var body = CapturedBody(order.OrderId, paymentId, order.AmountPaise - 100);
+
+        foreach (var _ in Enumerable.Range(0, 2))
+        {
+            var response = await PostWebhookAsync(body, SignWebhook(body), eventId, client);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.False((await response.Content.ReadFromJsonAsync<WebhookBody>(Json))!.Booked);
+        }
+
+        var saved = Assert.Single(await CountAsync(db => db.WebhookEvents.AsNoTracking().Where(e => e.EventId == eventId).ToListAsync()));
+        Assert.Equal(WebhookEventStatus.Rejected, saved.Status);
+        Assert.Single(log.Errors, line => line.Contains(paymentId, StringComparison.Ordinal));
+        Assert.Equal(before, await CountBookingsAsync(slot.Id));
+        Assert.Equal(CheckoutStatus.Open, await CheckoutStatusOfAsync(order.OrderId));
     }
 
     [Fact]
@@ -659,7 +688,7 @@ public class BookingPaymentTests : IClassFixture<YogaApiFactory>
     [Theory]
     [InlineData(50000L, "INR", "captured", "order_check", null)]
     [InlineData(49900L, "INR", "captured", "order_check", "Payment amount does not match the slot price.")]
-    [InlineData(50000L, "USD", "captured", "order_check", "Payment amount does not match the slot price.")]
+    [InlineData(50000L, "USD", "captured", "order_check", "Payment currency does not match.")]
     [InlineData(50000L, "INR", "authorized", "order_check", "Payment is not captured.")]
     [InlineData(50000L, "INR", "captured", "order_other", "Payment does not match this order.")]
     public async Task Real_gateway_callback_checks_the_captured_amount_currency_status_and_order(

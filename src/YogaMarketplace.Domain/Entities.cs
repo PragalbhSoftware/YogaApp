@@ -204,6 +204,11 @@ public class CheckoutIntent
     public Guid? SlotId { get; set; }
     public Guid? PackId { get; set; }
 
+    /// <summary>The pack as ordered, so a pack edited before capture still gives what was paid for. Null on older orders.</summary>
+    public int? PackSessions { get; set; }
+    public int? PackValidityDays { get; set; }
+    public decimal? PackPriceCap { get; set; }
+
     /// <summary>A booking paid with a credit; the order charges only the convenience fee.</summary>
     public bool UsesCredit { get; set; }
     public SessionMode Mode { get; set; }
