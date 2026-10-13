@@ -23,6 +23,7 @@ public sealed class OtpDemoMode
     public string Code { get; }
     public bool HasInvalidPhone { get; }
     public bool IsOn => _phones.Count > 0 && Code.Length > 0;
+    public bool IsConfigured => _phones.Count > 0 || Code.Length > 0 || HasInvalidPhone;
     public IReadOnlyCollection<string> Phones => _phones;
 
     public static OtpDemoMode From(OtpOptions options)

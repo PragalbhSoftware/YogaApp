@@ -55,7 +55,8 @@ builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddAppServices(builder.Configuration);
 builder.Services.AddApiRateLimiting(builder.Configuration);
 builder.Services.AddTrustedProxies(builder.Configuration);
-var allowedOrigins = CorsSettings.AllowedOriginsFrom(builder.Configuration, builder.Environment.IsProduction());
+var productionLike = ProductionSafety.AppliesTo(builder.Environment.EnvironmentName);
+var allowedOrigins = CorsSettings.AllowedOriginsFrom(builder.Configuration, productionLike);
 builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
     policy.WithOrigins(allowedOrigins)
         .AllowAnyHeader()
@@ -87,7 +88,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 builder.Services.AddAuthorization();
 
-var productionWarnings = ProductionSafety.Check(builder.Configuration, builder.Environment.IsProduction());
+var productionWarnings = ProductionSafety.Check(builder.Configuration, builder.Environment.EnvironmentName);
 
 var app = builder.Build();
 
@@ -99,11 +100,11 @@ if (otpDemo.StartupWarning() is string demoWarning)
 
 app.UseForwardedHeaders();
 app.UseSecurityHeaders();
-if (app.Environment.IsProduction())
+if (productionLike)
     app.UseHsts();
 app.UseApiErrorResponses();
 app.UseMiddleware<DomainExceptionMiddleware>();
-if (!app.Environment.IsProduction())
+if (!productionLike)
 {
     app.UseSwagger();
     app.UseSwaggerUI();

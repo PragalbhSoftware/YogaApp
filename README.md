@@ -81,7 +81,7 @@ Only public values belong here; everything prefixed `VITE_` ends up in the brows
 | --- | --- |
 | `VITE_API_BASE_URL` | API origin, e.g. `https://api.example.com`. Leave empty to call the same origin (dev proxy, or a production reverse proxy). Read at **build** time. |
 
-See `.env.example`. Vite loads `.env.development`, `.env.staging` (`vite build --mode staging`), and `.env.production`.
+See `.env.example`. Vite loads `.env.development`, `.env.staging` (`vite build --mode staging`), and `.env.production` when they exist. The single-site publish needs none of them: it builds with `VITE_API_BASE_URL` empty.
 
 ### API
 
@@ -95,7 +95,7 @@ Set in `appsettings.*.json`, user secrets, or environment variables (`Section__K
 | `RefreshToken:LifetimeDays`, `RefreshToken:ReuseGraceSeconds` | Refresh cookie lifetime (default 30 days) and how long a just-rotated token gets `409` (a parallel tab) before it counts as reuse (default 30 s) |
 | `RefreshToken:CookieSecure`, `RefreshToken:CookieSameSite` | Cookie flags. Defaults are `true` and `Strict`; Development and Testing turn `CookieSecure` off for plain HTTP. Use `None` (with HTTPS) only if the SPA and API are on different sites. |
 | `Otp:Pepper`, `Otp:ExposeCode`, `Otp:UseFixedCode` | OTP hashing and the dev shortcuts (forced off in Production) |
-| `Otp:DemoPhones`, `Otp:DemoCode` | Demo site sign-in: the listed phones (comma-separated) accept the 6-digit demo code; other phones get a normal OTP. Allowed in Production only with both set. |
+| `Otp:DemoPhones`, `Otp:DemoCode` | Demo site sign-in: the listed phones (comma-separated) accept the 6-digit demo code; other phones get a normal OTP. For Staging and Development only: **Production refuses to start when either is set.** |
 | `Cors:AllowedOrigins` | Array of browser origins allowed to call the API cross-origin. Development allows `http://localhost:5173`. **Production refuses to start with an empty list.** |
 | `Razorpay:KeyId`, `Razorpay:KeySecret`, `Razorpay:WebhookSecret` | Payment gateway. Never commit live keys. |
 | `Razorpay:UseFakeGateway` | Development and tests issue `order_fake_…` ids and capture locally (`/api/bookings/local-confirm`). Production refuses to start when this is on. |
@@ -344,12 +344,24 @@ With `ASPNETCORE_ENVIRONMENT=Production` the API **refuses to start** when:
 
 - `Database:AutoMigrate` is true (apply migrations with the script below instead),
 - `Otp:ExposeCode` or `Otp:UseFixedCode` is true,
-- `Otp:DemoCode` is set without `Otp:DemoPhones`, is not 6 digits, or `Otp:DemoPhones` has an invalid phone,
+- `Otp:DemoPhones` or `Otp:DemoCode` is set (demo sign-in is for Staging and Development),
 - `Razorpay:UseFakeGateway` is true, or any of `Razorpay:KeyId`, `Razorpay:KeySecret`, `Razorpay:WebhookSecret` is empty,
 - `Cors:AllowedOrigins` is empty, or `Jwt:Key` is shorter than 32 bytes,
 - `DataProtection:KeysPath` is empty or not a full path.
 
-It logs a warning (and still starts) when the key id is a `rzp_test_` key. It also turns off Swagger, returns `404` for `/api/bookings/local-confirm`, and writes one-line JSON logs to the console with UTC timestamps and the request trace id.
+It logs a warning (and still starts) when the key id is a `rzp_test_` key. It also turns off Swagger, returns `404` for `/api/bookings/local-confirm` and `/api/admin/demo-data/load`, and writes one-line JSON logs to the console with UTC timestamps and the request trace id.
+
+**Staging** (`ASPNETCORE_ENVIRONMENT=Staging`, `appsettings.Staging.json`) enforces everything above, with three differences: `Razorpay:KeyId` **must** be a `rzp_test_` key, OTP demo sign-in is allowed (a malformed demo setup still stops startup), and the admin demo-data loader works.
+
+After each deploy, run the smoke test (sign in with the demo phone, find an open slot, create a Razorpay Test order). Against the in-memory test host it also pays with the fake gateway, cancels and checks the refund; that part runs in every CI build.
+
+```bash
+SMOKE_BASE_URL=https://yogademo.psoftcs.com SMOKE_PHONE=<demo phone> SMOKE_OTP_CODE=<demo code> dotnet test tests/YogaMarketplace.Smoke
+```
+
+Or run **Actions → smoke → Run workflow** (repo secrets `SMOKE_PHONE`, `SMOKE_OTP_CODE`). Use a customer demo phone, not an admin or instructor. Paying needs Razorpay's browser checkout, so check that by hand once per release: book with a [Razorpay test card](https://razorpay.com/docs/payments/payments/test-card-details/), cancel, and see the refund in the Razorpay Test dashboard.
+
+If a release goes wrong, follow [docs/ops/rollback.md](docs/ops/rollback.md).
 
 ### API environment variables
 
@@ -450,7 +462,7 @@ Upload `dist/` to any static host or CDN. Every unknown path must fall back to `
 
 ## Deploy to Plesk (single site)
 
-One IIS site on `https://yogademo.psoftcs.com` runs the API and serves the SPA. The server needs the **.NET 8 Hosting Bundle** (ask the host if the Plesk "ASP.NET Core" component is not listed).
+One IIS site on `https://yogademo.psoftcs.com` runs the API and serves the SPA. yogademo is the **Staging** site: Razorpay Test keys, OTP demo sign-in and the demo-data loader. A live site uses the same steps with `Production`, live keys and no demo variables. The server needs the **.NET 8 Hosting Bundle** (ask the host if the Plesk "ASP.NET Core" component is not listed).
 
 ### 1. Build
 
@@ -489,24 +501,24 @@ Under **Dedicated IIS Application Pool** (or ask the host):
 
 Create an MS SQL database and user in Plesk. Production never migrates on startup, so run the `migrations-sql` script yourself, from SSMS or `sqlcmd -I -b -i migrations.sql`. The script is idempotent, so you can run it on every release.
 
-### 6. Environment variables (Production)
+### 6. Environment variables
 
 Set these in Plesk, if your plan shows environment variables for the site. Otherwise put them **only in the server's copy of `web.config`**, inside `<environmentVariables>`. They must never be in the repo or in the `web.config` you upload from your machine. **Never re-upload `web.config` after the first deploy**: it would wipe the variables and the app would not start. In `web.config` values, escape XML: `&` becomes `&amp;`, `<` becomes `&lt;`, and `"` becomes `&quot;`.
 
 | Variable | Required | Value |
 | --- | --- | --- |
-| `ASPNETCORE_ENVIRONMENT` | Yes | `Production` (already in `web.config`) |
+| `ASPNETCORE_ENVIRONMENT` | Yes | `Staging` on yogademo (edit the server copy of `web.config`; the uploaded one says `Production`) |
 | `ConnectionStrings__Default` | Yes | `Server=<host>;Database=<db>;User Id=<user>;Password=<password>;TrustServerCertificate=True;MultipleActiveResultSets=true` |
 | `Jwt__Key` | Yes | Random string, 32+ bytes |
 | `Otp__Pepper` | Yes | Random string, 8+ characters. Changing it invalidates codes already sent. |
 | `Cors__AllowedOrigins__0` | Yes | `https://yogademo.psoftcs.com` |
-| `Razorpay__KeyId` | Yes | `rzp_test_…` for QA, then the live key (a test key logs a warning) |
+| `Razorpay__KeyId` | Yes | `rzp_test_…` (Staging refuses any other key) |
 | `Razorpay__KeySecret` | Yes | Matching key secret |
 | `Razorpay__WebhookSecret` | Yes | The secret set on the Razorpay webhook (below) |
 | `DataProtection__KeysPath` | Yes | Full path of the `keys` folder from step 3. The app refuses to start without it. |
 | `Storage__RootPath` | Yes, for this deploy | Full path of the `uploads` folder from step 3. The default (`App_Data/uploads`) lives in the site folder and is lost on redeploy. |
-| `Otp__DemoPhones` | No (demo site only) | Comma-separated phones that sign in with the demo code, e.g. `+919000000001,+919000000002`. Every other phone gets a normal OTP. Empty or missing turns demo mode off. |
-| `Otp__DemoCode` | No (demo site only) | The 6-digit code for `Otp__DemoPhones`. Startup fails if it is set without `Otp__DemoPhones`. Attempt lockout and rate limits still apply, and the log shows a warning (with masked phones) while demo mode is on. |
+| `Otp__DemoPhones` | No (Staging only; Production refuses it) | Comma-separated phones that sign in with the demo code, e.g. `+919000000001,+919000000002`. Every other phone gets a normal OTP. Empty or missing turns demo mode off. |
+| `Otp__DemoCode` | No (Staging only; Production refuses it) | The 6-digit code for `Otp__DemoPhones`. Startup fails if it is set without `Otp__DemoPhones`. Attempt lockout and rate limits still apply, and the log shows a warning (with masked phones) while demo mode is on. |
 
 Leave `ForwardedHeaders__*` empty (IIS in-process has no proxy in front of the app) and `RefreshToken__CookieSameSite` at `Strict` (one site). The app refuses to start if a required value is missing or unsafe; see [What Production enforces](#what-production-enforces).
 
@@ -514,12 +526,13 @@ Leave `ForwardedHeaders__*` empty (IIS in-process has no proxy in front of the a
 
 **First deploy:** upload everything in `publish/` to the document root, then set the variables above in Plesk or in the server's `web.config`.
 
-**Every later deploy:**
+**Every later deploy** (keep each `site-publish` zip; see [docs/ops/rollback.md](docs/ops/rollback.md)):
 
 1. Upload `deploy/plesk/app_offline.htm` to the document root. IIS stops the app, unlocks its files and shows the maintenance page.
 2. Back up the database, then run the `migrations-sql` script if this release has new migrations.
 3. Upload the new `publish/` files, overwriting old ones, **except `web.config`**. Never re-upload it after the first deploy, because the server copy holds your variables. If a release really changes `web.config`, edit the server copy by hand. Never delete or overwrite the `keys` or `uploads` folders.
 4. Delete `app_offline.htm`. The app starts on the next request. Check that `https://yogademo.psoftcs.com/health/ready` returns `200`.
+5. Run the smoke test (**Actions → smoke**). If it fails, roll back.
 
 Old files in `wwwroot/assets` are harmless (every build uses new file names), and they keep already-open tabs working. Clear them now and then.
 

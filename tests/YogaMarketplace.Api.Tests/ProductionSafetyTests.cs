@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using YogaMarketplace.Api.Middleware;
 using YogaMarketplace.Api.Options;
 using YogaMarketplace.Api.Services;
@@ -32,10 +33,66 @@ public class ProductionSafetyTests : IClassFixture<YogaApiFactory>
         ["DataProtection:KeysPath"] = Path.Combine(Path.GetTempPath(), "yoga-keys")
     };
 
+    private static readonly (string, string)[] StagingKeys = [("Razorpay:KeyId", "rzp_test_example")];
+    private static readonly (string, string)[] DemoSignIn = [("Otp:DemoPhones", "+919811100001,+919811100002"), ("Otp:DemoCode", "246810")];
+
     [Fact]
     public void Safe_production_settings_start_without_warnings()
     {
-        Assert.Empty(ProductionSafety.Check(Config(), isProduction: true));
+        Assert.Empty(ProductionSafety.Check(Config(), Environments.Production));
+    }
+
+    [Theory]
+    [InlineData("Production", true)]
+    [InlineData("Staging", true)]
+    [InlineData("Development", false)]
+    [InlineData("Testing", false)]
+    public void Staging_gets_production_hardening(string environment, bool expected)
+    {
+        Assert.Equal(expected, ProductionSafety.AppliesTo(environment));
+    }
+
+    [Fact]
+    public void Staging_with_test_keys_starts_without_warnings()
+    {
+        Assert.Empty(ProductionSafety.Check(Config(StagingKeys), Environments.Staging));
+    }
+
+    [Fact]
+    public void Staging_with_live_keys_stops_startup()
+    {
+        var error = Assert.Throws<InvalidOperationException>(() => ProductionSafety.Check(Config(), Environments.Staging));
+        Assert.Contains("must be a test key", error.Message);
+    }
+
+    [Theory]
+    [InlineData("Database:AutoMigrate", "true", "AutoMigrate")]
+    [InlineData("Otp:ExposeCode", "true", "Otp:ExposeCode")]
+    [InlineData("Razorpay:UseFakeGateway", "true", "UseFakeGateway")]
+    [InlineData("Razorpay:KeySecret", "", "Razorpay:KeyId")]
+    [InlineData("DataProtection:KeysPath", "", "DataProtection:KeysPath is required")]
+    public void Unsafe_staging_settings_stop_startup(string key, string value, string expected)
+    {
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            ProductionSafety.Check(Config([.. StagingKeys, (key, value)]), Environments.Staging));
+        Assert.Contains(expected, error.Message);
+    }
+
+    [Fact]
+    public void Demo_sign_in_is_allowed_on_staging()
+    {
+        Assert.Empty(ProductionSafety.Check(Config([.. StagingKeys, .. DemoSignIn]), Environments.Staging));
+    }
+
+    [Theory]
+    [InlineData("+919811100001,+919811100002", "246810")]
+    [InlineData("+919811100001", "")]
+    [InlineData("", "246810")]
+    public void Demo_sign_in_stops_startup_in_production(string phones, string code)
+    {
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            ProductionSafety.Check(Config(("Otp:DemoPhones", phones), ("Otp:DemoCode", code)), Environments.Production));
+        Assert.Contains("must be empty in Production", error.Message);
     }
 
     [Theory]
@@ -46,44 +103,40 @@ public class ProductionSafetyTests : IClassFixture<YogaApiFactory>
     [InlineData("Razorpay:KeyId", "", "Razorpay:KeyId")]
     [InlineData("Razorpay:KeySecret", " ", "Razorpay:KeyId")]
     [InlineData("Razorpay:WebhookSecret", "", "Razorpay:KeyId")]
-    [InlineData("Otp:DemoCode", "246810", "Otp:DemoCode is set without Otp:DemoPhones")]
     [InlineData("DataProtection:KeysPath", "", "DataProtection:KeysPath is required")]
     [InlineData("DataProtection:KeysPath", "App_Data/keys", "DataProtection:KeysPath must be a full path")]
     public void Unsafe_production_settings_stop_startup(string key, string value, string expected)
     {
         var error = Assert.Throws<InvalidOperationException>(() =>
-            ProductionSafety.Check(Config((key, value)), isProduction: true));
+            ProductionSafety.Check(Config((key, value)), Environments.Production));
         Assert.Contains(expected, error.Message);
     }
 
-    [Fact]
-    public void Demo_mode_with_phones_and_a_code_is_allowed_in_production()
-    {
-        Assert.Empty(ProductionSafety.Check(
-            Config(("Otp:DemoPhones", "+919811100001,+919811100002"), ("Otp:DemoCode", "246810")), isProduction: true));
-    }
-
     [Theory]
+    [InlineData("", "246810", "Otp:DemoCode is set without Otp:DemoPhones")]
     [InlineData("+919811100001", "12ab56", "Otp:DemoCode must be 6 digits")]
     [InlineData("+919811100001,not-a-phone", "246810", "Otp:DemoPhones has an entry")]
-    public void A_malformed_demo_setup_stops_startup(string phones, string code, string expected)
+    public void A_malformed_demo_setup_stops_staging_startup(string phones, string code, string expected)
     {
         var error = Assert.Throws<InvalidOperationException>(() =>
-            ProductionSafety.Check(Config(("Otp:DemoPhones", phones), ("Otp:DemoCode", code)), isProduction: true));
+            ProductionSafety.Check(Config([.. StagingKeys, ("Otp:DemoPhones", phones), ("Otp:DemoCode", code)]), Environments.Staging));
         Assert.Contains(expected, error.Message);
     }
 
     [Fact]
     public void Test_keys_in_production_only_warn()
     {
-        var warning = Assert.Single(ProductionSafety.Check(Config(("Razorpay:KeyId", "rzp_test_abc")), isProduction: true));
+        var warning = Assert.Single(ProductionSafety.Check(Config(("Razorpay:KeyId", "rzp_test_abc")), Environments.Production));
         Assert.Contains("test keys", warning);
     }
 
-    [Fact]
-    public void Other_environments_are_not_checked()
+    [Theory]
+    [InlineData("Development")]
+    [InlineData("Testing")]
+    public void Other_environments_are_not_checked(string environment)
     {
-        Assert.Empty(ProductionSafety.Check(Config(("Database:AutoMigrate", "true"), ("Razorpay:KeyId", "")), isProduction: false));
+        Assert.Empty(ProductionSafety.Check(
+            Config([("Database:AutoMigrate", "true"), ("Razorpay:KeyId", ""), .. DemoSignIn]), environment));
     }
 
     [Fact]
