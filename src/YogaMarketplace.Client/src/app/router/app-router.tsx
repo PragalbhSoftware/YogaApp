@@ -131,9 +131,6 @@ export function AppRouter() {
                 <Route path={routes.home} element={<HomePage />} />
                 <Route path={routes.teacher} element={<TeacherPage />} />
                 <Route path={routes.packs} element={<PacksPage />} />
-                <Route path={routes.refundPolicy} element={<RefundPolicyPage />} />
-                <Route path={routes.terms} element={<TermsPage />} />
-                <Route path={routes.privacy} element={<PrivacyPage />} />
                 <Route element={<RequireAuth />}>
                   <Route element={<RequireRole roles={["Customer"]} />}>
                     <Route path={routes.book} element={<BookPage />} />
@@ -143,6 +140,11 @@ export function AppRouter() {
                   </Route>
                 </Route>
               </Route>
+            </Route>
+            <Route element={<CustomerLayout />}>
+              <Route path={routes.refundPolicy} element={<RefundPolicyPage />} />
+              <Route path={routes.terms} element={<TermsPage />} />
+              <Route path={routes.privacy} element={<PrivacyPage />} />
             </Route>
             <Route element={<RequireAuth />}>
               <Route element={<RequireRole roles={["Provider"]} />}>
