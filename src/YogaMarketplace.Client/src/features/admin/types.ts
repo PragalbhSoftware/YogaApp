@@ -220,7 +220,16 @@ export type PrivacySettings = {
   webhookPayloadRetentionDays: number;
 };
 
-export type AdminSettings = CreditSettings & ReconciliationSettings & PrivacySettings & {
+/** On/off and HH:mm market-clock times of the recurring jobs. Reconciliation's time is `reconciliationTime`. */
+export type JobScheduleSettings = {
+  reconciliationEnabled: boolean;
+  creditExpiryEnabled: boolean;
+  creditExpiryTime: string;
+  webhookCleanupEnabled: boolean;
+  webhookCleanupTime: string;
+};
+
+export type AdminSettings = CreditSettings & ReconciliationSettings & PrivacySettings & JobScheduleSettings & {
   version: number;
   currency: string;
   commissionPercent: number;
@@ -252,6 +261,7 @@ export type UpdateSettingsInput = Partial<
     | keyof CreditSettings
     | keyof ReconciliationSettings
     | keyof PrivacySettings
+    | keyof JobScheduleSettings
   >
 > & {
   version: number;
@@ -400,6 +410,26 @@ export type PagedList<T> = {
 };
 
 export const reconciliationPageSize = 20;
+
+export const backgroundJobStatuses = ["Failed", "Pending", "Running", "Succeeded"] as const;
+export type BackgroundJobStatus = (typeof backgroundJobStatuses)[number];
+
+/** One background job run. `recurring` marks the queued run of a recurring job. */
+export type AdminJob = {
+  id: string;
+  type: string;
+  payload: string | null;
+  status: BackgroundJobStatus;
+  runAt: string;
+  attempts: number;
+  maxAttempts: number;
+  lastError: string | null;
+  createdAt: string;
+  completedAt: string | null;
+  recurring: boolean;
+};
+
+export const jobsPageSize = 20;
 
 export type BookingListQuery = {
   status?: string;

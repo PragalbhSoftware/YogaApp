@@ -3,6 +3,7 @@ import {
   bannerSchema,
   creditSettingsSchema,
   feeSettingsSchema,
+  jobScheduleSettingsSchema,
   packSchema,
   privacySettingsSchema,
   reconciliationSettingsSchema,
@@ -105,6 +106,30 @@ describe("reconciliation settings form", () => {
     expect(reconErrors({ webhookStuckMinutes: 0 })).toEqual(["webhookStuckMinutes"]);
     expect(reconErrors({ refundPendingHours: 721 })).toEqual(["refundPendingHours"]);
     expect(reconErrors({ refundPendingHours: 1.5 })).toEqual(["refundPendingHours"]);
+  });
+});
+
+describe("job schedules form", () => {
+  const schedules = {
+    reconciliationEnabled: true,
+    creditExpiryEnabled: false,
+    creditExpiryTime: "00:00",
+    webhookCleanupEnabled: true,
+    webhookCleanupTime: "02:00",
+  };
+  const scheduleErrors = (input: Record<string, unknown>) => {
+    const result = jobScheduleSettingsSchema.safeParse({ ...schedules, ...input });
+    return result.success ? [] : result.error.issues.map((issue) => issue.path.join("."));
+  };
+
+  it("accepts on/off switches and HH:mm times", () => {
+    expect(scheduleErrors({})).toEqual([]);
+    expect(scheduleErrors({ creditExpiryTime: "23:59" })).toEqual([]);
+  });
+
+  it("rejects times that are not HH:mm", () => {
+    expect(scheduleErrors({ creditExpiryTime: "2:00" })).toEqual(["creditExpiryTime"]);
+    expect(scheduleErrors({ webhookCleanupTime: "24:00" })).toEqual(["webhookCleanupTime"]);
   });
 });
 

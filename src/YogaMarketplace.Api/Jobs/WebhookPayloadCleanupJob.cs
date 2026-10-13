@@ -6,53 +6,35 @@ using YogaMarketplace.Infrastructure.Persistence;
 namespace YogaMarketplace.Api.Jobs;
 
 /// <summary>
-/// Blanks the raw payload of processed webhook events older than the admin retention period, at midnight market time.
-/// The row itself stays for the event log. Received, Pending and Failed events keep their payload: they may still be
-/// handled, replayed or investigated.
+/// Blanks the raw payload of processed webhook events older than the admin retention period, daily at the admin-set
+/// market time (midnight by default). The row itself stays for the event log. Received, Pending and Failed events keep
+/// their payload: they may still be handled, replayed or investigated.
 /// </summary>
 public class WebhookPayloadCleanupJob : IBackgroundJobHandler
 {
     public const string JobType = "webhooks.clear-payloads";
     internal const int BatchSize = 500;
 
+    public static readonly RecurringJob Recurring = new(JobType, terms => terms.WebhookCleanup);
+
     private readonly YogaDbContext _db;
     private readonly IPlatformSettingsService _settings;
-    private readonly BackgroundJobQueue _queue;
     private readonly ILogger<WebhookPayloadCleanupJob> _logger;
 
     public WebhookPayloadCleanupJob(
         YogaDbContext db,
         IPlatformSettingsService settings,
-        BackgroundJobQueue queue,
         ILogger<WebhookPayloadCleanupJob> logger)
     {
         _db = db;
         _settings = settings;
-        _queue = queue;
         _logger = logger;
     }
 
     public string Type => JobType;
 
-    public async Task RunAsync(string? payload, CancellationToken cancellationToken)
-    {
-        var now = DateTimeOffset.UtcNow;
-        await EnsureScheduledAsync(now, cancellationToken);
-        await ClearAsync(now, cancellationToken);
-    }
-
-    /// <summary>Queues the next run unless one is already waiting. Also called at startup.</summary>
-    public async Task EnsureScheduledAsync(DateTimeOffset now, CancellationToken cancellationToken)
-    {
-        var next = CreditExpiryJob.NextRunAfter(now);
-        var waiting = await _db.BackgroundJobs.AnyAsync(
-            j => j.Type == JobType && j.Status == BackgroundJobStatus.Pending && j.RunAt >= next,
-            cancellationToken);
-        if (waiting)
-            return;
-        _queue.Enqueue(JobType, runAt: next);
-        await _db.SaveChangesAsync(cancellationToken);
-    }
+    public Task RunAsync(string? payload, CancellationToken cancellationToken) =>
+        ClearAsync(DateTimeOffset.UtcNow, cancellationToken);
 
     public async Task<int> ClearAsync(DateTimeOffset now, CancellationToken cancellationToken)
     {

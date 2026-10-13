@@ -1,11 +1,13 @@
 import type { AxiosResponse } from "axios";
 import { http } from "@/services/http/http-client";
 import {
+  jobsPageSize,
   reconciliationPageSize,
   type AdminArea,
   type AdminCertificate,
   type AdminBooking,
   type AdminCategory,
+  type AdminJob,
   type AdminPayment,
   type AdminPayout,
   type AdminProvider,
@@ -13,6 +15,7 @@ import {
   type AdminSettings,
   type AdminUserDetail,
   type AdminUserSummary,
+  type BackgroundJobStatus,
   type BookingListQuery,
   type PagedList,
   type ReconciliationItem,
@@ -174,6 +177,16 @@ export const adminApi = {
     return http
       .post<ReconciliationItem>(`/api/admin/reconciliation/items/${id}/resolve`, { note })
       .then((res) => res.data);
+  },
+
+  jobs(status: BackgroundJobStatus, page = 1) {
+    return http
+      .get<PagedList<AdminJob>>("/api/admin/jobs", { params: { status, page, pageSize: jobsPageSize } })
+      .then((res) => res.data);
+  },
+
+  retryJob(id: string) {
+    return http.post<AdminJob>(`/api/admin/jobs/${id}/retry`, {}).then((res) => res.data);
   },
 
   areas() {

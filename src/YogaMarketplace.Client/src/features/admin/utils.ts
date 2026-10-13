@@ -14,6 +14,17 @@ export function formatAdminWhen(value: string) {
   }).format(new Date(value));
 }
 
+const jobLabels: Record<string, string> = {
+  "credits.expire": "Expire unused credits",
+  "payments.reconcile": "Payment reconciliation",
+  "webhooks.clear-payloads": "Clear old webhook payloads",
+};
+
+/** Readable name of a background job type; an unknown type shows as it is. */
+export function jobLabel(type: string) {
+  return jobLabels[type] ?? type;
+}
+
 export function formatAdminDay(value: string) {
   return new Intl.DateTimeFormat("en-IN", {
     timeZone: "Asia/Kolkata",

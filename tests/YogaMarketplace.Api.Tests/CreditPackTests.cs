@@ -432,11 +432,12 @@ public class CreditPackTests : IClassFixture<YogaApiFactory>
         Assert.Equal(-3, Assert.Single(expired).Credits);
 
         using var scope = _factory.Services.CreateScope();
-        var job = scope.ServiceProvider.GetRequiredService<CreditExpiryJob>();
-        await job.EnsureScheduledAsync(DateTimeOffset.UtcNow, CancellationToken.None);
-        await job.EnsureScheduledAsync(DateTimeOffset.UtcNow, CancellationToken.None);
-        var next = CreditExpiryJob.NextRunAfter(DateTimeOffset.UtcNow);
-        Assert.Equal(1, await QueryAsync(db => db.BackgroundJobs.CountAsync(j => j.Type == CreditExpiryJob.JobType && j.RunAt == next)));
+        var scheduler = scope.ServiceProvider.GetRequiredService<RecurringJobScheduler>();
+        var now = DateTimeOffset.UtcNow;
+        await scheduler.EnsureAsync(now, CancellationToken.None);
+        await scheduler.EnsureAsync(now, CancellationToken.None);
+        var nextMidnight = MumbaiClock.SessionStart(MumbaiClock.Today(now).AddDays(1), TimeOnly.MinValue);
+        Assert.Equal(1, await QueryAsync(db => db.BackgroundJobs.CountAsync(j => j.Type == CreditExpiryJob.JobType && j.RunAt == nextMidnight)));
     }
 
     [Fact]

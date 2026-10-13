@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { adminApi } from "@/features/admin/api/admin-api";
 import type {
+  BackgroundJobStatus,
   BookingListQuery,
   ReconciliationItemQuery,
   UpdateSettingsInput,
@@ -202,6 +203,23 @@ export function useResolveReconciliationItem() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["admin-reconciliation-items"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-reconciliation-runs"] });
+    },
+  });
+}
+
+export function useAdminJobs(status: BackgroundJobStatus, page = 1) {
+  return useQuery({
+    queryKey: ["admin-jobs", status, page],
+    queryFn: () => adminApi.jobs(status, page),
+  });
+}
+
+export function useRetryJob() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => adminApi.retryJob(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin-jobs"] });
     },
   });
 }

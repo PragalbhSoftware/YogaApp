@@ -17,23 +17,26 @@ public class ReconciliationJob : IBackgroundJobHandler
     private const string DateFormat = "yyyy-MM-dd";
     private const int ErrorMax = 1000;
 
+    /// <summary>Each run covers the market day before the one it runs on.</summary>
+    public static readonly RecurringJob Recurring = new(
+        JobType,
+        terms => terms.Reconciliation,
+        runAt => MumbaiClock.Today(runAt).AddDays(-1).ToString(DateFormat, CultureInfo.InvariantCulture));
+
     private readonly YogaDbContext _db;
     private readonly IRazorpayClient _razorpay;
     private readonly IPlatformSettingsService _settings;
-    private readonly BackgroundJobQueue _queue;
     private readonly ILogger<ReconciliationJob> _logger;
 
     public ReconciliationJob(
         YogaDbContext db,
         IRazorpayClient razorpay,
         IPlatformSettingsService settings,
-        BackgroundJobQueue queue,
         ILogger<ReconciliationJob> logger)
     {
         _db = db;
         _razorpay = razorpay;
         _settings = settings;
-        _queue = queue;
         _logger = logger;
     }
 
@@ -41,34 +44,12 @@ public class ReconciliationJob : IBackgroundJobHandler
 
     public async Task RunAsync(string? payload, CancellationToken cancellationToken)
     {
-        var now = DateTimeOffset.UtcNow;
         var marketDate = DateOnly.ParseExact(payload ?? "", DateFormat, CultureInfo.InvariantCulture);
-        var runAt = (await _settings.GetAsync(cancellationToken)).Reconciliation.RunAt;
-        var thisRun = MumbaiClock.SessionStart(marketDate.AddDays(1), runAt);
-        await EnsureScheduledAsync(now > thisRun ? now : thisRun, cancellationToken);
         var done = await _db.ReconciliationRuns.AnyAsync(
             r => r.MarketDate == marketDate && r.Status == ReconciliationRunStatus.Completed,
             cancellationToken);
         if (!done)
-            await ReconcileAsync(marketDate, now, cancellationToken);
-    }
-
-    /// <summary>
-    /// Queues the next run at the admin-set time unless one is already waiting. Also called at startup.
-    /// A changed time applies from the run after the one already queued.
-    /// </summary>
-    public async Task EnsureScheduledAsync(DateTimeOffset now, CancellationToken cancellationToken)
-    {
-        var waiting = await _db.BackgroundJobs.AnyAsync(
-            j => j.Type == JobType && j.Status == BackgroundJobStatus.Pending,
-            cancellationToken);
-        if (waiting)
-            return;
-        var terms = (await _settings.GetAsync(cancellationToken)).Reconciliation;
-        var next = ReconciliationRules.NextRunAfter(now, terms.RunAt);
-        var marketDate = MumbaiClock.Today(next).AddDays(-1);
-        _queue.Enqueue(JobType, marketDate.ToString(DateFormat, CultureInfo.InvariantCulture), next);
-        await _db.SaveChangesAsync(cancellationToken);
+            await ReconcileAsync(marketDate, DateTimeOffset.UtcNow, cancellationToken);
     }
 
     public async Task<ReconciliationRun> ReconcileAsync(DateOnly marketDate, DateTimeOffset now, CancellationToken cancellationToken)

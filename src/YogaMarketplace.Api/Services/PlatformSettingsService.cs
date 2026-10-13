@@ -21,6 +21,7 @@ public sealed record CurrentSettings(
     ReconciliationTerms Reconciliation,
     int PolicyVersion,
     int WebhookPayloadRetentionDays,
+    RecurringJobTerms Jobs,
     int Version,
     DateTimeOffset? UpdatedAt)
 {
@@ -37,6 +38,7 @@ public sealed record CurrentSettings(
         PlatformSettingsRules.ReconciliationTermsFor(settings),
         settings.PolicyVersion,
         settings.WebhookPayloadRetentionDays,
+        PlatformSettingsRules.RecurringJobTermsFor(settings),
         settings.Version,
         settings.UpdatedAt);
 }
@@ -181,20 +183,27 @@ public class PlatformSettingsService : IPlatformSettingsService
         request.PackRefundsEnabled,
         request.PackReferenceSessionPrice,
         request.PackRefundFee,
-        ParseTime(request.ReconciliationTime),
+        ParseTime(request.ReconciliationTime, "Reconciliation time"),
         request.WebhookStuckMinutes,
         request.RefundPendingHours,
         request.PolicyVersion,
-        request.WebhookPayloadRetentionDays);
+        request.WebhookPayloadRetentionDays,
+        request.ReconciliationEnabled,
+        request.CreditExpiryEnabled,
+        ParseTime(request.CreditExpiryTime, "Credit expiry time"),
+        request.WebhookCleanupEnabled,
+        ParseTime(request.WebhookCleanupTime, "Webhook cleanup time"));
 
-    private static TimeOnly? ParseTime(string? value)
+    private static TimeOnly? ParseTime(string? value, string label)
     {
         if (string.IsNullOrWhiteSpace(value))
             return null;
         return TimeOnly.TryParseExact(value.Trim(), "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var time)
             ? time
-            : throw new DomainException("Reconciliation time must be HH:mm, for example 06:00.");
+            : throw new DomainException($"{label} must be HH:mm, for example 06:00.");
     }
+
+    private static string Time(TimeOnly value) => value.ToString("HH:mm", CultureInfo.InvariantCulture);
 
     private static AdminSettingsResponse ToAdmin(PlatformSettings settings) => new(
         settings.Version,
@@ -219,9 +228,14 @@ public class PlatformSettingsService : IPlatformSettingsService
         settings.PackRefundsEnabled,
         settings.PackReferenceSessionPrice,
         settings.PackRefundFee,
-        settings.ReconciliationTime.ToString("HH:mm", CultureInfo.InvariantCulture),
+        Time(settings.ReconciliationTime),
         settings.WebhookStuckMinutes,
         settings.RefundPendingHours,
         settings.PolicyVersion,
-        settings.WebhookPayloadRetentionDays);
+        settings.WebhookPayloadRetentionDays,
+        settings.ReconciliationEnabled,
+        settings.CreditExpiryEnabled,
+        Time(settings.CreditExpiryTime),
+        settings.WebhookCleanupEnabled,
+        Time(settings.WebhookCleanupTime));
 }

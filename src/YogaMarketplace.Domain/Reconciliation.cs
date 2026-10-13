@@ -77,14 +77,6 @@ public static class ReconciliationRules
     public static (DateTimeOffset Start, DateTimeOffset End) WindowFor(DateOnly marketDate) =>
         (MumbaiClock.SessionStart(marketDate, TimeOnly.MinValue), MumbaiClock.SessionStart(marketDate.AddDays(1), TimeOnly.MinValue));
 
-    /// <summary>The next market-clock moment at <paramref name="runAt"/> that is after <paramref name="now"/>.</summary>
-    public static DateTimeOffset NextRunAfter(DateTimeOffset now, TimeOnly runAt)
-    {
-        var today = MumbaiClock.Today(now);
-        var run = MumbaiClock.SessionStart(today, runAt);
-        return run > now ? run : MumbaiClock.SessionStart(today.AddDays(1), runAt);
-    }
-
     public static void Resolve(ReconciliationItem item, Guid adminUserId, string? note, DateTimeOffset now)
     {
         var trimmed = note?.Trim() ?? "";

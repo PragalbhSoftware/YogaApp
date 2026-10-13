@@ -6,51 +6,31 @@ using YogaMarketplace.Infrastructure.Persistence;
 namespace YogaMarketplace.Api.Jobs;
 
 /// <summary>
-/// Expires unused credits at midnight India time. Each run first queues the next midnight run, then writes one Expire row
-/// per batch that is past its expiry and still has credits. Running twice is safe: an expired batch has none left, and
-/// the database allows one Expire row per batch. Bookings already made with those credits stay.
+/// Expires unused credits daily at the admin-set market time (midnight by default). Writes one Expire row per batch
+/// that is past its expiry and still has credits. Running twice is safe: an expired batch has none left, and the
+/// database allows one Expire row per batch. Bookings already made with those credits stay.
 /// </summary>
 public class CreditExpiryJob : IBackgroundJobHandler
 {
     public const string JobType = "credits.expire";
 
+    public static readonly RecurringJob Recurring = new(JobType, terms => terms.CreditExpiry);
+
     private readonly YogaDbContext _db;
     private readonly CreditLedger _credits;
-    private readonly BackgroundJobQueue _queue;
     private readonly ILogger<CreditExpiryJob> _logger;
 
-    public CreditExpiryJob(YogaDbContext db, CreditLedger credits, BackgroundJobQueue queue, ILogger<CreditExpiryJob> logger)
+    public CreditExpiryJob(YogaDbContext db, CreditLedger credits, ILogger<CreditExpiryJob> logger)
     {
         _db = db;
         _credits = credits;
-        _queue = queue;
         _logger = logger;
     }
 
     public string Type => JobType;
 
-    public static DateTimeOffset NextRunAfter(DateTimeOffset now) =>
-        MumbaiClock.SessionStart(MumbaiClock.Today(now).AddDays(1), TimeOnly.MinValue);
-
-    public async Task RunAsync(string? payload, CancellationToken cancellationToken)
-    {
-        var now = DateTimeOffset.UtcNow;
-        await EnsureScheduledAsync(now, cancellationToken);
-        await ExpireDueAsync(now, cancellationToken);
-    }
-
-    /// <summary>Queues the next run unless one is already waiting. Also called at startup.</summary>
-    public async Task EnsureScheduledAsync(DateTimeOffset now, CancellationToken cancellationToken)
-    {
-        var next = NextRunAfter(now);
-        var waiting = await _db.BackgroundJobs.AnyAsync(
-            j => j.Type == JobType && j.Status == BackgroundJobStatus.Pending && j.RunAt >= next,
-            cancellationToken);
-        if (waiting)
-            return;
-        _queue.Enqueue(JobType, runAt: next);
-        await _db.SaveChangesAsync(cancellationToken);
-    }
+    public Task RunAsync(string? payload, CancellationToken cancellationToken) =>
+        ExpireDueAsync(DateTimeOffset.UtcNow, cancellationToken);
 
     public async Task<int> ExpireDueAsync(DateTimeOffset now, CancellationToken cancellationToken)
     {

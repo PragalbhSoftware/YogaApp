@@ -34,10 +34,18 @@ public sealed record PlatformSettingsChanges(
     int? WebhookStuckMinutes = null,
     int? RefundPendingHours = null,
     int? PolicyVersion = null,
-    int? WebhookPayloadRetentionDays = null);
+    int? WebhookPayloadRetentionDays = null,
+    bool? ReconciliationEnabled = null,
+    bool? CreditExpiryEnabled = null,
+    TimeOnly? CreditExpiryTime = null,
+    bool? WebhookCleanupEnabled = null,
+    TimeOnly? WebhookCleanupTime = null);
 
 /// <summary>When the daily reconciliation runs and how long a webhook or refund may wait before it is reported.</summary>
 public sealed record ReconciliationTerms(TimeOnly RunAt, int WebhookStuckMinutes, int RefundPendingHours);
+
+/// <summary>Schedules of the recurring jobs.</summary>
+public sealed record RecurringJobTerms(JobSchedule Reconciliation, JobSchedule CreditExpiry, JobSchedule WebhookCleanup);
 
 public sealed record SettingChange(string Field, string? OldValue, string? NewValue);
 
@@ -57,11 +65,19 @@ public static class PlatformSettingsRules
     public const int MaxRefundPendingHours = 30 * 24;
     public const int DefaultWebhookPayloadRetentionDays = 90;
     public const int MaxWebhookPayloadRetentionDays = 3650;
+    public static readonly TimeOnly DefaultDailyJobTime = TimeOnly.MinValue;
 
     public static ReconciliationTerms ReconciliationTermsFor(PlatformSettings settings) => new(
         settings.ReconciliationTime,
         settings.WebhookStuckMinutes,
         settings.RefundPendingHours);
+
+    public static RecurringJobTerms RecurringJobTermsFor(PlatformSettings settings) => new(
+        DailyIf(settings.ReconciliationEnabled, settings.ReconciliationTime),
+        DailyIf(settings.CreditExpiryEnabled, settings.CreditExpiryTime),
+        DailyIf(settings.WebhookCleanupEnabled, settings.WebhookCleanupTime));
+
+    private static JobSchedule DailyIf(bool enabled, TimeOnly at) => enabled ? JobSchedule.Daily(at) : JobSchedule.Off;
 
     public static BookingTerms TermsFor(PlatformSettings settings) => new(
         settings.CommissionPercent,
@@ -111,7 +127,12 @@ public static class PlatformSettingsRules
         var refunds = changes.PackRefundsEnabled ?? settings.PackRefundsEnabled;
         var referencePrice = changes.PackReferenceSessionPrice is decimal rp ? Flat(rp, "Reference session price") : settings.PackReferenceSessionPrice;
         var refundFee = changes.PackRefundFee is decimal rf ? Flat(rf, "Pack refund fee") : settings.PackRefundFee;
-        var reconcileAt = changes.ReconciliationTime is TimeOnly rt ? WholeMinute(rt) : settings.ReconciliationTime;
+        var reconcileAt = changes.ReconciliationTime is TimeOnly rt ? WholeMinute(rt, "Reconciliation time") : settings.ReconciliationTime;
+        var reconcileOn = changes.ReconciliationEnabled ?? settings.ReconciliationEnabled;
+        var expiryOn = changes.CreditExpiryEnabled ?? settings.CreditExpiryEnabled;
+        var expiryAt = changes.CreditExpiryTime is TimeOnly et ? WholeMinute(et, "Credit expiry time") : settings.CreditExpiryTime;
+        var cleanupOn = changes.WebhookCleanupEnabled ?? settings.WebhookCleanupEnabled;
+        var cleanupAt = changes.WebhookCleanupTime is TimeOnly wt ? WholeMinute(wt, "Webhook cleanup time") : settings.WebhookCleanupTime;
         var stuckMinutes = changes.WebhookStuckMinutes is int sm ? Between(sm, MaxWebhookStuckMinutes, "Stuck webhook threshold", "minutes") : settings.WebhookStuckMinutes;
         var pendingHours = changes.RefundPendingHours is int ph ? Between(ph, MaxRefundPendingHours, "Pending refund threshold", "hours") : settings.RefundPendingHours;
         var policyVersion = changes.PolicyVersion is int pv ? NotLower(pv, settings.PolicyVersion) : settings.PolicyVersion;
@@ -141,6 +162,11 @@ public static class PlatformSettingsRules
         Set(log, nameof(settings.RefundPendingHours), settings.RefundPendingHours, pendingHours, v => settings.RefundPendingHours = v);
         Set(log, nameof(settings.PolicyVersion), settings.PolicyVersion, policyVersion, v => settings.PolicyVersion = v);
         Set(log, nameof(settings.WebhookPayloadRetentionDays), settings.WebhookPayloadRetentionDays, retentionDays, v => settings.WebhookPayloadRetentionDays = v);
+        Set(log, nameof(settings.ReconciliationEnabled), settings.ReconciliationEnabled, reconcileOn, v => settings.ReconciliationEnabled = v);
+        Set(log, nameof(settings.CreditExpiryEnabled), settings.CreditExpiryEnabled, expiryOn, v => settings.CreditExpiryEnabled = v);
+        Set(log, nameof(settings.CreditExpiryTime), settings.CreditExpiryTime, expiryAt, v => settings.CreditExpiryTime = v);
+        Set(log, nameof(settings.WebhookCleanupEnabled), settings.WebhookCleanupEnabled, cleanupOn, v => settings.WebhookCleanupEnabled = v);
+        Set(log, nameof(settings.WebhookCleanupTime), settings.WebhookCleanupTime, cleanupAt, v => settings.WebhookCleanupTime = v);
         return log;
     }
 
@@ -151,10 +177,10 @@ public static class PlatformSettingsRules
         return value;
     }
 
-    private static TimeOnly WholeMinute(TimeOnly value)
+    private static TimeOnly WholeMinute(TimeOnly value, string label)
     {
         if (value.Second != 0 || value.Millisecond != 0)
-            throw new DomainException("Reconciliation time must be a whole minute.");
+            throw new DomainException($"{label} must be a whole minute.");
         return value;
     }
 

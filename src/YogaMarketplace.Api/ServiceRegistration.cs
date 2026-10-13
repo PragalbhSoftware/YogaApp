@@ -26,6 +26,7 @@ public static class ServiceRegistration
         services.Configure<JobsOptions>(configuration.GetSection(JobsOptions.Section));
         services.AddScoped<BackgroundJobQueue>();
         services.AddScoped<BackgroundJobRunner>();
+        services.AddScoped<RecurringJobScheduler>();
         services.AddHostedService<BackgroundJobHostedService>();
         services.AddMemoryCache();
         services.AddScoped<IPlatformSettingsService, PlatformSettingsService>();
@@ -41,10 +42,14 @@ public static class ServiceRegistration
         services.AddScoped<IAdminCreditService, AdminCreditService>();
         services.AddScoped<CreditExpiryJob>();
         services.AddScoped<IBackgroundJobHandler>(sp => sp.GetRequiredService<CreditExpiryJob>());
+        services.AddSingleton(CreditExpiryJob.Recurring);
         services.AddScoped<ReconciliationJob>();
         services.AddScoped<IBackgroundJobHandler>(sp => sp.GetRequiredService<ReconciliationJob>());
+        services.AddSingleton(ReconciliationJob.Recurring);
         services.AddScoped<WebhookPayloadCleanupJob>();
         services.AddScoped<IBackgroundJobHandler>(sp => sp.GetRequiredService<WebhookPayloadCleanupJob>());
+        services.AddSingleton(WebhookPayloadCleanupJob.Recurring);
+        services.AddScoped<AdminJobService>();
         services.AddScoped<IAdminProviderService, AdminProviderService>();
         services.AddScoped<IAdminCertificateService, AdminCertificateService>();
         services.AddScoped<IAdminUserService, AdminUserService>();

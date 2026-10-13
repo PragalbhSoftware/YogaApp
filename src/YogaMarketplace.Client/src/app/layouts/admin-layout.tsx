@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { Button } from "@mui/material";
-import { BookOpen, LayoutDashboard, Receipt, Settings, ShieldCheck, Users } from "lucide-react";
+import { BookOpen, CalendarClock, LayoutDashboard, Receipt, Settings, ShieldCheck, Users } from "lucide-react";
 import { PageLoader } from "@/components/common/page-loader";
 import { routes } from "@/constants/routes";
 import { useAuth } from "@/features/auth/hooks/use-auth";
@@ -15,6 +15,7 @@ const navItems = [
   { to: routes.adminUsers, label: "Users", icon: Users, end: false },
   { to: routes.adminBookings, label: "Bookings", icon: BookOpen, end: false },
   { to: routes.adminTransactions, label: "Money", icon: Receipt, end: false },
+  { to: routes.adminJobs, label: "Jobs", icon: CalendarClock, end: false },
   { to: routes.adminMasters, label: "Settings", icon: Settings, end: false },
 ];
 

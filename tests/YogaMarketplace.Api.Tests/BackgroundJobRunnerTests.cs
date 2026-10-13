@@ -164,8 +164,8 @@ public class BackgroundJobRunnerTests : IClassFixture<YogaApiFactory>
         var host = _factory.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
             services.AddScoped<IBackgroundJobHandler, TestJobHandler>()));
         using var scope = host.Services.CreateScope();
-        scope.ServiceProvider.GetRequiredService<CreditExpiryJob>()
-            .EnsureScheduledAsync(DateTimeOffset.UtcNow, CancellationToken.None).GetAwaiter().GetResult();
+        scope.ServiceProvider.GetRequiredService<RecurringJobScheduler>()
+            .EnsureAsync(DateTimeOffset.UtcNow, CancellationToken.None).GetAwaiter().GetResult();
         return host;
     }
 

@@ -18,6 +18,7 @@ export const routes = {
   adminBookings: "/admin/bookings",
   adminBooking: "/admin/bookings/:id",
   adminTransactions: "/admin/transactions",
+  adminJobs: "/admin/jobs",
   adminMasters: "/admin/masters",
   instructor: "/instructor",
   instructorRegister: "/instructor/register",

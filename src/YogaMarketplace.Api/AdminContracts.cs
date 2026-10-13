@@ -229,6 +229,15 @@ public class UpdateSettingsRequest
     public int? RefundPendingHours { get; set; }
     public int? PolicyVersion { get; set; }
     public int? WebhookPayloadRetentionDays { get; set; }
+    public bool? ReconciliationEnabled { get; set; }
+    public bool? CreditExpiryEnabled { get; set; }
+
+    /// <summary>Market-clock time as HH:mm.</summary>
+    public string? CreditExpiryTime { get; set; }
+    public bool? WebhookCleanupEnabled { get; set; }
+
+    /// <summary>Market-clock time as HH:mm.</summary>
+    public string? WebhookCleanupTime { get; set; }
 }
 
 public record AdminSettingsResponse(
@@ -258,7 +267,25 @@ public record AdminSettingsResponse(
     int WebhookStuckMinutes,
     int RefundPendingHours,
     int PolicyVersion,
-    int WebhookPayloadRetentionDays);
+    int WebhookPayloadRetentionDays,
+    bool ReconciliationEnabled,
+    bool CreditExpiryEnabled,
+    string CreditExpiryTime,
+    bool WebhookCleanupEnabled,
+    string WebhookCleanupTime);
+
+public record AdminJobResponse(
+    Guid Id,
+    string Type,
+    string? Payload,
+    string Status,
+    DateTimeOffset RunAt,
+    int Attempts,
+    int MaxAttempts,
+    string? LastError,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? CompletedAt,
+    bool Recurring);
 
 public record ReconciliationRunResponse(
     Guid Id,
