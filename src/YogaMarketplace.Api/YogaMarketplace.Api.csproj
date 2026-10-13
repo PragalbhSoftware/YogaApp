@@ -24,6 +24,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="YogaMarketplace.Api.Tests" />
     <Content Update="appsettings.Development.json" CopyToPublishDirectory="Never" />
+    <Content Update="DemoData\demo-data.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!--

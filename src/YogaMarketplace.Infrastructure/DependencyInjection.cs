@@ -16,6 +16,7 @@ public static class DependencyInjection
 
         services.AddDbContext<YogaDbContext>(options => options.UseSqlServer(connectionString));
         services.AddScoped<DbSeeder>();
+        services.AddScoped<DemoDataLoader>();
         services.Configure<StorageOptions>(options =>
             options.RootPath = configuration[$"{StorageOptions.Section}:{nameof(StorageOptions.RootPath)}"] ?? options.RootPath);
         services.AddSingleton<IFileStorage, LocalFileStorage>();
