@@ -1,0 +1,24 @@
+name: smoke
+
+# Post-deploy smoke against a live site. Run it from Actions → smoke → Run workflow after every deploy.
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: Site to test
+        required: true
+        default: https://yogademo.psoftcs.com
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet test tests/YogaMarketplace.Smoke -c Release --logger "console;verbosity=normal"
+        env:
+          SMOKE_BASE_URL: ${{ inputs.base_url }}
+          SMOKE_PHONE: ${{ secrets.SMOKE_PHONE }}
+          SMOKE_OTP_CODE: ${{ secrets.SMOKE_OTP_CODE }}

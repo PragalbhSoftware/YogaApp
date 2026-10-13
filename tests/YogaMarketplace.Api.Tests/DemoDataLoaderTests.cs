@@ -68,6 +68,20 @@ public class DemoDataLoaderTests : IClassFixture<YogaApiFactory>
         Assert.Equal(before, await CountsAsync());
     }
 
+    [Fact]
+    public async Task Loader_runs_on_Staging()
+    {
+        using var factory = new YogaApiFactory();
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<YogaDbContext>();
+        var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+
+        var loader = new DemoDataLoader(db, config, new StubEnvironment(Environments.Staging));
+        var result = await loader.LoadAsync(testPayments: true);
+
+        Assert.True(result.Created > 0);
+    }
+
     private async Task<string> CountsAsync()
     {
         using var scope = _factory.Services.CreateScope();

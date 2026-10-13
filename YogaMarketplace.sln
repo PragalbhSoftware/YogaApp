@@ -15,6 +15,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{639326A0
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "YogaMarketplace.Api.Tests", "tests\YogaMarketplace.Api.Tests\YogaMarketplace.Api.Tests.csproj", "{D2A08369-C579-465C-B1E7-A38799ACA407}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "YogaMarketplace.Smoke", "tests\YogaMarketplace.Smoke\YogaMarketplace.Smoke.csproj", "{17818CF4-9746-484F-86B0-D09E4BE51616}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -37,6 +39,10 @@ Global
 		{D2A08369-C579-465C-B1E7-A38799ACA407}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D2A08369-C579-465C-B1E7-A38799ACA407}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D2A08369-C579-465C-B1E7-A38799ACA407}.Release|Any CPU.Build.0 = Release|Any CPU
+		{17818CF4-9746-484F-86B0-D09E4BE51616}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{17818CF4-9746-484F-86B0-D09E4BE51616}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{17818CF4-9746-484F-86B0-D09E4BE51616}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{17818CF4-9746-484F-86B0-D09E4BE51616}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -46,5 +52,6 @@ Global
 		{669F18DA-EC8B-4902-92DB-36C9413C166E} = {2C10B14C-1F0B-409B-9A94-C095147228CC}
 		{7C906A91-286C-4F91-A213-E4757F755BDB} = {2C10B14C-1F0B-409B-9A94-C095147228CC}
 		{D2A08369-C579-465C-B1E7-A38799ACA407} = {639326A0-AEEC-495D-937C-03C981F64E95}
+		{17818CF4-9746-484F-86B0-D09E4BE51616} = {639326A0-AEEC-495D-937C-03C981F64E95}
 	EndGlobalSection
 EndGlobal
