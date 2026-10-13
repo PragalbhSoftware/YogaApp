@@ -93,7 +93,9 @@ public enum WebhookEventStatus
     Processed,
     /// <summary>Waiting for the payment it refers to; retried when that payment is captured.</summary>
     Pending,
-    Failed
+    Failed,
+    /// <summary>The payment does not match its order. Final: a redelivery is not processed again.</summary>
+    Rejected
 }
 
 public enum PayoutStatus

@@ -20,6 +20,12 @@ describe("purchaseStage", () => {
     expect(purchaseStage("order_1", status("order_1", "Completed"), true)).toBe("done");
   });
 
+  it("is failed only once the time limit passes on an order still marked Failed", () => {
+    expect(purchaseStage("order_1", status("order_1", "Failed"))).toBe("confirming");
+    expect(purchaseStage("order_1", status("order_1", "Failed"), true)).toBe("failed");
+    expect(purchaseStage("order_1", status("order_0", "Failed"), true)).toBe("slow");
+  });
+
   it("finishes on Completed or Refunded", () => {
     expect(purchaseStage("order_1", status("order_1", "Completed"))).toBe("done");
     expect(purchaseStage("order_1", status("order_1", "Refunded"))).toBe("refunded");

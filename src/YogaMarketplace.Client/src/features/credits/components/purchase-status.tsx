@@ -8,9 +8,10 @@ type PurchaseStatusProps = {
   batch: CreditBatch | null;
   onFindInstructor: () => void;
   onDismiss: () => void;
+  onRetry: () => void;
 };
 
-export function PurchaseStatus({ stage, batch, onFindInstructor, onDismiss }: PurchaseStatusProps) {
+export function PurchaseStatus({ stage, batch, onFindInstructor, onDismiss, onRetry }: PurchaseStatusProps) {
   if (stage === "idle") return null;
 
   if (stage === "confirming") {
@@ -35,6 +36,23 @@ export function PurchaseStatus({ stage, batch, onFindInstructor, onDismiss }: Pu
         <Button variant="text" sx={{ mt: 1, px: 0 }} onClick={onDismiss}>
           Close
         </Button>
+      </section>
+    );
+  }
+
+  if (stage === "failed") {
+    return (
+      <section className="rounded-3xl border border-red-200 bg-brand-surface p-5" role="alert">
+        <h2 className="font-heading text-lg font-medium">Payment failed, please try again</h2>
+        <p className="mt-1 text-sm text-brand-muted">Razorpay couldn’t take this payment. No credits were added.</p>
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+          <Button variant="contained" onClick={onRetry} sx={{ minHeight: 44, borderRadius: "14px" }}>
+            Try again
+          </Button>
+          <Button variant="text" onClick={onDismiss}>
+            Close
+          </Button>
+        </div>
       </section>
     );
   }

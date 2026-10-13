@@ -400,6 +400,16 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("PackId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<decimal?>("PackPriceCap")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<int?>("PackSessions")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("PackValidityDays")
+                        .HasColumnType("int");
+
                     b.Property<Guid?>("ProviderId")
                         .HasColumnType("uniqueidentifier");
 

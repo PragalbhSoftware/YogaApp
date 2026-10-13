@@ -1,11 +1,15 @@
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using YogaMarketplace.Api.Jobs;
 using YogaMarketplace.Api.Services;
 using YogaMarketplace.Domain;
@@ -134,7 +138,7 @@ public class CreditPackTests : IClassFixture<YogaApiFactory>
     }
 
     [Fact]
-    public async Task A_captured_webhook_with_a_wrong_amount_or_currency_is_recorded_failed_and_adds_no_credits()
+    public async Task A_captured_webhook_with_a_wrong_amount_or_currency_is_recorded_rejected_and_adds_no_credits()
     {
         var (admin, _) = await StaffAsync();
         var pack = await CreatePackAsync(admin, sessions: 4, price: 2400m);
@@ -153,8 +157,29 @@ public class CreditPackTests : IClassFixture<YogaApiFactory>
         var events = await QueryAsync(db => db.WebhookEvents.AsNoTracking()
             .Where(e => e.GatewayPaymentId == wrongAmount || e.GatewayPaymentId == wrongCurrency)
             .ToDictionaryAsync(e => e.GatewayPaymentId!, e => (e.Status, e.Error)));
-        Assert.Equal((WebhookEventStatus.Failed, "Payment amount does not match the pack price."), events[wrongAmount]);
-        Assert.Equal((WebhookEventStatus.Failed, "Payment currency does not match."), events[wrongCurrency]);
+        Assert.Equal((WebhookEventStatus.Rejected, "Payment amount does not match the pack price."), events[wrongAmount]);
+        Assert.Equal((WebhookEventStatus.Rejected, "Payment currency does not match."), events[wrongCurrency]);
+    }
+
+    [Fact]
+    public async Task A_replayed_mismatched_webhook_with_the_same_event_id_is_not_processed_again()
+    {
+        var (admin, _) = await StaffAsync();
+        var pack = await CreatePackAsync(admin, sessions: 4, price: 2400m);
+        var (customer, _) = await SignUpAsync();
+        var order = await PostAsync<PackOrderBody>(customer, $"/api/packs/{pack.Id}/orders", new { });
+        var eventId = "evt_pack_replay_" + Guid.NewGuid().ToString("N");
+        var body = CapturedBody(order.OrderId, "pay_pack_replay_" + Guid.NewGuid().ToString("N"), order.AmountPaise + 100);
+
+        Assert.Null((await PostWebhookAsync(body, eventId)).CreditBatchId);
+        const string marker = "left by the first delivery";
+        await QueryAsync(db => db.WebhookEvents.Where(e => e.EventId == eventId).ExecuteUpdateAsync(s => s.SetProperty(e => e.Error, marker)));
+        Assert.Null((await PostWebhookAsync(body, eventId)).CreditBatchId);
+
+        var saved = Assert.Single(await QueryAsync(db => db.WebhookEvents.AsNoTracking().Where(e => e.EventId == eventId).ToListAsync()));
+        Assert.Equal((WebhookEventStatus.Rejected, marker), (saved.Status, saved.Error));
+        Assert.Equal("Open", (await OrderStatusAsync(customer, order.OrderId)).Status);
+        Assert.Equal(0, (await CreditsAsync(customer)).Total);
     }
 
     [Fact]
@@ -179,6 +204,74 @@ public class CreditPackTests : IClassFixture<YogaApiFactory>
         Assert.Equal("Completed", (await OrderStatusAsync(customer, order.OrderId)).Status);
         Assert.Equal(4, (await CreditsAsync(customer)).Total);
         Assert.Equal(1, await QueryAsync(db => db.CreditLedger.CountAsync(e => e.BatchId == first.CreditBatchId && e.Kind == CreditEntryKind.Purchase)));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_capture_after_the_pack_was_deactivated_or_repriced_gives_the_pack_as_ordered_and_logs_a_warning(bool repriced)
+    {
+        var (admin, _) = await StaffAsync();
+        var pack = await CreatePackAsync(admin, sessions: 4, price: 2400m, validityDays: 30, priceCap: 800m);
+        var (customer, _) = await SignUpAsync();
+        var order = await PostAsync<PackOrderBody>(customer, $"/api/packs/{pack.Id}/orders", new { });
+        await PostWebhookAsync(FailedBody(order.OrderId, "pay_pack_changed_failed_" + Guid.NewGuid().ToString("N"), order.AmountPaise));
+        object change = repriced
+            ? new { version = pack.Version, price = 3000m, sessions = 6, validityDays = 10, priceCap = 500m }
+            : new { version = pack.Version, isActive = false };
+        await PatchAsync<AdminPackBody>(admin, $"/api/admin/packs/{pack.Id}", change);
+
+        var log = new WarningLog();
+        await using var logged = _factory.WithWebHostBuilder(builder => builder.ConfigureLogging(logging => logging.AddProvider(log)));
+        var capture = CapturedBody(order.OrderId, "pay_pack_changed_" + Guid.NewGuid().ToString("N"), order.AmountPaise);
+        var response = await SendWebhookAsync(capture, Sign(WebhookSecret, capture), client: logged.CreateClient());
+        var batchId = JsonSerializer.Deserialize<WebhookBody>(await response.Content.ReadAsStringAsync(), Json)!.CreditBatchId;
+
+        Assert.NotNull(batchId);
+        var batch = await QueryAsync(db => db.CreditBatches.AsNoTracking().SingleAsync(b => b.Id == batchId));
+        Assert.Equal((4, 2400m, 800m, 4), (batch.Sessions, batch.Price, batch.PriceCap, batch.Remaining));
+        Assert.Equal(CreditRules.ExpiresAt(batch.PurchasedAt, 30), batch.ExpiresAt);
+        Assert.Equal(4, (await CreditsAsync(customer)).Total);
+        Assert.Single(log.Warnings, line => line.Contains(order.OrderId, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Payment_failed_marks_both_a_booking_checkout_and_a_pack_checkout_failed()
+    {
+        var (admin, instructor) = await StaffAsync();
+        var pack = await CreatePackAsync(admin, sessions: 2, price: 1200m);
+        var (customer, _) = await SignUpAsync();
+        var packOrder = await PostAsync<PackOrderBody>(customer, $"/api/packs/{pack.Id}/orders", new { });
+        var bookingOrder = await PostAsync<OrderBody>(customer, "/api/bookings/orders", new { slotId = await SlotAsync(instructor, "Studio") });
+
+        await PostWebhookAsync(FailedBody(packOrder.OrderId, "pay_failed_pack_" + Guid.NewGuid().ToString("N"), packOrder.AmountPaise));
+        await PostWebhookAsync(FailedBody(bookingOrder.OrderId, "pay_failed_booking_" + Guid.NewGuid().ToString("N"), bookingOrder.AmountPaise));
+
+        var statuses = await QueryAsync(db => db.CheckoutIntents.AsNoTracking()
+            .Where(c => c.GatewayOrderId == packOrder.OrderId || c.GatewayOrderId == bookingOrder.OrderId)
+            .ToDictionaryAsync(c => c.Kind, c => c.Status));
+        Assert.Equal(CheckoutStatus.Failed, statuses[CheckoutKind.Pack]);
+        Assert.Equal(CheckoutStatus.Failed, statuses[CheckoutKind.Booking]);
+        Assert.Equal("Failed", (await OrderStatusAsync(customer, packOrder.OrderId)).Status);
+    }
+
+    [Fact]
+    public async Task An_expired_credit_cannot_be_used_even_before_the_expiry_job_runs()
+    {
+        var (admin, instructor) = await StaffAsync();
+        var pack = await CreatePackAsync(admin, sessions: 2, price: 1200m);
+        var (customer, _) = await SignUpAsync();
+        var batch = (await BuyAsync(customer, pack.Id)).Batch!;
+        await SetExpiryAsync(batch.Id, DateTimeOffset.UtcNow.AddMinutes(-1));
+        var slot = await SlotAsync(instructor, "Studio");
+
+        var quote = await QuoteAsync(customer, slot);
+
+        Assert.False(quote.Credit.Available);
+        Assert.Equal("NoCredits", quote.Credit.Reason);
+        await AssertStatusAsync(await customer.PostAsJsonAsync("/api/bookings/credit", new { slotId = slot }), HttpStatusCode.Conflict);
+        Assert.Equal(2, await RemainingAsync(batch.Id));
+        Assert.Equal(0, (await CreditsAsync(customer)).Total);
     }
 
     [Fact]
@@ -787,22 +880,24 @@ public class CreditPackTests : IClassFixture<YogaApiFactory>
     private Task<int> RemainingAsync(Guid batchId) =>
         QueryAsync(db => db.CreditBatches.Where(b => b.Id == batchId).Select(b => b.Remaining).SingleAsync());
 
-    private async Task<WebhookBody> PostWebhookAsync(string body)
+    private async Task<WebhookBody> PostWebhookAsync(string body, string? eventId = null)
     {
-        var response = await SendWebhookAsync(body, Sign(WebhookSecret, body));
+        var response = await SendWebhookAsync(body, Sign(WebhookSecret, body), eventId);
         var payload = await response.Content.ReadAsStringAsync();
         Assert.True(response.IsSuccessStatusCode, payload);
         return JsonSerializer.Deserialize<WebhookBody>(payload, Json)!;
     }
 
-    private Task<HttpResponseMessage> SendWebhookAsync(string body, string signature)
+    private Task<HttpResponseMessage> SendWebhookAsync(string body, string signature, string? eventId = null, HttpClient? client = null)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, "/api/webhooks/razorpay")
         {
             Content = new StringContent(body, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), "application/json")
         };
         request.Headers.TryAddWithoutValidation("X-Razorpay-Signature", signature);
-        return _factory.CreateClient().SendAsync(request);
+        if (eventId is not null)
+            request.Headers.TryAddWithoutValidation("X-Razorpay-Event-Id", eventId);
+        return (client ?? _factory.CreateClient()).SendAsync(request);
     }
 
     private static string Sign(string secret, string payload)
@@ -912,4 +1007,29 @@ public class CreditPackTests : IClassFixture<YogaApiFactory>
         Guid Id, int Remaining, int Used, string Status, decimal RefundFee, decimal RefundPreview, decimal RefundedAmount, string GatewayPaymentId);
     private sealed record TrialBody(Guid? ServiceId, bool Enabled, decimal? Price);
     private sealed record ServiceBody(Guid Id, bool TrialEnabled, decimal? TrialPrice);
+
+    /// <summary>Keeps the Warning lines logged by the pack purchase service.</summary>
+    private sealed class WarningLog : ILoggerProvider, ILogger
+    {
+        private readonly ConcurrentQueue<string> _warnings = new();
+
+        public IReadOnlyCollection<string> Warnings => _warnings.ToArray();
+
+        public ILogger CreateLogger(string categoryName) =>
+            categoryName == typeof(CreditPurchaseService).FullName ? this : NullLogger.Instance;
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => logLevel == LogLevel.Warning;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel == LogLevel.Warning)
+                _warnings.Enqueue(formatter(state, exception));
+        }
+
+        public void Dispose()
+        {
+        }
+    }
 }

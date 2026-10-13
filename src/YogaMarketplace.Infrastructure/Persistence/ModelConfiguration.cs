@@ -355,6 +355,7 @@ internal static class ModelConfiguration
         entity.Property(c => c.Mode).HasConversion<string>().HasMaxLength(16);
         entity.Property(c => c.Status).HasConversion<string>().HasMaxLength(16);
         entity.Property(c => c.Amount).HasPrecision(10, 2);
+        entity.Property(c => c.PackPriceCap).HasPrecision(10, 2);
         entity.Property(c => c.ConvenienceFee).HasPrecision(10, 2).HasDefaultValue(0m);
         entity.Property(c => c.IsTrial).HasDefaultValue(false);
         entity.Property(c => c.CommissionPercent).HasPrecision(5, 2).HasDefaultValue(0m);

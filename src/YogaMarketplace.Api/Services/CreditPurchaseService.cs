@@ -93,6 +93,9 @@ public class CreditPurchaseService
             Kind = CheckoutKind.Pack,
             CustomerId = customer.Id,
             PackId = pack.Id,
+            PackSessions = pack.Sessions,
+            PackValidityDays = pack.ValidityDays,
+            PackPriceCap = pack.PriceCap,
             Amount = pack.Price,
             Currency = currency,
             Gateway = PaymentGateways.Razorpay,
@@ -223,6 +226,15 @@ public class CreditPurchaseService
         }
 
         var pack = await _db.CreditPacks.AsNoTracking().SingleAsync(p => p.Id == checkout.PackId, cancellationToken);
+        var sessions = checkout.PackSessions ?? pack.Sessions;
+        var validityDays = checkout.PackValidityDays ?? pack.ValidityDays;
+        var priceCap = checkout.PackPriceCap ?? pack.PriceCap;
+        if (!pack.IsActive || pack.Price != checkout.Amount || pack.Sessions != sessions || pack.ValidityDays != validityDays || pack.PriceCap != priceCap)
+        {
+            _logger.LogWarning(
+                "Pack {PackId} was deactivated or changed after order {OrderId}; payment {PaymentId} gets the pack as ordered: {Sessions} credits for {Price}.",
+                pack.Id, orderId, paymentId, sessions, checkout.Amount);
+        }
         var terms = (await _settings.GetAsync(cancellationToken)).Credits;
         var batch = new CreditBatch
         {
@@ -231,10 +243,10 @@ public class CreditPurchaseService
             PackId = pack.Id,
             CheckoutIntentId = checkout.Id,
             PackName = pack.Name,
-            Sessions = pack.Sessions,
+            Sessions = sessions,
             Price = checkout.Amount,
-            ValidityDays = pack.ValidityDays,
-            PriceCap = pack.PriceCap,
+            ValidityDays = validityDays,
+            PriceCap = priceCap,
             Currency = checkout.Currency,
             ChargeConvenienceFee = terms.ChargeConvenienceFee,
             PayBasis = terms.PayBasis,
@@ -245,8 +257,8 @@ public class CreditPurchaseService
             RefundFee = terms.RefundFee,
             GatewayPaymentId = paymentId,
             PurchasedAt = now,
-            ExpiresAt = CreditRules.ExpiresAt(now, pack.ValidityDays),
-            Remaining = pack.Sessions
+            ExpiresAt = CreditRules.ExpiresAt(now, validityDays),
+            Remaining = sessions
         };
         await _credits.LockAsync(checkout.CustomerId, now, cancellationToken);
         _credits.AddPurchase(batch);

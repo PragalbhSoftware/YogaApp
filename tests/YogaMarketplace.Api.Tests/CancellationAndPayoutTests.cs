@@ -77,6 +77,108 @@ public class CancellationAndPayoutTests : IClassFixture<YogaApiFactory>
         }
     }
 
+    [Theory]
+    [InlineData("Percent", 0, 0, "07:45")]
+    [InlineData("Percent", 100, 749, "08:05")]
+    [InlineData("Flat", 200, 200, "08:25")]
+    public async Task Late_cancel_takes_the_fee_from_settings_and_refunds_the_rest_through_razorpay(
+        string feeType, decimal feeValue, decimal expectedFee, string start)
+    {
+        const decimal convenienceFee = 30m;
+        var admin = await SignInAsync(SeedIds.AdminPhone);
+        await AdminSettingsClient.PatchAsync(admin, version => new
+        {
+            version,
+            cancelFreeWindowHours = 48,
+            convenienceFee,
+            lateCancelFeeType = feeType,
+            lateCancelFeeValue = feeValue
+        });
+        try
+        {
+            var customer = await SignUpAsync("Leela Pillai", "Female");
+            var instructor = await SignInAsync("9876543210");
+            var booked = await BookAsync(customer, await TomorrowSlotAsync(instructor, "Studio", start), "pay_fee_" + Guid.NewGuid().ToString("N"));
+            await PostAsync<BookingBody>(instructor, $"/api/bookings/{booked.Id}/accept", new { });
+
+            var cancelled = await PostAsync<BookingBody>(customer, $"/api/bookings/{booked.Id}/cancel", new { });
+
+            var refund = booked.Amount - expectedFee;
+            Assert.True(refund >= 0);
+            Assert.Equal(refund, cancelled.RefundedAmount);
+            Assert.Equal(expectedFee > 0 ? expectedFee : null, cancelled.LateCancelFee);
+            Assert.Equal(refund > 0 ? "PartiallyRefunded" : "Paid", cancelled.PaymentStatus);
+            var refunds = RefundsFor(booked.GatewayPaymentId!);
+            if (refund > 0)
+                Assert.Equal(RazorpayMoney.ToPaise(refund), Assert.Single(refunds).AmountPaise);
+            else
+                Assert.Empty(refunds);
+            var payouts = await QueryAsync(db => db.PayoutsPending.Where(p => p.BookingId == booked.Id).Select(p => p.GrossAmount).ToArrayAsync());
+            Assert.Equal(expectedFee > 0 ? new[] { expectedFee } : [], payouts);
+        }
+        finally
+        {
+            await AdminSettingsClient.ResetFeesAsync(admin);
+        }
+    }
+
+    [Fact]
+    public async Task A_zero_hour_window_refunds_an_accepted_booking_in_full_until_it_starts()
+    {
+        var admin = await SignInAsync(SeedIds.AdminPhone);
+        await AdminSettingsClient.SetCancelWindowAsync(admin, 0);
+        try
+        {
+            var customer = await SignUpAsync("Asha Kulkarni", "Female");
+            var instructor = await SignInAsync("9876543210");
+            var booked = await BookAsync(customer, await TomorrowSlotAsync(instructor, "Studio", "08:45"), "pay_zero_window");
+            await PostAsync<BookingBody>(instructor, $"/api/bookings/{booked.Id}/accept", new { });
+
+            var quote = await customer.GetFromJsonAsync<QuoteBody>($"/api/bookings/{booked.Id}/cancel-quote", Json);
+            var cancelled = await PostAsync<BookingBody>(customer, $"/api/bookings/{booked.Id}/cancel", new { });
+
+            Assert.Equal((0m, booked.Amount), (quote!.LateCancelFee, quote.Refund));
+            Assert.Equal(("Refunded", booked.Amount, (decimal?)null), (cancelled.PaymentStatus, cancelled.RefundedAmount, cancelled.LateCancelFee));
+            Assert.Equal(RazorpayMoney.ToPaise(booked.Amount), Assert.Single(RefundsFor(booked.GatewayPaymentId!)).AmountPaise);
+            Assert.Equal(0, await PayoutCountAsync(booked.Id));
+        }
+        finally
+        {
+            await AdminSettingsClient.SetCancelWindowAsync(admin, 12);
+        }
+    }
+
+    [Fact]
+    public async Task Payout_export_leaves_out_declined_free_cancelled_and_admin_cancelled_bookings()
+    {
+        var admin = await SignInAsync(SeedIds.AdminPhone);
+        var customer = await SignUpAsync("Nisha Bose", "Female");
+        var instructor = await SignInAsync("9876543210");
+        var declined = await BookAsync(customer, await TomorrowSlotAsync(instructor, "Online", "09:05"), "pay_export_declined");
+        var freeCancelled = await BookAsync(customer, await TomorrowSlotAsync(instructor, "Online", "09:25"), "pay_export_free_cancel");
+        var adminCancelled = await BookAsync(customer, await TomorrowSlotAsync(instructor, "Online", "09:45"), "pay_export_admin_cancel");
+        var completed = await BookAsync(customer, await TomorrowSlotAsync(instructor, "Online", "10:05"), "pay_export_completed");
+
+        await PostAsync<BookingBody>(instructor, $"/api/bookings/{declined.Id}/decline", new { });
+        await PostAsync<BookingBody>(customer, $"/api/bookings/{freeCancelled.Id}/cancel", new { });
+        await PostAsync<AdminBookingBody>(admin, $"/api/admin/bookings/{adminCancelled.Id}/cancel", new { reason = "Instructor is unwell" });
+        await PostAsync<BookingBody>(instructor, $"/api/bookings/{completed.Id}/accept", new { });
+        await PostAsync<BookingBody>(instructor, $"/api/bookings/{completed.Id}/complete", new { });
+        await BackdatePayoutAsync(await PayoutIdAsync(completed.Id));
+
+        var export = await admin.PostAsync("/api/admin/payouts/export", null);
+        var csv = await export.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, export.StatusCode);
+        Assert.Contains(completed.Id.ToString(), csv);
+        foreach (var refunded in new[] { declined, freeCancelled, adminCancelled })
+        {
+            Assert.Equal(RazorpayMoney.ToPaise(refunded.Amount), Assert.Single(RefundsFor(refunded.GatewayPaymentId!)).AmountPaise);
+            Assert.Equal(0, await PayoutCountAsync(refunded.Id));
+            Assert.DoesNotContain(refunded.Id.ToString(), csv);
+        }
+    }
+
     [Fact]
     public async Task Admin_force_cancel_always_refunds_in_full_and_needs_a_reason()
     {

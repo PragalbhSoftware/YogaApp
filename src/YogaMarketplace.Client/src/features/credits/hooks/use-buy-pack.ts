@@ -21,14 +21,15 @@ import {
   readPendingPackOrder,
   savePendingPackOrder,
 } from "@/features/credits/utils/pending-pack-order";
-import { packConfirmTimeoutMs, purchaseStage } from "@/features/credits/utils/purchase-stage";
+import { packConfirmTimeoutMs, packFailedTimeoutMs, purchaseStage } from "@/features/credits/utils/purchase-stage";
 import { isRetryable, toUserMessage } from "@/services/http/api-error";
 import { useAuthStore } from "@/stores/auth-store";
 
 /**
  * Buys a pack: opens a server order, takes payment in Razorpay, then waits for the server to capture it. A confirm
  * that fails on the network keeps polling, because the Razorpay webhook may still capture the payment. Polling stops
- * after a couple of minutes, and a refresh resumes it for the same paid order.
+ * after a couple of minutes, and a refresh resumes it for the same paid order. An order Razorpay marked Failed is
+ * given a shorter wait for a late capture, then the customer can try again.
  */
 export function useBuyPack() {
   const queryClient = useQueryClient();
@@ -38,24 +39,26 @@ export function useBuyPack() {
   const confirmLocal = useConfirmLocalPackPayment();
   const userId = user?.id;
   const [buyingId, setBuyingId] = useState<string | null>(null);
+  const [lastPack, setLastPack] = useState<Pack | null>(null);
   const [orderId, setOrderId] = useState<string | null>(() => readPendingPackOrder(userId));
   const [timedOut, setTimedOut] = useState(false);
   const [confirmed, setConfirmed] = useState<PackOrderStatus | null>(null);
   const known = confirmed?.orderId === orderId ? confirmed : null;
   const settled = known?.status === "Completed" || known?.status === "Refunded";
-  const poll = usePackOrderStatus(orderId && !timedOut && !settled ? orderId : null);
+  const poll = usePackOrderStatus(orderId, !timedOut && !settled);
   const status = known && known.status !== "Open" ? known : (poll.data ?? known);
   const stage = purchaseStage(orderId, status, timedOut);
+  const markedFailed = status?.orderId === orderId && status?.status === "Failed";
 
   useEffect(() => {
     if (stage !== "confirming") return;
-    const timer = window.setTimeout(() => setTimedOut(true), packConfirmTimeoutMs);
+    const timer = window.setTimeout(() => setTimedOut(true), markedFailed ? packFailedTimeoutMs : packConfirmTimeoutMs);
     return () => window.clearTimeout(timer);
-  }, [stage, orderId]);
+  }, [stage, orderId, markedFailed]);
 
   useEffect(() => {
     if (stage === "done") invalidateCredits(queryClient);
-    if (stage === "done" || stage === "refunded") clearPendingPackOrder();
+    if (stage === "done" || stage === "refunded" || stage === "failed") clearPendingPackOrder();
   }, [stage, queryClient]);
 
   function track(id: string) {
@@ -66,6 +69,7 @@ export function useBuyPack() {
 
   async function buy(pack: Pack) {
     setBuyingId(pack.id);
+    setLastPack(pack);
     try {
       const order = await createOrder.mutateAsync(pack.id);
       if (order.localCapture || isFakeOrder(order.orderId)) {
@@ -116,6 +120,12 @@ export function useBuyPack() {
     clearPendingPackOrder();
   }
 
+  /** Starts a new payment for the same pack; after a refresh the pack isn't known, so it only clears the failed order. */
+  function retry() {
+    reset();
+    if (lastPack) void buy(lastPack);
+  }
+
   const waiting = stage === "confirming" || stage === "slow";
-  return { buy, reset, buyingId, stage, batch: status?.batch ?? null, busy: buyingId !== null || waiting };
+  return { buy, reset, retry, buyingId, stage, batch: status?.batch ?? null, busy: buyingId !== null || waiting };
 }
