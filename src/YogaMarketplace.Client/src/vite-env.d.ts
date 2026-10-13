@@ -26,6 +26,7 @@ interface RazorpayCheckoutOptions {
     contact?: string;
     email?: string;
   };
+  readonly?: { contact?: boolean; email?: boolean; name?: boolean };
   theme?: { color?: string };
   handler: (response: RazorpaySuccessResponse) => void;
   modal?: { ondismiss?: () => void };
