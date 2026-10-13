@@ -153,7 +153,7 @@ public class ConsentTests : IClassFixture<YogaApiFactory>
             var job = scope.ServiceProvider.GetRequiredService<WebhookPayloadCleanupJob>();
             Assert.Equal(oldProcessed.Length, await job.ClearAsync(now, CancellationToken.None));
             Assert.Equal(0, await job.ClearAsync(now, CancellationToken.None));
-            await job.EnsureScheduledAsync(now, CancellationToken.None);
+            await scope.ServiceProvider.GetRequiredService<RecurringJobScheduler>().EnsureAsync(now, CancellationToken.None);
         }
 
         var ids = oldProcessed.Concat(kept).ToList();

@@ -146,12 +146,8 @@ public static class DatabaseStartup
         if (!ShouldScheduleRecurringJobs(app.Environment))
             return;
         using var scope = app.Services.CreateScope();
-        await scope.ServiceProvider.GetRequiredService<YogaMarketplace.Api.Jobs.CreditExpiryJob>()
-            .EnsureScheduledAsync(DateTimeOffset.UtcNow, CancellationToken.None);
-        await scope.ServiceProvider.GetRequiredService<YogaMarketplace.Api.Jobs.ReconciliationJob>()
-            .EnsureScheduledAsync(DateTimeOffset.UtcNow, CancellationToken.None);
-        await scope.ServiceProvider.GetRequiredService<YogaMarketplace.Api.Jobs.WebhookPayloadCleanupJob>()
-            .EnsureScheduledAsync(DateTimeOffset.UtcNow, CancellationToken.None);
+        await scope.ServiceProvider.GetRequiredService<YogaMarketplace.Api.Jobs.RecurringJobScheduler>()
+            .EnsureAsync(DateTimeOffset.UtcNow, CancellationToken.None);
     }
 
     public static async Task InitializeAsync(WebApplication app)

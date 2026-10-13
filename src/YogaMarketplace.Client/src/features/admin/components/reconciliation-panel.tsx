@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Button, Pagination } from "@mui/material";
+import { Button } from "@mui/material";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/common/empty-state";
 import { ErrorState } from "@/components/common/error-state";
 import { BookingListSkeleton } from "@/components/common/loading-skeleton";
 import { FilterChips } from "@/features/admin/components/filter-chips";
+import { ListPagination } from "@/features/admin/components/list-pagination";
 import { ReconciliationResolveDialog } from "@/features/admin/components/reconciliation-resolve-dialog";
 import {
   useReconciliationItems,
@@ -16,7 +17,6 @@ import {
   reconciliationItemStatuses,
   reconciliationItemTypes,
   type ReconciliationItem,
-  type PagedList,
   type ReconciliationItemType,
   type ReconciliationRun,
 } from "@/features/admin/types";
@@ -150,24 +150,6 @@ export function ReconciliationPanel() {
         }}
       />
     </div>
-  );
-}
-
-function ListPagination({
-  label,
-  list,
-  onChange,
-}: {
-  label: string;
-  list: PagedList<unknown>;
-  onChange: (page: number) => void;
-}) {
-  const pages = Math.ceil(list.total / list.pageSize);
-  if (pages <= 1) return null;
-  return (
-    <nav aria-label={label} className="flex justify-center pt-2">
-      <Pagination count={pages} page={list.page} onChange={(_, page) => onChange(page)} shape="rounded" />
-    </nav>
   );
 }
 

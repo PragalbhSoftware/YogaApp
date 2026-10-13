@@ -116,8 +116,10 @@ export const reconciliationLimits = {
   noteMax: 500,
 } as const;
 
+const marketTime = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Pick a time such as 06:00.");
+
 export const reconciliationSettingsSchema = z.object({
-  reconciliationTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Pick a time such as 06:00."),
+  reconciliationTime: marketTime,
   webhookStuckMinutes: z.coerce
     .number({ invalid_type_error: "Enter a number of minutes." })
     .int("Enter a whole number of minutes.")
@@ -128,6 +130,14 @@ export const reconciliationSettingsSchema = z.object({
     .int("Enter a whole number of hours.")
     .min(1, `Must be between 1 and ${reconciliationLimits.maxRefundPendingHours} hours.`)
     .max(reconciliationLimits.maxRefundPendingHours, `Must be between 1 and ${reconciliationLimits.maxRefundPendingHours} hours.`),
+});
+
+export const jobScheduleSettingsSchema = z.object({
+  reconciliationEnabled: z.boolean(),
+  creditExpiryEnabled: z.boolean(),
+  creditExpiryTime: marketTime,
+  webhookCleanupEnabled: z.boolean(),
+  webhookCleanupTime: marketTime,
 });
 
 export const maxWebhookPayloadRetentionDays = 3650;
@@ -210,5 +220,6 @@ export type BannerValues = z.infer<typeof bannerSchema>;
 export type CreditSettingsValues = z.infer<typeof creditSettingsSchema>;
 export type PackFormValues = z.infer<typeof packSchema>;
 export type ReconciliationSettingsValues = z.infer<typeof reconciliationSettingsSchema>;
+export type JobScheduleSettingsValues = z.infer<typeof jobScheduleSettingsSchema>;
 export type ResolveItemValues = z.infer<typeof resolveItemSchema>;
 export type PrivacySettingsValues = z.infer<ReturnType<typeof privacySettingsSchema>>;

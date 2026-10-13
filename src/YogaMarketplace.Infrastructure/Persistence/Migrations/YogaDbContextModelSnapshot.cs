@@ -116,6 +116,10 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                         .HasMaxLength(4000)
                         .HasColumnType("nvarchar(4000)");
 
+                    b.Property<string>("RecurringType")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
                     b.Property<DateTimeOffset>("RunAt")
                         .HasColumnType("datetimeoffset");
 
@@ -132,6 +136,10 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("Status", "RunAt");
+
+                    b.HasIndex(new[] { "RecurringType" }, "IX_BackgroundJobs_OneQueuedRunPerRecurringJob")
+                        .IsUnique()
+                        .HasFilter("[RecurringType] IS NOT NULL");
 
                     b.ToTable("BackgroundJobs");
                 });
@@ -980,6 +988,14 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                         .HasColumnType("bit")
                         .HasDefaultValue(false);
 
+                    b.Property<bool>("CreditExpiryEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<TimeOnly>("CreditExpiryTime")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("time")
+                        .HasDefaultValue(new TimeOnly(0, 0, 0));
+
                     b.Property<string>("CreditLateCancel")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -1042,6 +1058,9 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                         .HasColumnType("int")
                         .HasDefaultValue(1);
 
+                    b.Property<bool>("ReconciliationEnabled")
+                        .HasColumnType("bit");
+
                     b.Property<TimeOnly>("ReconciliationTime")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("time")
@@ -1063,6 +1082,14 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int")
                         .HasDefaultValue(1);
+
+                    b.Property<bool>("WebhookCleanupEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<TimeOnly>("WebhookCleanupTime")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("time")
+                        .HasDefaultValue(new TimeOnly(0, 0, 0));
 
                     b.Property<int>("WebhookPayloadRetentionDays")
                         .ValueGeneratedOnAdd()

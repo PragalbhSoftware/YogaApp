@@ -333,6 +333,13 @@ public class PlatformSettings
     /// <summary>Version of the Terms and Privacy pages users must accept. Raising it asks every user again once.</summary>
     public int PolicyVersion { get; set; } = 1;
     public int WebhookPayloadRetentionDays { get; set; } = PlatformSettingsRules.DefaultWebhookPayloadRetentionDays;
+
+    /// <summary>On/off and market-clock times of the recurring jobs.</summary>
+    public bool ReconciliationEnabled { get; set; } = true;
+    public bool CreditExpiryEnabled { get; set; } = true;
+    public TimeOnly CreditExpiryTime { get; set; } = PlatformSettingsRules.DefaultDailyJobTime;
+    public bool WebhookCleanupEnabled { get; set; } = true;
+    public TimeOnly WebhookCleanupTime { get; set; } = PlatformSettingsRules.DefaultDailyJobTime;
     public int Version { get; set; } = 1;
     public DateTimeOffset? UpdatedAt { get; set; }
 }
@@ -363,6 +370,12 @@ public class BackgroundJob
     public DateTimeOffset? LockedUntil { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? CompletedAt { get; set; }
+
+    /// <summary>
+    /// Set on the one queued run of a recurring job, unique per type, so two instances never queue it twice.
+    /// Cleared when that run succeeds or fails for good.
+    /// </summary>
+    public string? RecurringType { get; set; }
 }
 
 public class OtpChallenge

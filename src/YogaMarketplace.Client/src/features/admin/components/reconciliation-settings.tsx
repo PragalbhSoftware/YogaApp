@@ -65,7 +65,7 @@ function ReconciliationForm({ settings }: { settings: AdminSettings }) {
               fullWidth
               slotProps={{ inputLabel: { shrink: true } }}
               error={Boolean(errors.reconciliationTime)}
-              helperText={errors.reconciliationTime?.message ?? "India time. A change applies after the next scheduled check."}
+              helperText={errors.reconciliationTime?.message ?? "India time. A change moves the next check within a minute or two."}
               {...form.register("reconciliationTime")}
             />
             <TextField

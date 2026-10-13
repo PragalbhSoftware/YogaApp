@@ -435,6 +435,8 @@ internal static class ModelConfiguration
         entity.Property(s => s.RefundPendingHours).HasDefaultValue(PlatformSettingsRules.DefaultRefundPendingHours);
         entity.Property(s => s.PolicyVersion).HasDefaultValue(1);
         entity.Property(s => s.WebhookPayloadRetentionDays).HasDefaultValue(PlatformSettingsRules.DefaultWebhookPayloadRetentionDays);
+        entity.Property(s => s.CreditExpiryTime).HasDefaultValue(PlatformSettingsRules.DefaultDailyJobTime);
+        entity.Property(s => s.WebhookCleanupTime).HasDefaultValue(PlatformSettingsRules.DefaultDailyJobTime);
     }
 
     private static void ConfigureSettingsAudit(EntityTypeBuilder<SettingsAudit> entity)
@@ -464,7 +466,11 @@ internal static class ModelConfiguration
         entity.Property(j => j.Status).HasConversion<string>().HasMaxLength(16);
         entity.Property(j => j.LastError).HasMaxLength(1000);
         entity.Property(j => j.LockedBy).HasMaxLength(80);
+        entity.Property(j => j.RecurringType).HasMaxLength(80);
         entity.HasIndex(j => new { j.Status, j.RunAt });
+        entity.HasIndex(j => j.RecurringType, "IX_BackgroundJobs_OneQueuedRunPerRecurringJob")
+            .IsUnique()
+            .HasFilter(sqlite ? "\"RecurringType\" IS NOT NULL" : "[RecurringType] IS NOT NULL");
         if (sqlite)
         {
             // SQLite cannot compare DateTimeOffset text; the runner filters on these in SQL.

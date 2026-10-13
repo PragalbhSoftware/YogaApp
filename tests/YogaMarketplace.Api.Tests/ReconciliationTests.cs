@@ -197,7 +197,7 @@ public class ReconciliationTests
         await host.EnsureScheduledAsync(now);
 
         var job = Assert.Single(await host.JobsAsync(BackgroundJobStatus.Pending));
-        var expected = ReconciliationRules.NextRunAfter(now, new TimeOnly(7, 30));
+        var expected = JobSchedule.Daily(new TimeOnly(7, 30)).NextRunAfter(now);
         Assert.Equal(expected, job.RunAt);
         Assert.Equal(TimeOnly.FromDateTime(TimeZoneInfo.ConvertTime(job.RunAt, MumbaiClock.Zone).DateTime), new TimeOnly(7, 30));
         var marketDay = MumbaiClock.Today(job.RunAt).AddDays(-1);
@@ -222,8 +222,8 @@ public class ReconciliationTests
         var before = MumbaiClock.SessionStart(day, new TimeOnly(5, 59));
         var after = MumbaiClock.SessionStart(day, new TimeOnly(6, 0));
 
-        Assert.Equal(MumbaiClock.SessionStart(day, at), ReconciliationRules.NextRunAfter(before, at));
-        Assert.Equal(MumbaiClock.SessionStart(day.AddDays(1), at), ReconciliationRules.NextRunAfter(after, at));
+        Assert.Equal(MumbaiClock.SessionStart(day, at), JobSchedule.Daily(at).NextRunAfter(before));
+        Assert.Equal(MumbaiClock.SessionStart(day.AddDays(1), at), JobSchedule.Daily(at).NextRunAfter(after));
     }
 
     [Fact]
@@ -526,7 +526,7 @@ public class ReconciliationTests
         public async Task EnsureScheduledAsync(DateTimeOffset now)
         {
             using var scope = _host.Services.CreateScope();
-            await scope.ServiceProvider.GetRequiredService<ReconciliationJob>().EnsureScheduledAsync(now, CancellationToken.None);
+            await scope.ServiceProvider.GetRequiredService<RecurringJobScheduler>().EnsureAsync(now, CancellationToken.None);
         }
 
         public async Task RunJobsAsync(DateTimeOffset now)

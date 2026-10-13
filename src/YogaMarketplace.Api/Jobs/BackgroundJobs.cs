@@ -56,7 +56,8 @@ public class BackgroundJobQueue
 /// <summary>
 /// Claims due jobs with a conditional UPDATE so two API instances never run the same job, then runs each
 /// in its own scope. A failed job retries with exponential backoff until <see cref="BackgroundJob.MaxAttempts"/>.
-/// A job whose lock expired (its worker died) goes back to Pending.
+/// A job whose lock expired (its worker died) goes back to Pending. When a recurring job's run succeeds or fails for good,
+/// its next run is queued.
 /// </summary>
 public class BackgroundJobRunner
 {
@@ -65,17 +66,20 @@ public class BackgroundJobRunner
 
     private readonly YogaDbContext _db;
     private readonly IServiceScopeFactory _scopes;
+    private readonly RecurringJobScheduler _recurring;
     private readonly JobsOptions _options;
     private readonly ILogger<BackgroundJobRunner> _logger;
 
     public BackgroundJobRunner(
         YogaDbContext db,
         IServiceScopeFactory scopes,
+        RecurringJobScheduler recurring,
         IOptions<JobsOptions> options,
         ILogger<BackgroundJobRunner> logger)
     {
         _db = db;
         _scopes = scopes;
+        _recurring = recurring;
         _options = options.Value;
         _logger = logger;
     }
@@ -150,13 +154,13 @@ public class BackgroundJobRunner
                 .FirstOrDefault(h => string.Equals(h.Type, job.Type, StringComparison.Ordinal));
             if (handler is null)
             {
-                await FinishAsync(job, BackgroundJobStatus.Failed, $"No handler is registered for job type '{job.Type}'.", null, cancellationToken);
+                await FinishAsync(job, BackgroundJobStatus.Failed, $"No handler is registered for job type '{job.Type}'.", null, now, cancellationToken);
                 _logger.LogError("Background job {JobId} has unknown type {JobType}.", job.Id, job.Type);
                 return;
             }
 
             await handler.RunAsync(job.Payload, cancellationToken);
-            await FinishAsync(job, BackgroundJobStatus.Succeeded, null, null, cancellationToken);
+            await FinishAsync(job, BackgroundJobStatus.Succeeded, null, null, now, cancellationToken);
             _logger.LogInformation("Background job {JobId} ({JobType}) succeeded on attempt {Attempt}.", job.Id, job.Type, job.Attempts);
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
@@ -164,13 +168,13 @@ public class BackgroundJobRunner
             var error = Truncate(ex.Message, ErrorMax);
             if (job.Attempts >= job.MaxAttempts)
             {
-                await FinishAsync(job, BackgroundJobStatus.Failed, error, null, cancellationToken);
+                await FinishAsync(job, BackgroundJobStatus.Failed, error, null, now, cancellationToken);
                 _logger.LogError(ex, "Background job {JobId} ({JobType}) failed for good after {Attempts} attempts.", job.Id, job.Type, job.Attempts);
             }
             else
             {
                 var retryAt = now + BackoffFor(job.Attempts);
-                await FinishAsync(job, BackgroundJobStatus.Pending, error, retryAt, cancellationToken);
+                await FinishAsync(job, BackgroundJobStatus.Pending, error, retryAt, now, cancellationToken);
                 _logger.LogWarning(ex, "Background job {JobId} ({JobType}) failed on attempt {Attempt}; retrying at {RetryAt}.", job.Id, job.Type, job.Attempts, retryAt);
             }
         }
@@ -178,19 +182,23 @@ public class BackgroundJobRunner
 
     private static string Truncate(string value, int max) => value.Length > max ? value[..max] : value;
 
-    /// <summary>Only the worker that still holds the lock may record the outcome.</summary>
-    private Task<int> FinishAsync(
+    /// <summary>
+    /// Only the worker that still holds the lock may record the outcome. A finished recurring run hands its
+    /// <see cref="BackgroundJob.RecurringType"/> on to the next run.
+    /// </summary>
+    private async Task FinishAsync(
         BackgroundJob job,
         BackgroundJobStatus status,
         string? error,
         DateTimeOffset? retryAt,
+        DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        var completedAt = status is BackgroundJobStatus.Succeeded or BackgroundJobStatus.Failed
-            ? DateTimeOffset.UtcNow
-            : (DateTimeOffset?)null;
+        var finished = status is BackgroundJobStatus.Succeeded or BackgroundJobStatus.Failed;
+        var completedAt = finished ? DateTimeOffset.UtcNow : (DateTimeOffset?)null;
         var runAt = retryAt ?? job.RunAt;
-        return _db.BackgroundJobs
+        var recurringType = finished ? null : job.RecurringType;
+        var recorded = await _db.BackgroundJobs
             .Where(j => j.Id == job.Id && j.LockedBy == WorkerId)
             .ExecuteUpdateAsync(
                 set => set
@@ -199,8 +207,20 @@ public class BackgroundJobRunner
                     .SetProperty(j => j.RunAt, runAt)
                     .SetProperty(j => j.CompletedAt, completedAt)
                     .SetProperty(j => j.LockedBy, (string?)null)
-                    .SetProperty(j => j.LockedUntil, (DateTimeOffset?)null),
+                    .SetProperty(j => j.LockedUntil, (DateTimeOffset?)null)
+                    .SetProperty(j => j.RecurringType, recurringType),
                 CancellationToken.None);
+        if (recorded == 0 || !finished || job.RecurringType is null)
+            return;
+
+        try
+        {
+            await _recurring.EnsureAsync(now, cancellationToken, job.RecurringType);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogError(ex, "Could not queue the next run of {JobType}; the next poll tries again.", job.RecurringType);
+        }
     }
 }
 
@@ -208,15 +228,18 @@ public class BackgroundJobHostedService : BackgroundService
 {
     private readonly IServiceScopeFactory _scopes;
     private readonly JobsOptions _options;
+    private readonly bool _scheduleRecurring;
     private readonly ILogger<BackgroundJobHostedService> _logger;
 
     public BackgroundJobHostedService(
         IServiceScopeFactory scopes,
         IOptions<JobsOptions> options,
+        IHostEnvironment environment,
         ILogger<BackgroundJobHostedService> logger)
     {
         _scopes = scopes;
         _options = options.Value;
+        _scheduleRecurring = DatabaseStartup.ShouldScheduleRecurringJobs(environment);
         _logger = logger;
     }
 
@@ -231,7 +254,10 @@ public class BackgroundJobHostedService : BackgroundService
             try
             {
                 using var scope = _scopes.CreateScope();
-                await scope.ServiceProvider.GetRequiredService<BackgroundJobRunner>().RunDueAsync(DateTimeOffset.UtcNow, stoppingToken);
+                var now = DateTimeOffset.UtcNow;
+                if (_scheduleRecurring)
+                    await scope.ServiceProvider.GetRequiredService<RecurringJobScheduler>().EnsureAsync(now, stoppingToken);
+                await scope.ServiceProvider.GetRequiredService<BackgroundJobRunner>().RunDueAsync(now, stoppingToken);
             }
             catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
             {
