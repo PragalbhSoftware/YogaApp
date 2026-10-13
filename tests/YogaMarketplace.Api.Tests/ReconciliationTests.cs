@@ -340,12 +340,22 @@ public class ReconciliationTests
         await using var host = new Host();
         host.Gateway.Payments.Add(Captured("pay_race_orphan", 100m));
 
+        var arrived = 0;
+        var bothListing = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        host.Gateway.BeforeList = () =>
+        {
+            if (Interlocked.Increment(ref arrived) == 2)
+                bothListing.TrySetResult();
+            return bothListing.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        };
+
         var both = await Task.WhenAll(host.ReconcileAsync(Day), host.ReconcileAsync(Day));
 
         var saved = Assert.Single(await host.RunsAsync());
         Assert.All(both, run => Assert.Equal(saved.Id, run.Id));
         Assert.Equal(saved.Id, Assert.Single(await host.ItemsAsync()).RunId);
         Assert.Single(host.Logs.Errors);
+        Assert.Single(host.Logs.Infos, line => line.Contains("already has completed run", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -721,11 +731,18 @@ public class ReconciliationTests
         public List<RazorpayPaymentRecord> Fetchable { get; } = [];
         public Exception? Failure { get; set; }
 
+        /// <summary>Awaited before listing payments, so a test can hold runs at the same point.</summary>
+        public Func<Task>? BeforeList { get; set; }
+
         public string KeyId => "rzp_test_stub";
         public bool SupportsLocalCapture => false;
 
-        public Task<IReadOnlyList<RazorpayPaymentRecord>> ListPaymentsAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken) =>
-            Failure is null ? Task.FromResult<IReadOnlyList<RazorpayPaymentRecord>>(Payments.ToList()) : Task.FromException<IReadOnlyList<RazorpayPaymentRecord>>(Failure);
+        public async Task<IReadOnlyList<RazorpayPaymentRecord>> ListPaymentsAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken)
+        {
+            if (BeforeList is not null)
+                await BeforeList();
+            return Failure is null ? Payments.ToList() : throw Failure;
+        }
 
         public Task<IReadOnlyList<RazorpayRefundRecord>> ListRefundsAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken) =>
             Failure is null ? Task.FromResult<IReadOnlyList<RazorpayRefundRecord>>(Refunds.ToList()) : Task.FromException<IReadOnlyList<RazorpayRefundRecord>>(Failure);
