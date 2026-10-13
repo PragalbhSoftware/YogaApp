@@ -83,6 +83,7 @@ export async function openRazorpayCheckout(input: OpenRazorpayCheckoutInput): Pr
       action();
     };
 
+    const contact = input.customerPhone?.replace(/\D/g, "").slice(-10);
     const checkout = new Razorpay({
       key: input.keyId,
       amount: input.amountPaise,
@@ -92,8 +93,10 @@ export async function openRazorpayCheckout(input: OpenRazorpayCheckoutInput): Pr
       order_id: input.orderId,
       prefill: {
         name: input.customerName?.trim() || undefined,
-        contact: input.customerPhone ? `+91${input.customerPhone.replace(/\D/g, "").slice(-10)}` : undefined,
+        contact: contact ? `+91${contact}` : undefined,
       },
+      // Razorpay remembers numbers typed in earlier payments; keep the signed-in customer's.
+      readonly: contact ? { contact: true } : undefined,
       theme: { color: brand.primary },
       handler: (response) => {
         finish(() =>
