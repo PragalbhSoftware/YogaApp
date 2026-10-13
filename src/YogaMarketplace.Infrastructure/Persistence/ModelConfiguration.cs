@@ -34,6 +34,32 @@ internal static class ModelConfiguration
         ConfigureCreditBatch(modelBuilder.Entity<CreditBatch>(), sqlite);
         ConfigureCreditLedger(modelBuilder.Entity<CreditLedgerEntry>());
         ConfigureCreditAccount(modelBuilder.Entity<CreditAccount>());
+        ConfigureReconciliationRun(modelBuilder.Entity<ReconciliationRun>());
+        ConfigureReconciliationItem(modelBuilder.Entity<ReconciliationItem>());
+    }
+
+    private static void ConfigureReconciliationRun(EntityTypeBuilder<ReconciliationRun> entity)
+    {
+        entity.Property(r => r.Status).HasConversion<string>().HasMaxLength(16);
+        entity.Property(r => r.Error).HasMaxLength(1000);
+        entity.HasIndex(r => r.MarketDate);
+    }
+
+    private static void ConfigureReconciliationItem(EntityTypeBuilder<ReconciliationItem> entity)
+    {
+        entity.Property(i => i.Type).HasConversion<string>().HasMaxLength(24);
+        entity.Property(i => i.Status).HasConversion<string>().HasMaxLength(16);
+        entity.Property(i => i.GatewayPaymentId).HasMaxLength(80);
+        entity.Property(i => i.GatewayRefundId).HasMaxLength(80);
+        entity.Property(i => i.Reference).HasMaxLength(120);
+        entity.Property(i => i.DatabaseValue).HasMaxLength(80);
+        entity.Property(i => i.GatewayValue).HasMaxLength(80);
+        entity.Property(i => i.Detail).HasMaxLength(ReconciliationRules.DetailMax);
+        entity.Property(i => i.ResolutionNote).HasMaxLength(ReconciliationRules.NoteMax);
+        entity.HasIndex(i => new { i.RunId, i.Type });
+        entity.HasIndex(i => new { i.Status, i.Type });
+        entity.HasOne<ReconciliationRun>().WithMany().HasForeignKey(i => i.RunId).OnDelete(DeleteBehavior.Cascade);
+        entity.HasOne<User>().WithMany().HasForeignKey(i => i.ResolvedByUserId).OnDelete(DeleteBehavior.Restrict);
     }
 
     private static void ConfigureCreditPack(EntityTypeBuilder<CreditPack> entity)
@@ -385,6 +411,9 @@ internal static class ModelConfiguration
         entity.Property(s => s.CreditLateCancel).HasConversion<string>().HasMaxLength(24).HasDefaultValue(CreditLateCancel.PayInstructorShare);
         entity.Property(s => s.PackReferenceSessionPrice).HasPrecision(10, 2).HasDefaultValue(PlatformSettingsRules.DefaultPackReferenceSessionPrice);
         entity.Property(s => s.PackRefundFee).HasPrecision(10, 2).HasDefaultValue(0m);
+        entity.Property(s => s.ReconciliationTime).HasDefaultValue(PlatformSettingsRules.DefaultReconciliationTime);
+        entity.Property(s => s.WebhookStuckMinutes).HasDefaultValue(PlatformSettingsRules.DefaultWebhookStuckMinutes);
+        entity.Property(s => s.RefundPendingHours).HasDefaultValue(PlatformSettingsRules.DefaultRefundPendingHours);
     }
 
     private static void ConfigureSettingsAudit(EntityTypeBuilder<SettingsAudit> entity)

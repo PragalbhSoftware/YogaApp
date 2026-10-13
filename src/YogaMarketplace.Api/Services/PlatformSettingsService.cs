@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using YogaMarketplace.Api.Security;
@@ -17,6 +18,7 @@ public sealed record CurrentSettings(
     string? BannerSubtitle,
     string? BannerOffer,
     CreditTerms Credits,
+    ReconciliationTerms Reconciliation,
     int Version,
     DateTimeOffset? UpdatedAt)
 {
@@ -30,6 +32,7 @@ public sealed record CurrentSettings(
         settings.BannerSubtitle,
         settings.BannerOffer,
         PlatformSettingsRules.CreditTermsFor(settings),
+        PlatformSettingsRules.ReconciliationTermsFor(settings),
         settings.Version,
         settings.UpdatedAt);
 }
@@ -173,7 +176,19 @@ public class PlatformSettingsService : IPlatformSettingsService
         request.CreditBookingStandsAfterExpiry,
         request.PackRefundsEnabled,
         request.PackReferenceSessionPrice,
-        request.PackRefundFee);
+        request.PackRefundFee,
+        ParseTime(request.ReconciliationTime),
+        request.WebhookStuckMinutes,
+        request.RefundPendingHours);
+
+    private static TimeOnly? ParseTime(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+        return TimeOnly.TryParseExact(value.Trim(), "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var time)
+            ? time
+            : throw new DomainException("Reconciliation time must be HH:mm, for example 06:00.");
+    }
 
     private static AdminSettingsResponse ToAdmin(PlatformSettings settings) => new(
         settings.Version,
@@ -197,5 +212,8 @@ public class PlatformSettingsService : IPlatformSettingsService
         settings.CreditBookingStandsAfterExpiry,
         settings.PackRefundsEnabled,
         settings.PackReferenceSessionPrice,
-        settings.PackRefundFee);
+        settings.PackRefundFee,
+        settings.ReconciliationTime.ToString("HH:mm", CultureInfo.InvariantCulture),
+        settings.WebhookStuckMinutes,
+        settings.RefundPendingHours);
 }

@@ -13,6 +13,9 @@ import type {
   AdminUserDetail,
   AdminUserSummary,
   BookingListQuery,
+  ReconciliationItem,
+  ReconciliationItemQuery,
+  ReconciliationRun,
   SettingsAuditEntry,
   UpdateSettingsInput,
   UserListQuery,
@@ -141,6 +144,28 @@ export const adminApi = {
 
   markPayoutPaid(id: string) {
     return http.post<AdminPayout>(`/api/admin/payouts/${id}/paid`, {}).then((res) => res.data);
+  },
+
+  reconciliationRuns() {
+    return http.get<ReconciliationRun[]>("/api/admin/reconciliation/runs").then((res) => res.data);
+  },
+
+  reconciliationItems(query: ReconciliationItemQuery) {
+    return http
+      .get<ReconciliationItem[]>("/api/admin/reconciliation/items", {
+        params: {
+          ...(query.runId ? { runId: query.runId } : {}),
+          ...(query.type ? { type: query.type } : {}),
+          ...(query.status ? { status: query.status } : {}),
+        },
+      })
+      .then((res) => res.data);
+  },
+
+  resolveReconciliationItem(id: string, note: string) {
+    return http
+      .post<ReconciliationItem>(`/api/admin/reconciliation/items/${id}/resolve`, { note })
+      .then((res) => res.data);
   },
 
   areas() {

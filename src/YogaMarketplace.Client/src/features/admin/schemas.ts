@@ -110,6 +110,34 @@ export const creditSettingsSchema = z.object({
   packRefundFee: flatAmount,
 });
 
+export const reconciliationLimits = {
+  maxWebhookStuckMinutes: 7 * 24 * 60,
+  maxRefundPendingHours: 30 * 24,
+  noteMax: 500,
+} as const;
+
+export const reconciliationSettingsSchema = z.object({
+  reconciliationTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Pick a time such as 06:00."),
+  webhookStuckMinutes: z.coerce
+    .number({ invalid_type_error: "Enter a number of minutes." })
+    .int("Enter a whole number of minutes.")
+    .min(1, `Must be between 1 and ${reconciliationLimits.maxWebhookStuckMinutes} minutes.`)
+    .max(reconciliationLimits.maxWebhookStuckMinutes, `Must be between 1 and ${reconciliationLimits.maxWebhookStuckMinutes} minutes.`),
+  refundPendingHours: z.coerce
+    .number({ invalid_type_error: "Enter a number of hours." })
+    .int("Enter a whole number of hours.")
+    .min(1, `Must be between 1 and ${reconciliationLimits.maxRefundPendingHours} hours.`)
+    .max(reconciliationLimits.maxRefundPendingHours, `Must be between 1 and ${reconciliationLimits.maxRefundPendingHours} hours.`),
+});
+
+export const resolveItemSchema = z.object({
+  note: z
+    .string()
+    .trim()
+    .min(1, "Say how this was resolved.")
+    .max(reconciliationLimits.noteMax, `Keep the note to ${reconciliationLimits.noteMax} characters.`),
+});
+
 export const packLimits = {
   maxSessions: 100,
   maxPrice: 500_000,
@@ -164,3 +192,5 @@ export type FeeSettingsValues = z.infer<typeof feeSettingsSchema>;
 export type BannerValues = z.infer<typeof bannerSchema>;
 export type CreditSettingsValues = z.infer<typeof creditSettingsSchema>;
 export type PackFormValues = z.infer<typeof packSchema>;
+export type ReconciliationSettingsValues = z.infer<typeof reconciliationSettingsSchema>;
+export type ResolveItemValues = z.infer<typeof resolveItemSchema>;

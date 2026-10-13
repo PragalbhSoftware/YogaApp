@@ -148,6 +148,8 @@ public static class DatabaseStartup
         using var scope = app.Services.CreateScope();
         await scope.ServiceProvider.GetRequiredService<YogaMarketplace.Api.Jobs.CreditExpiryJob>()
             .EnsureScheduledAsync(DateTimeOffset.UtcNow, CancellationToken.None);
+        await scope.ServiceProvider.GetRequiredService<YogaMarketplace.Api.Jobs.ReconciliationJob>()
+            .EnsureScheduledAsync(DateTimeOffset.UtcNow, CancellationToken.None);
     }
 
     public static async Task InitializeAsync(WebApplication app)

@@ -207,7 +207,14 @@ export type CreditSettings = {
   packRefundFee: number;
 };
 
-export type AdminSettings = CreditSettings & {
+/** Daily Razorpay reconciliation. `reconciliationTime` is HH:mm on the market clock. */
+export type ReconciliationSettings = {
+  reconciliationTime: string;
+  webhookStuckMinutes: number;
+  refundPendingHours: number;
+};
+
+export type AdminSettings = CreditSettings & ReconciliationSettings & {
   version: number;
   currency: string;
   commissionPercent: number;
@@ -237,6 +244,7 @@ export type UpdateSettingsInput = Partial<
     | "payoutCycle"
     | "policyNote"
     | keyof CreditSettings
+    | keyof ReconciliationSettings
   >
 > & {
   version: number;
@@ -317,6 +325,61 @@ export type AdminReport = {
   revenue: number;
   paidBookings: number;
   creditBookings: number;
+};
+
+export const reconciliationItemTypes = [
+  "MissingInDatabase",
+  "MissingInRazorpay",
+  "AmountMismatch",
+  "StatusMismatch",
+  "RefundMismatch",
+  "RefundNotRecorded",
+  "DashboardRefund",
+  "StuckWebhook",
+  "RefundPending",
+] as const;
+export type ReconciliationItemType = (typeof reconciliationItemTypes)[number];
+
+export const reconciliationItemStatuses = ["Open", "Resolved"] as const;
+export type ReconciliationItemStatus = (typeof reconciliationItemStatuses)[number];
+
+/** One daily run. `gatewayCompared` is false when only the database checks ran (test gateway). */
+export type ReconciliationRun = {
+  id: string;
+  marketDate: string;
+  windowStart: string;
+  windowEnd: string;
+  startedAt: string;
+  completedAt: string | null;
+  status: "Completed" | "Failed";
+  gatewayCompared: boolean;
+  itemCount: number;
+  openCount: number;
+  error: string | null;
+};
+
+export type ReconciliationItem = {
+  id: string;
+  runId: string;
+  marketDate: string;
+  type: ReconciliationItemType;
+  status: ReconciliationItemStatus;
+  gatewayPaymentId: string | null;
+  gatewayRefundId: string | null;
+  reference: string | null;
+  databaseValue: string | null;
+  gatewayValue: string | null;
+  detail: string;
+  createdAt: string;
+  resolvedAt: string | null;
+  resolvedByName: string | null;
+  resolutionNote: string | null;
+};
+
+export type ReconciliationItemQuery = {
+  runId?: string;
+  type?: ReconciliationItemType;
+  status?: ReconciliationItemStatus;
 };
 
 export type BookingListQuery = {

@@ -462,6 +462,15 @@ public class CancellationAndPayoutTests : IClassFixture<YogaApiFactory>
             await _beforeRefund();
             return await _inner.RefundPaymentAsync(paymentId, amountPaise, receipt, cancellationToken);
         }
+
+        public Task<IReadOnlyList<RazorpayPaymentRecord>> ListPaymentsAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken) =>
+            _inner.ListPaymentsAsync(from, to, cancellationToken);
+
+        public Task<IReadOnlyList<RazorpayRefundRecord>> ListRefundsAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken) =>
+            _inner.ListRefundsAsync(from, to, cancellationToken);
+
+        public Task<RazorpayPaymentRecord?> FetchPaymentAsync(string paymentId, CancellationToken cancellationToken) =>
+            _inner.FetchPaymentAsync(paymentId, cancellationToken);
     }
 
     private sealed record OtpBody(Guid ChallengeId, DateTimeOffset ExpiresAt, string? DevCode);

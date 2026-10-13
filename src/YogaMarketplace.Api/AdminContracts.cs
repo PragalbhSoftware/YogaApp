@@ -222,6 +222,11 @@ public class UpdateSettingsRequest
     public bool? PackRefundsEnabled { get; set; }
     public decimal? PackReferenceSessionPrice { get; set; }
     public decimal? PackRefundFee { get; set; }
+
+    /// <summary>Market-clock time as HH:mm.</summary>
+    public string? ReconciliationTime { get; set; }
+    public int? WebhookStuckMinutes { get; set; }
+    public int? RefundPendingHours { get; set; }
 }
 
 public record AdminSettingsResponse(
@@ -246,7 +251,45 @@ public record AdminSettingsResponse(
     bool CreditBookingStandsAfterExpiry,
     bool PackRefundsEnabled,
     decimal PackReferenceSessionPrice,
-    decimal PackRefundFee);
+    decimal PackRefundFee,
+    string ReconciliationTime,
+    int WebhookStuckMinutes,
+    int RefundPendingHours);
+
+public record ReconciliationRunResponse(
+    Guid Id,
+    DateOnly MarketDate,
+    DateTimeOffset WindowStart,
+    DateTimeOffset WindowEnd,
+    DateTimeOffset StartedAt,
+    DateTimeOffset? CompletedAt,
+    string Status,
+    bool GatewayCompared,
+    int ItemCount,
+    int OpenCount,
+    string? Error);
+
+public record ReconciliationItemResponse(
+    Guid Id,
+    Guid RunId,
+    DateOnly MarketDate,
+    string Type,
+    string Status,
+    string? GatewayPaymentId,
+    string? GatewayRefundId,
+    string? Reference,
+    string? DatabaseValue,
+    string? GatewayValue,
+    string Detail,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? ResolvedAt,
+    string? ResolvedByName,
+    string? ResolutionNote);
+
+public class ResolveReconciliationItemRequest
+{
+    public string? Note { get; set; }
+}
 
 public record AdminPackResponse(
     Guid Id,

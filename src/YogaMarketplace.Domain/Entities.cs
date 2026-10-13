@@ -319,6 +319,11 @@ public class PlatformSettings
     public bool PackRefundsEnabled { get; set; } = true;
     public decimal PackReferenceSessionPrice { get; set; } = PlatformSettingsRules.DefaultPackReferenceSessionPrice;
     public decimal PackRefundFee { get; set; }
+
+    /// <summary>Market-clock time the daily Razorpay reconciliation runs; it covers the previous market day.</summary>
+    public TimeOnly ReconciliationTime { get; set; } = PlatformSettingsRules.DefaultReconciliationTime;
+    public int WebhookStuckMinutes { get; set; } = PlatformSettingsRules.DefaultWebhookStuckMinutes;
+    public int RefundPendingHours { get; set; } = PlatformSettingsRules.DefaultRefundPendingHours;
     public int Version { get; set; } = 1;
     public DateTimeOffset? UpdatedAt { get; set; }
 }
