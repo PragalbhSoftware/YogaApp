@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/common/empty-state";
 import { ErrorState } from "@/components/common/error-state";
 import { packPath, routes } from "@/constants/routes";
 import { useAuth } from "@/features/auth/hooks/use-auth";
+import { PayAgreement } from "@/features/content/components/pay-agreement";
 import { CreditsPanel } from "@/features/credits/components/credits-panel";
 import { PackCard } from "@/features/credits/components/pack-card";
 import { PurchaseStatus } from "@/features/credits/components/purchase-status";
@@ -88,6 +89,7 @@ export function PacksPage() {
           ))}
         </div>
       ) : null}
+      {packs.isSuccess && packs.data.length > 0 ? <PayAgreement /> : null}
     </main>
   );
 }

@@ -12,20 +12,23 @@ internal static class ContentPageDefaults
         Page(ContentPageRules.RefundPolicy, "Refund policy", """
             You pay when you book. The instructor then accepts or declines your request.
 
+            ## How refund rules are set
+            Cancellation windows, late-cancellation fees, convenience fees and pack refunds follow the platform settings, which can change over time. The terms for your booking or pack are shown before you pay and stay fixed for that booking or pack.
+
             ## Full refunds
             - The instructor declines your request.
             - You cancel before the instructor accepts.
-            - You cancel before the free-cancellation window closes. The booking page shows the exact time.
+            - You cancel before the free-cancellation window shown on your booking closes.
             - We cancel the session.
 
             ## Late cancellations
-            If you cancel after the free-cancellation window closes, a late-cancellation fee is kept and paid to the instructor. The convenience fee is not refunded on a late cancel. The rest is refunded.
+            If you cancel after the free-cancellation window closes, the late-cancellation fee shown on your booking is kept and paid to the instructor. The rest is refunded as shown on your booking.
 
             ## No-shows
             If you miss a session without cancelling, no refund is given.
 
             ## How refunds reach you
-            Refunds go back to the original payment method through Razorpay. Banks usually take 5 to 7 working days.
+            Refunds go back to the original payment method through Razorpay. How long the money takes to arrive depends on your bank.
             """),
         Page(ContentPageRules.Terms, "Terms of use", """
             These terms cover your use of the marketplace, where customers book sessions with independent instructors.
@@ -38,6 +41,9 @@ internal static class ContentPageDefaults
             ## Your account
             - Sign in with your own phone number and keep access to it secure.
             - Do not misuse the service, book on behalf of others without consent, or post misleading reviews.
+
+            ## Off-platform bookings
+            [Placeholder: the rule for arranging or paying for sessions outside the marketplace with an instructor you found here, and what happens if it is broken. Replace this text before launch.]
 
             ## Changes
             We may update these terms. The date at the bottom of this page shows the latest version.
