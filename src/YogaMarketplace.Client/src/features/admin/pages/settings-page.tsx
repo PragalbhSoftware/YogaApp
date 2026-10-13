@@ -8,6 +8,7 @@ import { CreditRulesSettings } from "@/features/admin/components/credit-rules-se
 import { FeeSettings } from "@/features/admin/components/fee-settings";
 import { PackSettings } from "@/features/admin/components/pack-settings";
 import { PageSettings } from "@/features/admin/components/page-settings";
+import { PrivacySettings } from "@/features/admin/components/privacy-settings";
 import { ReconciliationSettings } from "@/features/admin/components/reconciliation-settings";
 
 const tabs = ["earnings", "packs", "areas", "banner", "catalog", "pages"] as const;
@@ -65,7 +66,12 @@ export function SettingsPage() {
       {tab === "areas" ? <AreaSettings /> : null}
       {tab === "banner" ? <BannerSettings /> : null}
       {tab === "catalog" ? <CategorySettings /> : null}
-      {tab === "pages" ? <PageSettings /> : null}
+      {tab === "pages" ? (
+        <div className="space-y-8">
+          <PageSettings />
+          <PrivacySettings />
+        </div>
+      ) : null}
     </AdminPage>
   );
 }

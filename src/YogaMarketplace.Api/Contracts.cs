@@ -7,7 +7,7 @@ public record OtpResponse(
     DateTimeOffset ExpiresAt,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? DevCode);
 
-public record UserResponse(Guid Id, string? Name, string Phone, string? Gender, string Role);
+public record UserResponse(Guid Id, string? Name, string Phone, string? Gender, string Role, bool ConsentRequired);
 
 public record VisitAddressResponse(
     string Line1,
@@ -48,6 +48,7 @@ public class RequestOtpRequest
     public string? Name { get; set; }
     public string? Gender { get; set; }
     public bool IsNewUser { get; set; }
+    public bool AcceptedPolicies { get; set; }
 }
 
 public class VerifyOtpRequest

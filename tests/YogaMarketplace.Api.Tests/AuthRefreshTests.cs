@@ -150,7 +150,7 @@ public class AuthRefreshTests : IClassFixture<YogaApiFactory>
     {
         var phone = "+9196" + Random.Shared.Next(10000000, 99999999).ToString();
         var client = Client();
-        var otp = await PostAsync<OtpBody>(client, "/api/auth/otp/request", new { phone, name, gender = "Female", isNewUser = true });
+        var otp = await PostAsync<OtpBody>(client, "/api/auth/otp/request", new { phone, name, gender = "Female", isNewUser = true, acceptedPolicies = true });
         return await VerifyAsync(client, phone, otp.DevCode);
     }
 

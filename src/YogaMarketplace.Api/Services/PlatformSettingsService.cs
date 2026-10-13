@@ -19,6 +19,8 @@ public sealed record CurrentSettings(
     string? BannerOffer,
     CreditTerms Credits,
     ReconciliationTerms Reconciliation,
+    int PolicyVersion,
+    int WebhookPayloadRetentionDays,
     int Version,
     DateTimeOffset? UpdatedAt)
 {
@@ -33,6 +35,8 @@ public sealed record CurrentSettings(
         settings.BannerOffer,
         PlatformSettingsRules.CreditTermsFor(settings),
         PlatformSettingsRules.ReconciliationTermsFor(settings),
+        settings.PolicyVersion,
+        settings.WebhookPayloadRetentionDays,
         settings.Version,
         settings.UpdatedAt);
 }
@@ -179,7 +183,9 @@ public class PlatformSettingsService : IPlatformSettingsService
         request.PackRefundFee,
         ParseTime(request.ReconciliationTime),
         request.WebhookStuckMinutes,
-        request.RefundPendingHours);
+        request.RefundPendingHours,
+        request.PolicyVersion,
+        request.WebhookPayloadRetentionDays);
 
     private static TimeOnly? ParseTime(string? value)
     {
@@ -215,5 +221,7 @@ public class PlatformSettingsService : IPlatformSettingsService
         settings.PackRefundFee,
         settings.ReconciliationTime.ToString("HH:mm", CultureInfo.InvariantCulture),
         settings.WebhookStuckMinutes,
-        settings.RefundPendingHours);
+        settings.RefundPendingHours,
+        settings.PolicyVersion,
+        settings.WebhookPayloadRetentionDays);
 }

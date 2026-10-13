@@ -9,6 +9,7 @@ import { CustomerLayout } from "@/app/layouts/customer-layout";
 import { InstructorLayout } from "@/app/layouts/instructor-layout";
 import { AllowGuestOr, RedirectIfSignedIn, RequireAuth, RequireRole } from "@/app/router/guards";
 import { routes } from "@/constants/routes";
+import { ConsentPrompt } from "@/features/auth/components/consent-prompt";
 
 const LoginPage = lazy(() =>
   import("@/features/auth/pages/login-page").then((module) => ({ default: module.LoginPage })),
@@ -168,6 +169,7 @@ export function AppRouter() {
             </Route>
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
+          <ConsentPrompt />
         </Suspense>
       </AppErrorBoundary>
     </BrowserRouter>

@@ -324,6 +324,10 @@ public class PlatformSettings
     public TimeOnly ReconciliationTime { get; set; } = PlatformSettingsRules.DefaultReconciliationTime;
     public int WebhookStuckMinutes { get; set; } = PlatformSettingsRules.DefaultWebhookStuckMinutes;
     public int RefundPendingHours { get; set; } = PlatformSettingsRules.DefaultRefundPendingHours;
+
+    /// <summary>Version of the Terms and Privacy pages users must accept. Raising it asks every user again once.</summary>
+    public int PolicyVersion { get; set; } = 1;
+    public int WebhookPayloadRetentionDays { get; set; } = PlatformSettingsRules.DefaultWebhookPayloadRetentionDays;
     public int Version { get; set; } = 1;
     public DateTimeOffset? UpdatedAt { get; set; }
 }
@@ -367,6 +371,7 @@ public class OtpChallenge
     public bool IsNewUser { get; set; }
     public string? PendingName { get; set; }
     public Gender? PendingGender { get; set; }
+    public bool ConsentAccepted { get; set; }
     public UserRole IntendedRole { get; set; } = UserRole.Customer;
     public DateTimeOffset CreatedAt { get; set; }
 }

@@ -2,7 +2,9 @@ import { Controller, type UseFormReturn } from "react-hook-form";
 import {
   Alert,
   Button,
+  Checkbox,
   FormControl,
+  FormControlLabel,
   FormHelperText,
   InputLabel,
   MenuItem,
@@ -12,6 +14,7 @@ import {
   TextField,
 } from "@mui/material";
 import { PhoneField } from "@/features/auth/components/phone-field";
+import { PolicyLinks } from "@/features/auth/components/policy-links";
 import type { AccountFormValues } from "@/features/auth/schemas";
 
 type AccountStepProps = {
@@ -132,6 +135,34 @@ export function AccountStep({ form, error, busy, onSubmit }: AccountStepProps) {
             />
           )}
         />
+
+        {isNew ? (
+          <Controller
+            name="acceptedPolicies"
+            control={form.control}
+            render={({ field, fieldState }) => (
+              <FormControl error={Boolean(fieldState.error)}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={Boolean(field.value)}
+                      onChange={(event) => field.onChange(event.target.checked)}
+                      onBlur={field.onBlur}
+                    />
+                  }
+                  label={
+                    <span className="text-sm leading-relaxed">
+                      I agree to the <PolicyLinks />.
+                    </span>
+                  }
+                />
+                {fieldState.error ? (
+                  <FormHelperText>{fieldState.error.message}</FormHelperText>
+                ) : null}
+              </FormControl>
+            )}
+          />
+        ) : null}
 
         <div className="pt-2">
           <Button

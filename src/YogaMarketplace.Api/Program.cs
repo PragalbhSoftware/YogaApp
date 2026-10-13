@@ -150,6 +150,8 @@ public static class DatabaseStartup
             .EnsureScheduledAsync(DateTimeOffset.UtcNow, CancellationToken.None);
         await scope.ServiceProvider.GetRequiredService<YogaMarketplace.Api.Jobs.ReconciliationJob>()
             .EnsureScheduledAsync(DateTimeOffset.UtcNow, CancellationToken.None);
+        await scope.ServiceProvider.GetRequiredService<YogaMarketplace.Api.Jobs.WebhookPayloadCleanupJob>()
+            .EnsureScheduledAsync(DateTimeOffset.UtcNow, CancellationToken.None);
     }
 
     public static async Task InitializeAsync(WebApplication app)

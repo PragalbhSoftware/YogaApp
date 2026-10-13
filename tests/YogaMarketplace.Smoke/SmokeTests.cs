@@ -93,7 +93,7 @@ public class SmokeTests
     {
         var existing = await client.PostAsJsonAsync("api/auth/otp/request", new { phone, isNewUser = false });
         if (existing.StatusCode == HttpStatusCode.NotFound)
-            await PostAsync<JsonElement>(client, "api/auth/otp/request", new { phone, name = "Smoke Test", gender = "Other", isNewUser = true });
+            await PostAsync<JsonElement>(client, "api/auth/otp/request", new { phone, name = "Smoke Test", gender = "Other", isNewUser = true, acceptedPolicies = true });
         else
             await EnsureSuccessAsync(existing);
 

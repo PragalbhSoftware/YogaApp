@@ -172,7 +172,7 @@ public class UserBlockingApiTests : IClassFixture<YogaApiFactory>
     private async Task<(string Token, string Phone)> SignUpAsync(HttpClient client, string name)
     {
         var phone = "+9197" + Random.Shared.Next(10000000, 99999999).ToString();
-        var otp = await PostAsync<OtpBody>(client, "/api/auth/otp/request", new { phone, name, gender = "Female", isNewUser = true });
+        var otp = await PostAsync<OtpBody>(client, "/api/auth/otp/request", new { phone, name, gender = "Female", isNewUser = true, acceptedPolicies = true });
         var auth = await PostAsync<AuthBody>(client, "/api/auth/otp/verify", new { phone, code = otp.DevCode });
         return (auth.Token, phone);
     }

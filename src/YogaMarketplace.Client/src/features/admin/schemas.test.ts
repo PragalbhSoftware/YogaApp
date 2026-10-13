@@ -4,6 +4,7 @@ import {
   creditSettingsSchema,
   feeSettingsSchema,
   packSchema,
+  privacySettingsSchema,
   reconciliationSettingsSchema,
   resolveItemSchema,
 } from "@/features/admin/schemas";
@@ -104,6 +105,24 @@ describe("reconciliation settings form", () => {
     expect(reconErrors({ webhookStuckMinutes: 0 })).toEqual(["webhookStuckMinutes"]);
     expect(reconErrors({ refundPendingHours: 721 })).toEqual(["refundPendingHours"]);
     expect(reconErrors({ refundPendingHours: 1.5 })).toEqual(["refundPendingHours"]);
+  });
+});
+
+describe("consent and data form", () => {
+  const privacyErrors = (input: Record<string, unknown>) => {
+    const result = privacySettingsSchema(3).safeParse({ policyVersion: 3, webhookPayloadRetentionDays: 90, ...input });
+    return result.success ? [] : result.error.issues.map((issue) => issue.path.join("."));
+  };
+
+  it("lets the policy version stay or go up, never down", () => {
+    expect(privacyErrors({ policyVersion: "4" })).toEqual([]);
+    expect(privacyErrors({ policyVersion: 2 })).toEqual(["policyVersion"]);
+  });
+
+  it("keeps retention days within range", () => {
+    expect(privacyErrors({ webhookPayloadRetentionDays: "3650" })).toEqual([]);
+    expect(privacyErrors({ webhookPayloadRetentionDays: 0 })).toEqual(["webhookPayloadRetentionDays"]);
+    expect(privacyErrors({ webhookPayloadRetentionDays: 3651 })).toEqual(["webhookPayloadRetentionDays"]);
   });
 });
 

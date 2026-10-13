@@ -7,6 +7,7 @@ export const authApi = {
     name?: string;
     gender?: string;
     isNewUser: boolean;
+    acceptedPolicies?: boolean;
   }) {
     return http.post<OtpResponse>("/api/auth/otp/request", input).then((res) => res.data);
   },
@@ -23,6 +24,10 @@ export const authApi = {
 
   me() {
     return http.get<User>("/api/auth/me").then((res) => res.data);
+  },
+
+  acceptConsent() {
+    return http.post<User>("/api/auth/consent").then((res) => res.data);
   },
 
   logout() {

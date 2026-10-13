@@ -122,7 +122,7 @@ public class ProviderRatesTests : IClassFixture<YogaApiFactory>
     private async Task<(string Token, string Phone)> SignUpAsync(HttpClient client, string name, string gender)
     {
         var phone = NewPhone();
-        var otp = await PostAsync<OtpBody>(client, "/api/auth/otp/request", new { phone, name, gender, isNewUser = true });
+        var otp = await PostAsync<OtpBody>(client, "/api/auth/otp/request", new { phone, name, gender, isNewUser = true, acceptedPolicies = true });
         var auth = await PostAsync<AuthBody>(client, "/api/auth/otp/verify", new { phone, code = otp.DevCode });
         return (auth.Token, phone);
     }

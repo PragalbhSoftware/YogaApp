@@ -227,6 +227,8 @@ public class UpdateSettingsRequest
     public string? ReconciliationTime { get; set; }
     public int? WebhookStuckMinutes { get; set; }
     public int? RefundPendingHours { get; set; }
+    public int? PolicyVersion { get; set; }
+    public int? WebhookPayloadRetentionDays { get; set; }
 }
 
 public record AdminSettingsResponse(
@@ -254,7 +256,9 @@ public record AdminSettingsResponse(
     decimal PackRefundFee,
     string ReconciliationTime,
     int WebhookStuckMinutes,
-    int RefundPendingHours);
+    int RefundPendingHours,
+    int PolicyVersion,
+    int WebhookPayloadRetentionDays);
 
 public record ReconciliationRunResponse(
     Guid Id,

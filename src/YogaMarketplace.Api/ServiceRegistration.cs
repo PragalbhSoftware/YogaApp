@@ -18,6 +18,7 @@ public static class ServiceRegistration
         services.AddScoped<ICurrentUser, HttpCurrentUser>();
         services.AddScoped<IOtpSender, LoggingOtpSender>();
         services.AddScoped<OtpService>();
+        services.AddScoped<ConsentService>();
         services.AddScoped<JwtTokenService>();
         services.Configure<RefreshTokenOptions>(configuration.GetSection(RefreshTokenOptions.Section));
         services.AddScoped<RefreshTokenService>();
@@ -42,6 +43,8 @@ public static class ServiceRegistration
         services.AddScoped<IBackgroundJobHandler>(sp => sp.GetRequiredService<CreditExpiryJob>());
         services.AddScoped<ReconciliationJob>();
         services.AddScoped<IBackgroundJobHandler>(sp => sp.GetRequiredService<ReconciliationJob>());
+        services.AddScoped<WebhookPayloadCleanupJob>();
+        services.AddScoped<IBackgroundJobHandler>(sp => sp.GetRequiredService<WebhookPayloadCleanupJob>());
         services.AddScoped<IAdminProviderService, AdminProviderService>();
         services.AddScoped<IAdminCertificateService, AdminCertificateService>();
         services.AddScoped<IAdminUserService, AdminUserService>();

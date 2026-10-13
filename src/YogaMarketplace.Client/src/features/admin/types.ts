@@ -214,7 +214,13 @@ export type ReconciliationSettings = {
   refundPendingHours: number;
 };
 
-export type AdminSettings = CreditSettings & ReconciliationSettings & {
+/** Raising `policyVersion` asks every user to accept Terms and Privacy again once. */
+export type PrivacySettings = {
+  policyVersion: number;
+  webhookPayloadRetentionDays: number;
+};
+
+export type AdminSettings = CreditSettings & ReconciliationSettings & PrivacySettings & {
   version: number;
   currency: string;
   commissionPercent: number;
@@ -245,6 +251,7 @@ export type UpdateSettingsInput = Partial<
     | "policyNote"
     | keyof CreditSettings
     | keyof ReconciliationSettings
+    | keyof PrivacySettings
   >
 > & {
   version: number;

@@ -130,6 +130,23 @@ export const reconciliationSettingsSchema = z.object({
     .max(reconciliationLimits.maxRefundPendingHours, `Must be between 1 and ${reconciliationLimits.maxRefundPendingHours} hours.`),
 });
 
+export const maxWebhookPayloadRetentionDays = 3650;
+
+/** The policy version may only go up, so the current value is the floor. */
+export function privacySettingsSchema(currentPolicyVersion: number) {
+  return z.object({
+    policyVersion: z.coerce
+      .number({ invalid_type_error: "Enter a version number." })
+      .int("Enter a whole version number.")
+      .min(currentPolicyVersion, `The version can only go up. It is ${currentPolicyVersion} now.`),
+    webhookPayloadRetentionDays: z.coerce
+      .number({ invalid_type_error: "Enter a number of days." })
+      .int("Enter a whole number of days.")
+      .min(1, `Must be between 1 and ${maxWebhookPayloadRetentionDays} days.`)
+      .max(maxWebhookPayloadRetentionDays, `Must be between 1 and ${maxWebhookPayloadRetentionDays} days.`),
+  });
+}
+
 export const resolveItemSchema = z.object({
   note: z
     .string()
@@ -194,3 +211,4 @@ export type CreditSettingsValues = z.infer<typeof creditSettingsSchema>;
 export type PackFormValues = z.infer<typeof packSchema>;
 export type ReconciliationSettingsValues = z.infer<typeof reconciliationSettingsSchema>;
 export type ResolveItemValues = z.infer<typeof resolveItemSchema>;
+export type PrivacySettingsValues = z.infer<ReturnType<typeof privacySettingsSchema>>;

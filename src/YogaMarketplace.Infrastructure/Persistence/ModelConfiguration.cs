@@ -36,6 +36,15 @@ internal static class ModelConfiguration
         ConfigureCreditAccount(modelBuilder.Entity<CreditAccount>());
         ConfigureReconciliationRun(modelBuilder.Entity<ReconciliationRun>());
         ConfigureReconciliationItem(modelBuilder.Entity<ReconciliationItem>());
+        ConfigureConsent(modelBuilder.Entity<ConsentRecord>());
+    }
+
+    private static void ConfigureConsent(EntityTypeBuilder<ConsentRecord> entity)
+    {
+        entity.Property(c => c.Purpose).HasConversion<string>().HasMaxLength(16);
+        entity.Property(c => c.IpHash).HasMaxLength(ConsentRules.IpHashLength);
+        entity.HasIndex(c => new { c.UserId, c.Purpose, c.PolicyVersion }).IsUnique();
+        entity.HasOne<User>().WithMany().HasForeignKey(c => c.UserId).OnDelete(DeleteBehavior.Cascade);
     }
 
     private static void ConfigureReconciliationRun(EntityTypeBuilder<ReconciliationRun> entity)
@@ -414,6 +423,8 @@ internal static class ModelConfiguration
         entity.Property(s => s.ReconciliationTime).HasDefaultValue(PlatformSettingsRules.DefaultReconciliationTime);
         entity.Property(s => s.WebhookStuckMinutes).HasDefaultValue(PlatformSettingsRules.DefaultWebhookStuckMinutes);
         entity.Property(s => s.RefundPendingHours).HasDefaultValue(PlatformSettingsRules.DefaultRefundPendingHours);
+        entity.Property(s => s.PolicyVersion).HasDefaultValue(1);
+        entity.Property(s => s.WebhookPayloadRetentionDays).HasDefaultValue(PlatformSettingsRules.DefaultWebhookPayloadRetentionDays);
     }
 
     private static void ConfigureSettingsAudit(EntityTypeBuilder<SettingsAudit> entity)
@@ -459,6 +470,7 @@ internal static class ModelConfiguration
         entity.Property(c => c.PendingName).HasMaxLength(80);
         entity.Property(c => c.PendingGender).HasConversion<string>().HasMaxLength(16);
         entity.Property(c => c.IntendedRole).HasConversion<string>().HasMaxLength(16);
+        entity.Property(c => c.ConsentAccepted).HasDefaultValue(false);
         entity.HasIndex(c => new { c.Phone, c.CreatedAt });
     }
 }

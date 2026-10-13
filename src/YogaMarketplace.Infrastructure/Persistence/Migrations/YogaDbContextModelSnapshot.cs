@@ -443,6 +443,38 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                     b.ToTable("CheckoutIntents");
                 });
 
+            modelBuilder.Entity("YogaMarketplace.Domain.ConsentRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("AcceptedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("IpHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<int>("PolicyVersion")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "Purpose", "PolicyVersion")
+                        .IsUnique();
+
+                    b.ToTable("ConsentRecords");
+                });
+
             modelBuilder.Entity("YogaMarketplace.Domain.ContentPage", b =>
                 {
                     b.Property<string>("Slug")
@@ -741,6 +773,11 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)");
 
+                    b.Property<bool>("ConsentAccepted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
                     b.Property<DateTimeOffset?>("ConsumedAt")
                         .HasColumnType("datetimeoffset");
 
@@ -986,6 +1023,11 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                         .HasMaxLength(400)
                         .HasColumnType("nvarchar(400)");
 
+                    b.Property<int>("PolicyVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
+
                     b.Property<TimeOnly>("ReconciliationTime")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("time")
@@ -1007,6 +1049,11 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int")
                         .HasDefaultValue(1);
+
+                    b.Property<int>("WebhookPayloadRetentionDays")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(90);
 
                     b.Property<int>("WebhookStuckMinutes")
                         .ValueGeneratedOnAdd()
@@ -1702,6 +1749,15 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("SlotId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("YogaMarketplace.Domain.ConsentRecord", b =>
+                {
+                    b.HasOne("YogaMarketplace.Domain.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("YogaMarketplace.Domain.ContentPage", b =>

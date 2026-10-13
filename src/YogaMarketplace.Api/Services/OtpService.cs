@@ -16,11 +16,13 @@ public class OtpService
     private readonly IOtpSender _sender;
     private readonly OtpOptions _options;
     private readonly OtpDemoMode _demo;
+    private readonly ConsentService _consent;
 
-    public OtpService(YogaDbContext db, IOtpSender sender, IOptions<OtpOptions> options)
+    public OtpService(YogaDbContext db, IOtpSender sender, IOptions<OtpOptions> options, ConsentService consent)
     {
         _db = db;
         _sender = sender;
+        _consent = consent;
         _options = options.Value;
         _demo = OtpDemoMode.From(_options);
         if (string.IsNullOrWhiteSpace(_options.Pepper) || _options.Pepper.Length < 8)
@@ -44,6 +46,8 @@ public class OtpService
                 throw new DomainException("Name is required for a new account.");
             if (!Enum.TryParse<Gender>(request.Gender, true, out var parsed))
                 throw new DomainException("Gender is required for a new account. Use Female, Male, or Other.");
+            if (!request.AcceptedPolicies)
+                throw new DomainException("Accept the Terms and Privacy Policy to create an account.");
             name = request.Name.Trim();
             gender = parsed;
         }
@@ -53,7 +57,7 @@ public class OtpService
         }
         UserBlocking.EnsureCanSignIn(user);
 
-        return await IssueAsync(phone, request.IsNewUser, name, gender, UserRole.Customer, cancellationToken);
+        return await IssueAsync(phone, request.IsNewUser, name, gender, request.IsNewUser, UserRole.Customer, cancellationToken);
     }
 
     public async Task<OtpRequestResult> ResendAsync(string? phoneRaw, CancellationToken cancellationToken)
@@ -73,11 +77,12 @@ public class OtpService
             previous.IsNewUser && user is null,
             previous.PendingName,
             previous.PendingGender,
+            previous.ConsentAccepted,
             previous.IntendedRole,
             cancellationToken);
     }
 
-    public async Task<User> VerifyAsync(VerifyOtpRequest request, CancellationToken cancellationToken)
+    public async Task<User> VerifyAsync(VerifyOtpRequest request, string? ipAddress, CancellationToken cancellationToken)
     {
         if (!PhoneNumber.TryNormalize(request.Phone, out var phone, out var phoneError))
             throw new DomainException(phoneError!);
@@ -108,7 +113,7 @@ public class OtpService
         var user = await _db.Users.SingleOrDefaultAsync(u => u.Phone == phone, cancellationToken);
         if (user is null)
         {
-            if (string.IsNullOrWhiteSpace(challenge.PendingName) || challenge.PendingGender is null)
+            if (string.IsNullOrWhiteSpace(challenge.PendingName) || challenge.PendingGender is null || !challenge.ConsentAccepted)
                 throw new DomainException("This code is missing signup details. Start again.");
 
             user = new User
@@ -121,6 +126,8 @@ public class OtpService
                 CreatedAt = DateTimeOffset.UtcNow
             };
             _db.Users.Add(user);
+            // ponytail: records the version current at verify; a bump while the code is open counts as accepted. Store the version on the challenge if that matters.
+            await _consent.AddAsync(user.Id, ipAddress, cancellationToken);
         }
 
         await _db.SaveChangesAsync(cancellationToken);
@@ -132,6 +139,7 @@ public class OtpService
         bool isNewUser,
         string? name,
         Gender? gender,
+        bool consentAccepted,
         UserRole role,
         CancellationToken cancellationToken)
     {
@@ -152,6 +160,7 @@ public class OtpService
             IsNewUser = isNewUser,
             PendingName = name,
             PendingGender = gender,
+            ConsentAccepted = consentAccepted,
             IntendedRole = role,
             CreatedAt = now
         };
