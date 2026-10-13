@@ -493,9 +493,9 @@ public partial class BookingService : IBookingService, IBookingHandshake, IRazor
 
             var total = checkout.Amount + checkout.ConvenienceFee;
             if (amountPaise is long paise && paise != RazorpayMoney.ToPaise(total))
-                throw new DomainException("Payment amount does not match the slot price.");
+                throw new PaymentMismatchException("Payment amount does not match the slot price.");
             if (currency is not null && !currency.Equals(checkout.Currency, StringComparison.OrdinalIgnoreCase))
-                throw new DomainException("Payment currency does not match.");
+                throw new PaymentMismatchException("Payment currency does not match.");
 
             var replay = await LoadByPaymentIdAsync(paymentId, cancellationToken);
             if (replay is not null)

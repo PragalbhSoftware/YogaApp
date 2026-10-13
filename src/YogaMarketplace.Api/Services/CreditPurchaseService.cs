@@ -196,11 +196,12 @@ public class CreditPurchaseService
         if (expectedCustomerId is Guid expected && checkout.CustomerId != expected)
             throw new DomainException("This payment belongs to another account.", 403);
         if (amountPaise is long paise && paise != RazorpayMoney.ToPaise(checkout.Amount))
-            throw new DomainException("Payment amount does not match the pack price.");
+            throw new PaymentMismatchException("Payment amount does not match the pack price.");
         if (currency is not null && !currency.Equals(checkout.Currency, StringComparison.OrdinalIgnoreCase))
-            throw new DomainException("Payment currency does not match.");
+            throw new PaymentMismatchException("Payment currency does not match.");
 
-        if (checkout.Status != CheckoutStatus.Open)
+        // A failed attempt can still be followed by a capture on the same order.
+        if (checkout.Status is not (CheckoutStatus.Open or CheckoutStatus.Failed))
         {
             if (checkout.GatewayPaymentId != paymentId)
                 throw new DomainException("This order was already paid.", 409);

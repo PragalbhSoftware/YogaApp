@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -7,6 +8,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using YogaMarketplace.Api.Services;
 using YogaMarketplace.Domain;
 using YogaMarketplace.Infrastructure.Persistence;
@@ -234,6 +236,70 @@ public class BookingPaymentTests : IClassFixture<YogaApiFactory>
         Assert.Equal(before, await CountBookingsAsync(slot.Id));
         Assert.Equal(CheckoutStatus.Open, await CheckoutStatusOfAsync(order.OrderId));
         Assert.Equal(0, await CountAsync(db => db.WebhookEvents.CountAsync(e => e.EventId == "evt_bad_sig")));
+    }
+
+    [Fact]
+    public async Task Webhook_before_the_client_callback_books_once_and_the_callback_returns_that_booking()
+    {
+        var client = _factory.CreateClient();
+        var (token, _) = await SignUpAsync(client, "Tara Menon", "Female");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var slot = await FirstOpenSlotAsync(client, "Studio");
+        var order = await CreateOrderAsync(client, slot.Id, null, null);
+        var before = await CountBookingsAsync(slot.Id);
+        var paymentId = "pay_webhook_first_" + Guid.NewGuid().ToString("N");
+
+        var capture = CapturedBody(order.OrderId, paymentId, order.AmountPaise);
+        var webhook = await PostWebhookAsync(capture, SignWebhook(capture));
+        var hooked = (await webhook.Content.ReadFromJsonAsync<WebhookBody>(Json))!;
+        var callback = await ConfirmAsync(client, order.OrderId, paymentId);
+
+        Assert.True(hooked.Booked);
+        Assert.Equal(hooked.BookingId, callback.Id);
+        Assert.Equal(("PendingAccept", "Paid", paymentId), (callback.Status, callback.PaymentStatus, callback.GatewayPaymentId));
+        Assert.Equal(before + 1, await CountBookingsAsync(slot.Id));
+        Assert.Equal(1, await CountAsync(db => db.Payments.CountAsync(p => p.GatewayPaymentId == paymentId)));
+        Assert.Equal(CheckoutStatus.Completed, await CheckoutStatusOfAsync(order.OrderId));
+    }
+
+    [Fact]
+    public async Task Captured_webhook_with_a_wrong_amount_or_currency_is_recorded_failed_answered_200_and_books_nothing()
+    {
+        var log = new ErrorLog();
+        using var logged = _factory.WithWebHostBuilder(builder => builder.ConfigureLogging(logging => logging.AddProvider(log)));
+        var client = logged.CreateClient();
+        var (token, _) = await SignUpAsync(client, "Vikram Nair", "Male");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var slot = await FirstOpenSlotAsync(client, "Studio");
+        var order = await CreateOrderAsync(client, slot.Id, null, null);
+        var before = await CountBookingsAsync(slot.Id);
+        var wrongAmount = "pay_wrong_amount_" + Guid.NewGuid().ToString("N");
+        var wrongCurrency = "pay_wrong_currency_" + Guid.NewGuid().ToString("N");
+
+        foreach (var body in new[]
+        {
+            CapturedBody(order.OrderId, wrongAmount, order.AmountPaise - 100),
+            CapturedBody(order.OrderId, wrongCurrency, order.AmountPaise, currency: "USD")
+        })
+        {
+            var response = await PostWebhookAsync(body, SignWebhook(body), client: client);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.False((await response.Content.ReadFromJsonAsync<WebhookBody>(Json))!.Booked);
+        }
+
+        Assert.Equal(before, await CountBookingsAsync(slot.Id));
+        Assert.Equal(CheckoutStatus.Open, await CheckoutStatusOfAsync(order.OrderId));
+        var events = await CountAsync(db => db.WebhookEvents.AsNoTracking()
+            .Where(e => e.GatewayPaymentId == wrongAmount || e.GatewayPaymentId == wrongCurrency)
+            .ToDictionaryAsync(e => e.GatewayPaymentId!));
+        Assert.Equal((WebhookEventStatus.Failed, "Payment amount does not match the slot price."), (events[wrongAmount].Status, events[wrongAmount].Error));
+        Assert.Equal((WebhookEventStatus.Failed, "Payment currency does not match."), (events[wrongCurrency].Status, events[wrongCurrency].Error));
+        Assert.Contains(log.Errors, line => line.Contains(wrongAmount, StringComparison.Ordinal));
+        Assert.Contains(log.Errors, line => line.Contains(wrongCurrency, StringComparison.Ordinal));
+
+        var paid = await ConfirmAsync(client, order.OrderId, "pay_right_" + Guid.NewGuid().ToString("N"));
+        Assert.Equal("PendingAccept", paid.Status);
+        Assert.Equal(before + 1, await CountBookingsAsync(slot.Id));
     }
 
     [Fact]
@@ -472,7 +538,7 @@ public class BookingPaymentTests : IClassFixture<YogaApiFactory>
         });
     }
 
-    private async Task<HttpResponseMessage> PostWebhookAsync(string body, string signature, string? eventId = null)
+    private async Task<HttpResponseMessage> PostWebhookAsync(string body, string signature, string? eventId = null, HttpClient? client = null)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, "/api/webhooks/razorpay")
         {
@@ -481,7 +547,7 @@ public class BookingPaymentTests : IClassFixture<YogaApiFactory>
         request.Headers.TryAddWithoutValidation("X-Razorpay-Signature", signature);
         if (eventId is not null)
             request.Headers.TryAddWithoutValidation("X-Razorpay-Event-Id", eventId);
-        return await _factory.CreateClient().SendAsync(request);
+        return await (client ?? _factory.CreateClient()).SendAsync(request);
     }
 
     private IReadOnlyList<RecordedRefund> RefundsFor(string paymentId) =>
@@ -550,9 +616,9 @@ public class BookingPaymentTests : IClassFixture<YogaApiFactory>
         return Convert.ToHexString(hmac.ComputeHash(Encoding.UTF8.GetBytes(payload))).ToLowerInvariant();
     }
 
-    private static string CapturedBody(string orderId, string paymentId, long paise) =>
+    private static string CapturedBody(string orderId, string paymentId, long paise, string currency = "INR") =>
         "{\"event\":\"payment.captured\",\"payload\":{\"payment\":{\"entity\":{\"id\":\"" + paymentId
-        + "\",\"order_id\":\"" + orderId + "\",\"status\":\"captured\",\"amount\":" + paise + ",\"currency\":\"INR\"}}}}";
+        + "\",\"order_id\":\"" + orderId + "\",\"status\":\"captured\",\"amount\":" + paise + ",\"currency\":\"" + currency + "\"}}}}";
 
     private const string RefundProcessed = "refund.processed";
 
@@ -589,4 +655,62 @@ public class BookingPaymentTests : IClassFixture<YogaApiFactory>
         string? GatewayOrderId,
         string? GatewayPaymentId);
     private sealed record WebhookBody(bool Received, bool Booked, Guid? BookingId);
+
+    [Theory]
+    [InlineData(50000L, "INR", "captured", "order_check", null)]
+    [InlineData(49900L, "INR", "captured", "order_check", "Payment amount does not match the slot price.")]
+    [InlineData(50000L, "USD", "captured", "order_check", "Payment amount does not match the slot price.")]
+    [InlineData(50000L, "INR", "authorized", "order_check", "Payment is not captured.")]
+    [InlineData(50000L, "INR", "captured", "order_other", "Payment does not match this order.")]
+    public async Task Real_gateway_callback_checks_the_captured_amount_currency_status_and_order(
+        long amountPaise, string currency, string status, string remoteOrderId, string? error)
+    {
+        const string orderId = "order_check";
+        const string paymentId = "pay_check";
+        var gateway = RazorpayListPagingTests.NewClient(new PaymentHandler(new
+        {
+            id = paymentId, order_id = remoteOrderId, status, amount = amountPaise, amount_refunded = 0, currency
+        }));
+        var signature = Sign(RazorpayListPagingTests.KeySecret, $"{orderId}|{paymentId}");
+
+        var check = () => gateway.RequireCapturedCheckoutAsync(orderId, paymentId, signature, 50000, "INR", CancellationToken.None);
+
+        if (error is null)
+            await check();
+        else
+            Assert.Equal(error, (await Assert.ThrowsAsync<DomainException>(check)).Message);
+        Assert.Equal("Payment signature is invalid.", (await Assert.ThrowsAsync<DomainException>(() =>
+            gateway.RequireCapturedCheckoutAsync(orderId, paymentId, "bad", 50000, "INR", CancellationToken.None))).Message);
+    }
+
+    /// <summary>Answers Razorpay's fetch-payment call with one payment.</summary>
+    private sealed class PaymentHandler(object payment) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(payment) });
+    }
+
+    /// <summary>Keeps every Error line logged by the host.</summary>
+    private sealed class ErrorLog : ILoggerProvider, ILogger
+    {
+        private readonly ConcurrentQueue<string> _errors = new();
+
+        public IReadOnlyCollection<string> Errors => _errors.ToArray();
+
+        public ILogger CreateLogger(string categoryName) => this;
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => logLevel >= LogLevel.Error;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel >= LogLevel.Error)
+                _errors.Enqueue(formatter(state, exception));
+        }
+
+        public void Dispose()
+        {
+        }
+    }
 }

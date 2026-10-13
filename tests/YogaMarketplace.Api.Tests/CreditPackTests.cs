@@ -16,6 +16,7 @@ namespace YogaMarketplace.Api.Tests;
 /// <summary>Seeded instructor rates: Home 899, Studio 749, Online 599. Seeded terms: 15% commission, 12 h window, 50% late fee.</summary>
 public class CreditPackTests : IClassFixture<YogaApiFactory>
 {
+    private const string KeySecret = "dev-only-not-a-live-key-secret";
     private const string WebhookSecret = "dev-only-not-a-live-webhook-secret";
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private static int _slotCounter;
@@ -85,6 +86,97 @@ public class CreditPackTests : IClassFixture<YogaApiFactory>
         var status = await OrderStatusAsync(customer, order.OrderId);
         Assert.Equal("Completed", status.Status);
         Assert.Equal(first.CreditBatchId, status.Batch!.Id);
+        Assert.Equal(4, (await CreditsAsync(customer)).Total);
+        Assert.Equal(1, await QueryAsync(db => db.CreditLedger.CountAsync(e => e.BatchId == first.CreditBatchId && e.Kind == CreditEntryKind.Purchase)));
+    }
+
+    [Fact]
+    public async Task A_bad_signature_on_the_callback_or_the_webhook_adds_no_credits()
+    {
+        var (admin, _) = await StaffAsync();
+        var pack = await CreatePackAsync(admin, sessions: 4, price: 2400m);
+        var (customer, _) = await SignUpAsync();
+        var order = await PostAsync<PackOrderBody>(customer, $"/api/packs/{pack.Id}/orders", new { });
+        var paymentId = "pay_pack_bad_sig_" + Guid.NewGuid().ToString("N");
+
+        var callback = await customer.PostAsJsonAsync("/api/packs/confirm", new { orderId = order.OrderId, paymentId, signature = "not-a-valid-signature" });
+        var webhook = await SendWebhookAsync(CapturedBody(order.OrderId, paymentId, order.AmountPaise), "deadbeef");
+
+        await AssertStatusAsync(callback, HttpStatusCode.BadRequest);
+        await AssertStatusAsync(webhook, HttpStatusCode.BadRequest);
+        Assert.Equal("Open", (await OrderStatusAsync(customer, order.OrderId)).Status);
+        Assert.Equal(0, (await CreditsAsync(customer)).Total);
+        Assert.False(await QueryAsync(db => db.CreditBatches.AnyAsync(b => b.GatewayPaymentId == paymentId)));
+    }
+
+    [Fact]
+    public async Task Webhook_before_the_client_callback_adds_one_batch_and_the_callback_returns_it()
+    {
+        var (admin, _) = await StaffAsync();
+        var pack = await CreatePackAsync(admin, sessions: 4, price: 2400m);
+        var (customer, _) = await SignUpAsync();
+        var order = await PostAsync<PackOrderBody>(customer, $"/api/packs/{pack.Id}/orders", new { });
+        var paymentId = "pay_pack_first_" + Guid.NewGuid().ToString("N");
+
+        var hooked = await PostWebhookAsync(CapturedBody(order.OrderId, paymentId, order.AmountPaise));
+        var callback = await PostAsync<PackStatusBody>(customer, "/api/packs/confirm", new
+        {
+            orderId = order.OrderId,
+            paymentId,
+            signature = Sign(KeySecret, $"{order.OrderId}|{paymentId}")
+        });
+
+        Assert.NotNull(hooked.CreditBatchId);
+        Assert.Equal(("Completed", hooked.CreditBatchId), (callback.Status, callback.Batch?.Id));
+        Assert.Equal(4, (await CreditsAsync(customer)).Total);
+        Assert.Equal(1, await QueryAsync(db => db.CreditBatches.CountAsync(b => b.GatewayPaymentId == paymentId)));
+        Assert.Equal(1, await QueryAsync(db => db.CreditLedger.CountAsync(e => e.BatchId == hooked.CreditBatchId && e.Kind == CreditEntryKind.Purchase)));
+    }
+
+    [Fact]
+    public async Task A_captured_webhook_with_a_wrong_amount_or_currency_is_recorded_failed_and_adds_no_credits()
+    {
+        var (admin, _) = await StaffAsync();
+        var pack = await CreatePackAsync(admin, sessions: 4, price: 2400m);
+        var (customer, _) = await SignUpAsync();
+        var order = await PostAsync<PackOrderBody>(customer, $"/api/packs/{pack.Id}/orders", new { });
+        var wrongAmount = "pay_pack_amount_" + Guid.NewGuid().ToString("N");
+        var wrongCurrency = "pay_pack_currency_" + Guid.NewGuid().ToString("N");
+
+        var amountHook = await PostWebhookAsync(CapturedBody(order.OrderId, wrongAmount, order.AmountPaise + 100));
+        var currencyHook = await PostWebhookAsync(CapturedBody(order.OrderId, wrongCurrency, order.AmountPaise, currency: "USD"));
+
+        Assert.Null(amountHook.CreditBatchId);
+        Assert.Null(currencyHook.CreditBatchId);
+        Assert.Equal("Open", (await OrderStatusAsync(customer, order.OrderId)).Status);
+        Assert.Equal(0, (await CreditsAsync(customer)).Total);
+        var events = await QueryAsync(db => db.WebhookEvents.AsNoTracking()
+            .Where(e => e.GatewayPaymentId == wrongAmount || e.GatewayPaymentId == wrongCurrency)
+            .ToDictionaryAsync(e => e.GatewayPaymentId!, e => (e.Status, e.Error)));
+        Assert.Equal((WebhookEventStatus.Failed, "Payment amount does not match the pack price."), events[wrongAmount]);
+        Assert.Equal((WebhookEventStatus.Failed, "Payment currency does not match."), events[wrongCurrency]);
+    }
+
+    [Fact]
+    public async Task A_failed_payment_marks_the_order_failed_and_a_later_capture_adds_exactly_one_batch()
+    {
+        var (admin, _) = await StaffAsync();
+        var pack = await CreatePackAsync(admin, sessions: 4, price: 2400m);
+        var (customer, _) = await SignUpAsync();
+        var order = await PostAsync<PackOrderBody>(customer, $"/api/packs/{pack.Id}/orders", new { });
+
+        await PostWebhookAsync(FailedBody(order.OrderId, "pay_pack_failed_" + Guid.NewGuid().ToString("N"), order.AmountPaise));
+
+        Assert.Equal("Failed", (await OrderStatusAsync(customer, order.OrderId)).Status);
+        Assert.Equal(0, (await CreditsAsync(customer)).Total);
+
+        var capture = CapturedBody(order.OrderId, "pay_pack_retry_" + Guid.NewGuid().ToString("N"), order.AmountPaise);
+        var first = await PostWebhookAsync(capture);
+        var again = await PostWebhookAsync(capture);
+
+        Assert.NotNull(first.CreditBatchId);
+        Assert.Null(again.CreditBatchId);
+        Assert.Equal("Completed", (await OrderStatusAsync(customer, order.OrderId)).Status);
         Assert.Equal(4, (await CreditsAsync(customer)).Total);
         Assert.Equal(1, await QueryAsync(db => db.CreditLedger.CountAsync(e => e.BatchId == first.CreditBatchId && e.Kind == CreditEntryKind.Purchase)));
     }
@@ -697,22 +789,35 @@ public class CreditPackTests : IClassFixture<YogaApiFactory>
 
     private async Task<WebhookBody> PostWebhookAsync(string body)
     {
-        var request = new HttpRequestMessage(HttpMethod.Post, "/api/webhooks/razorpay")
-        {
-            Content = new StringContent(body, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), "application/json")
-        };
-        using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(WebhookSecret));
-        request.Headers.TryAddWithoutValidation(
-            "X-Razorpay-Signature", Convert.ToHexString(hmac.ComputeHash(Encoding.UTF8.GetBytes(body))).ToLowerInvariant());
-        var response = await _factory.CreateClient().SendAsync(request);
+        var response = await SendWebhookAsync(body, Sign(WebhookSecret, body));
         var payload = await response.Content.ReadAsStringAsync();
         Assert.True(response.IsSuccessStatusCode, payload);
         return JsonSerializer.Deserialize<WebhookBody>(payload, Json)!;
     }
 
-    private static string CapturedBody(string orderId, string paymentId, long paise) =>
+    private Task<HttpResponseMessage> SendWebhookAsync(string body, string signature)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/webhooks/razorpay")
+        {
+            Content = new StringContent(body, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), "application/json")
+        };
+        request.Headers.TryAddWithoutValidation("X-Razorpay-Signature", signature);
+        return _factory.CreateClient().SendAsync(request);
+    }
+
+    private static string Sign(string secret, string payload)
+    {
+        using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(secret));
+        return Convert.ToHexString(hmac.ComputeHash(Encoding.UTF8.GetBytes(payload))).ToLowerInvariant();
+    }
+
+    private static string CapturedBody(string orderId, string paymentId, long paise, string currency = "INR") =>
         "{\"event\":\"payment.captured\",\"payload\":{\"payment\":{\"entity\":{\"id\":\"" + paymentId
-        + "\",\"order_id\":\"" + orderId + "\",\"status\":\"captured\",\"amount\":" + paise + ",\"currency\":\"INR\"}}}}";
+        + "\",\"order_id\":\"" + orderId + "\",\"status\":\"captured\",\"amount\":" + paise + ",\"currency\":\"" + currency + "\"}}}}";
+
+    private static string FailedBody(string orderId, string paymentId, long paise) =>
+        "{\"event\":\"payment.failed\",\"payload\":{\"payment\":{\"entity\":{\"id\":\"" + paymentId
+        + "\",\"order_id\":\"" + orderId + "\",\"status\":\"failed\",\"amount\":" + paise + ",\"currency\":\"INR\"}}}}";
 
     private IReadOnlyList<RecordedRefund> RefundsFor(string paymentId) =>
         Assert.IsType<FakeRazorpayClient>(_factory.Services.GetRequiredService<IRazorpayClient>())
