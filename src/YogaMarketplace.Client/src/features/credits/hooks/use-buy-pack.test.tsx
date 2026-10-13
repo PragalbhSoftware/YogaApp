@@ -4,6 +4,7 @@ import { render, renderHook, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PurchaseStatus } from "@/features/credits/components/purchase-status";
 import { useBuyPack } from "@/features/credits/hooks/use-buy-pack";
+import { packOrderPollMs, usePackOrderStatus } from "@/features/credits/hooks/use-credits";
 import { readPendingPackOrder, savePendingPackOrder } from "@/features/credits/utils/pending-pack-order";
 import { useAuthStore } from "@/stores/auth-store";
 
@@ -64,6 +65,21 @@ describe("useBuyPack", () => {
     await waitFor(() => expect(result.current.stage).toBe("slow"));
     expect(result.current.busy).toBe(true);
     expect(readPendingPackOrder(userId)).toBe("order_slow");
+  });
+});
+
+describe("usePackOrderStatus", () => {
+  beforeEach(() => orderStatus.mockReset());
+
+  it("keeps polling an order marked Failed by an earlier attempt until the capture lands", async () => {
+    orderStatus
+      .mockResolvedValueOnce({ orderId: "order_retried", status: "Failed", batch: null })
+      .mockResolvedValue({ orderId: "order_retried", status: "Completed", batch: null });
+
+    const { result } = renderHook(() => usePackOrderStatus("order_retried"), { wrapper });
+
+    await waitFor(() => expect(result.current.data?.status).toBe("Completed"), { timeout: packOrderPollMs * 2 });
+    expect(orderStatus).toHaveBeenCalledTimes(2);
   });
 });
 

@@ -9,3 +9,6 @@ public class DomainException : Exception
         StatusCode = statusCode;
     }
 }
+
+/// <summary>A captured payment whose amount or currency differs from the order. Retrying can never fix it.</summary>
+public sealed class PaymentMismatchException(string message) : DomainException(message);

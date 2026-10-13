@@ -18,13 +18,19 @@ export function useMyCredits(enabled = true) {
   return useQuery({ queryKey: myCreditsKey, queryFn: creditsApi.mine, enabled, staleTime: 0 });
 }
 
-/** Polls an order the server hasn't captured yet, and stops once it is Completed or Refunded. */
+/**
+ * Polls an order the server hasn't captured yet, and stops once it is Completed or Refunded. Failed keeps polling:
+ * it only reflects an earlier attempt on the order, and the payment Razorpay just reported can still be captured.
+ */
 export function usePackOrderStatus(orderId: string | null) {
   return useQuery({
     queryKey: ["pack-order", orderId],
     queryFn: () => creditsApi.orderStatus(orderId ?? ""),
     enabled: Boolean(orderId),
-    refetchInterval: (query) => (query.state.data?.status === "Open" || !query.state.data ? packOrderPollMs : false),
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return !status || status === "Open" || status === "Failed" ? packOrderPollMs : false;
+    },
     staleTime: 0,
     gcTime: 0,
   });

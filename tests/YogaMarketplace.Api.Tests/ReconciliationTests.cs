@@ -816,9 +816,11 @@ public class RazorpayListPagingTests
             timeout.ListRefundsAsync(DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch.AddDays(1), CancellationToken.None))).StatusCode);
     }
 
+    internal const string KeySecret = "secret";
+
     internal static RazorpayHttpClient NewClient(HttpMessageHandler handler) => new(
         new HttpClient(handler) { BaseAddress = new Uri("https://api.razorpay.test/") },
-        Microsoft.Extensions.Options.Options.Create(new RazorpayOptions { KeyId = "rzp_test_paging", KeySecret = "secret" }),
+        Microsoft.Extensions.Options.Options.Create(new RazorpayOptions { KeyId = "rzp_test_paging", KeySecret = KeySecret }),
         NullLogger<RazorpayHttpClient>.Instance);
 
     /// <summary>

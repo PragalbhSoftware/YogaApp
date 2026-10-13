@@ -42,7 +42,7 @@ export type PackOrder = {
 
 export type PackOrderStatus = {
   orderId: string;
-  /** Open until the server captures the payment; credits only exist once Completed. */
-  status: "Open" | "Completed" | "Refunded" | string;
+  /** Open until the server captures the payment; credits only exist once Completed. Failed: a payment attempt failed. */
+  status: "Open" | "Failed" | "Completed" | "Refunded" | string;
   batch: CreditBatch | null;
 };

@@ -55,7 +55,17 @@ public partial class BookingService
         switch (eventType)
         {
             case RazorpayWire.PaymentCapturedEvent:
-                return (await HandleCapturedAsync(rawBody, cancellationToken), WebhookEventStatus.Processed, null);
+                try
+                {
+                    return (await HandleCapturedAsync(rawBody, cancellationToken), WebhookEventStatus.Processed, null);
+                }
+                catch (PaymentMismatchException ex)
+                {
+                    // Razorpay would redeliver forever; answer 200 and leave the payment for reconciliation to report.
+                    _logger.LogError(ex, "Captured Razorpay payment {PaymentId} does not match its order and was not applied.",
+                        RazorpayWebhookParser.ReadEnvelope(rawBody).PaymentId);
+                    return (WebhookResult.Ignored(), WebhookEventStatus.Failed, ex.Message);
+                }
             case RazorpayWire.PaymentFailedEvent:
                 await HandlePaymentFailedAsync(rawBody, cancellationToken);
                 return (WebhookResult.Ignored(), WebhookEventStatus.Processed, null);
@@ -107,7 +117,7 @@ public partial class BookingService
             return;
 
         var updated = await _db.CheckoutIntents
-            .Where(c => c.GatewayOrderId == failed.OrderId && c.Kind == CheckoutKind.Booking && c.Status == CheckoutStatus.Open)
+            .Where(c => c.GatewayOrderId == failed.OrderId && c.Status == CheckoutStatus.Open)
             .ExecuteUpdateAsync(s => s.SetProperty(c => c.Status, CheckoutStatus.Failed), cancellationToken);
         if (updated > 0)
             _logger.LogInformation("Razorpay payment {PaymentId} failed; checkout for order {OrderId} marked failed.", failed.PaymentId, failed.OrderId);
