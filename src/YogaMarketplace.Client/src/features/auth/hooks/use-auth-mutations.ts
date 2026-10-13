@@ -13,6 +13,12 @@ export function useResendOtp() {
   });
 }
 
+export function useAcceptConsent() {
+  return useMutation({
+    mutationFn: authApi.acceptConsent,
+  });
+}
+
 export function useVerifyOtp() {
   return useMutation({
     mutationFn: ({ phone, code }: { phone: string; code: string }) =>

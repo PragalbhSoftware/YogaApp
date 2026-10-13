@@ -443,6 +443,38 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                     b.ToTable("CheckoutIntents");
                 });
 
+            modelBuilder.Entity("YogaMarketplace.Domain.ConsentRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("AcceptedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("IpHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<int>("PolicyVersion")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "Purpose", "PolicyVersion")
+                        .IsUnique();
+
+                    b.ToTable("ConsentRecords");
+                });
+
             modelBuilder.Entity("YogaMarketplace.Domain.ContentPage", b =>
                 {
                     b.Property<string>("Slug")
@@ -481,7 +513,7 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                         new
                         {
                             Slug = "refund-policy",
-                            Body = "You pay when you book. The instructor then accepts or declines your request.\n\n## Full refunds\n- The instructor declines your request.\n- You cancel before the instructor accepts.\n- You cancel before the free-cancellation window closes. The booking page shows the exact time.\n- We cancel the session.\n\n## Late cancellations\nIf you cancel after the free-cancellation window closes, a late-cancellation fee is kept and paid to the instructor. The convenience fee is not refunded on a late cancel. The rest is refunded.\n\n## No-shows\nIf you miss a session without cancelling, no refund is given.\n\n## How refunds reach you\nRefunds go back to the original payment method through Razorpay. Banks usually take 5 to 7 working days.",
+                            Body = "You pay when you book. The instructor then accepts or declines your request.\n\n## How refund rules are set\nCancellation windows, late-cancellation fees, convenience fees and pack refunds follow the platform settings, which can change over time. The terms for your booking or pack are shown before you pay and stay fixed for that booking or pack.\n\n## Full refunds\n- The instructor declines your request.\n- You cancel before the instructor accepts.\n- You cancel before the free-cancellation window shown on your booking closes.\n- We cancel the session.\n\n## Late cancellations\nIf you cancel after the free-cancellation window closes, the late-cancellation fee shown on your booking is kept and paid to the instructor. The rest is refunded as shown on your booking.\n\n## No-shows\nIf you miss a session without cancelling, no refund is given.\n\n## How refunds reach you\nRefunds go back to the original payment method through Razorpay. How long the money takes to arrive depends on your bank.",
                             Title = "Refund policy",
                             UpdatedAt = new DateTimeOffset(new DateTime(2026, 10, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
                             Version = 1
@@ -489,7 +521,7 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                         new
                         {
                             Slug = "terms",
-                            Body = "These terms cover your use of the marketplace, where customers book sessions with independent instructors.\n\n## Bookings\n- A booking is a request until the instructor accepts it.\n- Prices, fees and cancellation terms are shown before you pay and stay fixed for that booking.\n- Instructors are independent professionals and are responsible for the sessions they deliver.\n\n## Your account\n- Sign in with your own phone number and keep access to it secure.\n- Do not misuse the service, book on behalf of others without consent, or post misleading reviews.\n\n## Changes\nWe may update these terms. The date at the bottom of this page shows the latest version.",
+                            Body = "These terms cover your use of the marketplace, where customers book sessions with independent instructors.\n\n## Bookings\n- A booking is a request until the instructor accepts it.\n- Prices, fees and cancellation terms are shown before you pay and stay fixed for that booking.\n- Instructors are independent professionals and are responsible for the sessions they deliver.\n\n## Your account\n- Sign in with your own phone number and keep access to it secure.\n- Do not misuse the service, book on behalf of others without consent, or post misleading reviews.\n\n## Off-platform bookings\n[Placeholder: the rule for arranging or paying for sessions outside the marketplace with an instructor you found here, and what happens if it is broken. Replace this text before launch.]\n\n## Changes\nWe may update these terms. The date at the bottom of this page shows the latest version.",
                             Title = "Terms of use",
                             UpdatedAt = new DateTimeOffset(new DateTime(2026, 10, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
                             Version = 1
@@ -741,6 +773,11 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)");
 
+                    b.Property<bool>("ConsentAccepted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
                     b.Property<DateTimeOffset?>("ConsumedAt")
                         .HasColumnType("datetimeoffset");
 
@@ -986,6 +1023,21 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                         .HasMaxLength(400)
                         .HasColumnType("nvarchar(400)");
 
+                    b.Property<int>("PolicyVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
+
+                    b.Property<TimeOnly>("ReconciliationTime")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("time")
+                        .HasDefaultValue(new TimeOnly(6, 0, 0));
+
+                    b.Property<int>("RefundPendingHours")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(48);
+
                     b.Property<int>("RescheduleFreeWindowHours")
                         .HasColumnType("int");
 
@@ -997,6 +1049,16 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int")
                         .HasDefaultValue(1);
+
+                    b.Property<int>("WebhookPayloadRetentionDays")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(90);
+
+                    b.Property<int>("WebhookStuckMinutes")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(60);
 
                     b.HasKey("Id");
 
@@ -1176,6 +1238,117 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                     b.HasIndex("ProviderId", "SortOrder");
 
                     b.ToTable("ProviderPhotos");
+                });
+
+            modelBuilder.Entity("YogaMarketplace.Domain.ReconciliationItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("DatabaseValue")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<string>("Detail")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("GatewayPaymentId")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<string>("GatewayRefundId")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<string>("GatewayValue")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<string>("ResolutionNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTimeOffset?>("ResolvedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("ResolvedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("nvarchar(24)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ResolvedByUserId");
+
+                    b.HasIndex("RunId", "Type");
+
+                    b.HasIndex("Status", "Type");
+
+                    b.ToTable("ReconciliationItems");
+                });
+
+            modelBuilder.Entity("YogaMarketplace.Domain.ReconciliationRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Error")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<bool>("GatewayCompared")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("ItemCount")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly>("MarketDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<DateTimeOffset>("WindowEnd")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("WindowStart")
+                        .HasColumnType("datetimeoffset");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MarketDate");
+
+                    b.ToTable("ReconciliationRuns");
                 });
 
             modelBuilder.Entity("YogaMarketplace.Domain.RefreshToken", b =>
@@ -1578,6 +1751,15 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
                 });
 
+            modelBuilder.Entity("YogaMarketplace.Domain.ConsentRecord", b =>
+                {
+                    b.HasOne("YogaMarketplace.Domain.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("YogaMarketplace.Domain.ContentPage", b =>
                 {
                     b.HasOne("YogaMarketplace.Domain.User", null)
@@ -1704,6 +1886,20 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                     b.HasOne("YogaMarketplace.Domain.Provider", null)
                         .WithMany("Photos")
                         .HasForeignKey("ProviderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("YogaMarketplace.Domain.ReconciliationItem", b =>
+                {
+                    b.HasOne("YogaMarketplace.Domain.User", null)
+                        .WithMany()
+                        .HasForeignKey("ResolvedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("YogaMarketplace.Domain.ReconciliationRun", null)
+                        .WithMany()
+                        .HasForeignKey("RunId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

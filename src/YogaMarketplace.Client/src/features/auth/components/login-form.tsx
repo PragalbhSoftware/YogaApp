@@ -28,6 +28,7 @@ export function LoginForm() {
       phone: "",
       name: "",
       gender: "",
+      acceptedPolicies: false,
     },
   });
 
@@ -52,6 +53,7 @@ export function LoginForm() {
         isNewUser: values.accountKind === "new",
         name: values.accountKind === "new" ? values.name : undefined,
         gender: values.accountKind === "new" ? values.gender : undefined,
+        acceptedPolicies: values.accountKind === "new" ? values.acceptedPolicies : undefined,
       },
       {
         onSuccess: applyChallenge,

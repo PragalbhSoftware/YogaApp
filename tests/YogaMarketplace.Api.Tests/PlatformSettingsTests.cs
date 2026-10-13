@@ -328,7 +328,7 @@ public class PlatformSettingsTests : IClassFixture<YogaApiFactory>
     {
         var client = _factory.CreateClient();
         var phone = "+9193" + Random.Shared.Next(10000000, 99999999);
-        var otp = await PostAsync<OtpBody>(client, "/api/auth/otp/request", new { phone, name, gender = "Female", isNewUser = true });
+        var otp = await PostAsync<OtpBody>(client, "/api/auth/otp/request", new { phone, name, gender = "Female", isNewUser = true, acceptedPolicies = true });
         var auth = await PostAsync<AuthBody>(client, "/api/auth/otp/verify", new { phone, code = otp.DevCode });
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth.Token);
         return client;

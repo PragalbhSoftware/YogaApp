@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { bannerSchema, creditSettingsSchema, feeSettingsSchema, packSchema } from "@/features/admin/schemas";
+import {
+  bannerSchema,
+  creditSettingsSchema,
+  feeSettingsSchema,
+  packSchema,
+  privacySettingsSchema,
+  reconciliationSettingsSchema,
+  resolveItemSchema,
+} from "@/features/admin/schemas";
 
 const valid = {
   commissionPercent: 15,
@@ -77,6 +85,52 @@ describe("credit settings form", () => {
     expect(creditSettingsSchema.safeParse(credit).success).toBe(true);
     expect(creditSettingsSchema.safeParse({ ...credit, creditLateCancel: "Refund" }).success).toBe(false);
     expect(creditSettingsSchema.safeParse({ ...credit, packRefundFee: -1 }).success).toBe(false);
+  });
+});
+
+describe("reconciliation settings form", () => {
+  const recon = { reconciliationTime: "06:00", webhookStuckMinutes: 60, refundPendingHours: 48 };
+  const reconErrors = (input: Record<string, unknown>) => {
+    const result = reconciliationSettingsSchema.safeParse({ ...recon, ...input });
+    return result.success ? [] : result.error.issues.map((issue) => issue.path.join("."));
+  };
+
+  it("accepts the defaults and typed numbers", () => {
+    expect(reconErrors({ webhookStuckMinutes: "15", refundPendingHours: "720" })).toEqual([]);
+  });
+
+  it("rejects bad times and thresholds out of range", () => {
+    expect(reconErrors({ reconciliationTime: "24:00" })).toEqual(["reconciliationTime"]);
+    expect(reconErrors({ reconciliationTime: "6:00" })).toEqual(["reconciliationTime"]);
+    expect(reconErrors({ webhookStuckMinutes: 0 })).toEqual(["webhookStuckMinutes"]);
+    expect(reconErrors({ refundPendingHours: 721 })).toEqual(["refundPendingHours"]);
+    expect(reconErrors({ refundPendingHours: 1.5 })).toEqual(["refundPendingHours"]);
+  });
+});
+
+describe("consent and data form", () => {
+  const privacyErrors = (input: Record<string, unknown>) => {
+    const result = privacySettingsSchema(3).safeParse({ policyVersion: 3, webhookPayloadRetentionDays: 90, ...input });
+    return result.success ? [] : result.error.issues.map((issue) => issue.path.join("."));
+  };
+
+  it("lets the policy version stay or go up, never down", () => {
+    expect(privacyErrors({ policyVersion: "4" })).toEqual([]);
+    expect(privacyErrors({ policyVersion: 2 })).toEqual(["policyVersion"]);
+  });
+
+  it("keeps retention days within range", () => {
+    expect(privacyErrors({ webhookPayloadRetentionDays: "3650" })).toEqual([]);
+    expect(privacyErrors({ webhookPayloadRetentionDays: 0 })).toEqual(["webhookPayloadRetentionDays"]);
+    expect(privacyErrors({ webhookPayloadRetentionDays: 3651 })).toEqual(["webhookPayloadRetentionDays"]);
+  });
+});
+
+describe("resolve reconciliation item form", () => {
+  it("needs a note within the length limit", () => {
+    expect(resolveItemSchema.safeParse({ note: "Refunded in dashboard" }).success).toBe(true);
+    expect(resolveItemSchema.safeParse({ note: "   " }).success).toBe(false);
+    expect(resolveItemSchema.safeParse({ note: "a".repeat(501) }).success).toBe(false);
   });
 });
 

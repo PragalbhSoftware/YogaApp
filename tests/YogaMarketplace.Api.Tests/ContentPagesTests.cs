@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
 using YogaMarketplace.Domain;
 using YogaMarketplace.Infrastructure.Persistence;
 
@@ -34,6 +35,35 @@ public class ContentPagesTests : IClassFixture<YogaApiFactory>
     {
         var anon = _factory.CreateClient();
         Assert.Equal(HttpStatusCode.NotFound, (await anon.GetAsync("/api/pages/about")).StatusCode);
+    }
+
+    [Theory]
+    [InlineData("draft-terms")]
+    [InlineData("TERMS")]
+    [InlineData("cookie-policy")]
+    public async Task Pages_that_are_not_published_are_404(string slug)
+    {
+        var response = await _factory.CreateClient().GetAsync($"/api/pages/{slug}");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Starter_text_has_the_off_platform_rule_and_no_fixed_refund_numbers_or_cities()
+    {
+        var anon = _factory.CreateClient();
+        var terms = await anon.GetFromJsonAsync<PageBody>("/api/pages/terms", Json);
+        var refund = await anon.GetFromJsonAsync<PageBody>("/api/pages/refund-policy", Json);
+        var privacy = await anon.GetFromJsonAsync<PageBody>("/api/pages/privacy", Json);
+
+        Assert.Contains("## Off-platform bookings", terms!.Body, StringComparison.Ordinal);
+        Assert.Contains("platform settings", refund!.Body, StringComparison.Ordinal);
+        Assert.DoesNotMatch(@"\d", refund.Body);
+
+        using var scope = _factory.Services.CreateScope();
+        var cities = scope.ServiceProvider.GetRequiredService<YogaDbContext>().Areas.Select(a => a.City).Distinct().ToList();
+        Assert.NotEmpty(cities);
+        foreach (var body in new[] { terms.Body, refund.Body, privacy!.Body })
+            Assert.All(cities, city => Assert.DoesNotContain(city, body, StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

@@ -23,6 +23,7 @@ export const accountSchema = z
     phone: phoneSchema,
     name: z.string().trim().optional(),
     gender: z.string().optional(),
+    acceptedPolicies: z.boolean().optional(),
   })
   .superRefine((value, ctx) => {
     if (value.accountKind !== "new") return;
@@ -38,6 +39,13 @@ export const accountSchema = z
         code: z.ZodIssueCode.custom,
         path: ["gender"],
         message: "Gender is required for a new account. Use Female, Male, or Other.",
+      });
+    }
+    if (!value.acceptedPolicies) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["acceptedPolicies"],
+        message: "Accept the Terms and Privacy Policy to create an account.",
       });
     }
   });

@@ -144,7 +144,7 @@ public class OtpDemoModeTests : IClassFixture<YogaApiFactory>
     private static async Task<OtpBody> RequestAsync(HttpClient client, string phone)
     {
         var response = await client.PostAsJsonAsync("/api/auth/otp/request",
-            new { phone, name = "Demo Visitor", gender = "Female", isNewUser = true });
+            new { phone, name = "Demo Visitor", gender = "Female", isNewUser = true, acceptedPolicies = true });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<OtpBody>(Json))!;
     }

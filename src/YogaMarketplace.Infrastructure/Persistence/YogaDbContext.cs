@@ -37,6 +37,9 @@ public class YogaDbContext : DbContext
     public DbSet<CreditBatch> CreditBatches => Set<CreditBatch>();
     public DbSet<CreditLedgerEntry> CreditLedger => Set<CreditLedgerEntry>();
     public DbSet<CreditAccount> CreditAccounts => Set<CreditAccount>();
+    public DbSet<ReconciliationRun> ReconciliationRuns => Set<ReconciliationRun>();
+    public DbSet<ReconciliationItem> ReconciliationItems => Set<ReconciliationItem>();
+    public DbSet<ConsentRecord> ConsentRecords => Set<ConsentRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

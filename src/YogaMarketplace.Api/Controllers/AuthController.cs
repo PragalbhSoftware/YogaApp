@@ -19,6 +19,7 @@ public class AuthController : ControllerBase
     private readonly ICurrentUser _current;
     private readonly RefreshTokenService _refreshTokens;
     private readonly RefreshCookie _refreshCookie;
+    private readonly ConsentService _consent;
 
     public AuthController(
         OtpService otp,
@@ -26,7 +27,8 @@ public class AuthController : ControllerBase
         YogaDbContext db,
         ICurrentUser current,
         RefreshTokenService refreshTokens,
-        RefreshCookie refreshCookie)
+        RefreshCookie refreshCookie,
+        ConsentService consent)
     {
         _otp = otp;
         _tokens = tokens;
@@ -34,7 +36,10 @@ public class AuthController : ControllerBase
         _current = current;
         _refreshTokens = refreshTokens;
         _refreshCookie = refreshCookie;
+        _consent = consent;
     }
+
+    private string? ClientIp => HttpContext.Connection.RemoteIpAddress?.ToString();
 
     [EnableRateLimiting(RateLimitPolicies.Otp)]
     [HttpPost("otp/request")]
@@ -60,9 +65,9 @@ public class AuthController : ControllerBase
     {
         if (request is null)
             return BadRequest(new { error = "Invalid request." });
-        var user = await _otp.VerifyAsync(request, cancellationToken);
+        var user = await _otp.VerifyAsync(request, ClientIp, cancellationToken);
         _refreshCookie.Write(Response, await _refreshTokens.IssueAsync(user, cancellationToken));
-        return Ok(new VerifyResponse(_tokens.Create(user), ToResponse(user)));
+        return Ok(new VerifyResponse(_tokens.Create(user), await ToResponseAsync(user, cancellationToken)));
     }
 
     /// <summary>Swaps the refresh cookie for a new one and returns a fresh access token.</summary>
@@ -73,7 +78,7 @@ public class AuthController : ControllerBase
         {
             var (user, refresh) = await _refreshTokens.RotateAsync(_refreshCookie.Read(Request), cancellationToken);
             _refreshCookie.Write(Response, refresh);
-            return Ok(new VerifyResponse(_tokens.Create(user), ToResponse(user)));
+            return Ok(new VerifyResponse(_tokens.Create(user), await ToResponseAsync(user, cancellationToken)));
         }
         catch (DomainException ex) when (ex.StatusCode != StatusCodes.Status409Conflict)
         {
@@ -98,9 +103,19 @@ public class AuthController : ControllerBase
         var user = await _db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Id == _current.UserId, cancellationToken);
         if (user is null)
             return Unauthorized();
-        return Ok(ToResponse(user));
+        return Ok(await ToResponseAsync(user, cancellationToken));
     }
 
-    private static UserResponse ToResponse(User user) =>
-        new(user.Id, user.Name, user.Phone, user.Gender?.ToString(), user.Role.ToString());
+    /// <summary>Accepts the current Terms and Privacy version for the signed-in user.</summary>
+    [Authorize]
+    [HttpPost("consent")]
+    public async Task<ActionResult<UserResponse>> AcceptConsent(CancellationToken cancellationToken)
+    {
+        await _consent.AcceptAsync(_current.UserId, ClientIp, cancellationToken);
+        return await Me(cancellationToken);
+    }
+
+    private async Task<UserResponse> ToResponseAsync(User user, CancellationToken cancellationToken) =>
+        new(user.Id, user.Name, user.Phone, user.Gender?.ToString(), user.Role.ToString(),
+            await _consent.IsRequiredAsync(user.Id, cancellationToken));
 }

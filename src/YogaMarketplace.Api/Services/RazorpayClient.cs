@@ -15,6 +15,8 @@ namespace YogaMarketplace.Api.Services;
 public static class RazorpayWire
 {
     public const string CapturedStatus = "captured";
+    public const string RefundedStatus = "refunded";
+    public const string FailedStatus = "failed";
     public const string PaymentCapturedEvent = "payment.captured";
     public const string PaymentFailedEvent = "payment.failed";
     public const string RefundProcessedEvent = "refund.processed";
@@ -24,6 +26,10 @@ public static class RazorpayWire
 }
 
 public sealed record RazorpayCreatedOrder(string OrderId, long AmountPaise, string Currency);
+
+public sealed record RazorpayPaymentRecord(string Id, string? OrderId, string? Status, long AmountPaise, long AmountRefundedPaise, string? Currency);
+
+public sealed record RazorpayRefundRecord(string Id, string PaymentId, long AmountPaise, string? Status, string? Receipt);
 
 public interface IRazorpayClient
 {
@@ -58,6 +64,15 @@ public interface IRazorpayClient
     /// The fake client records the call and does not contact Razorpay.
     /// </summary>
     Task<string?> RefundPaymentAsync(string paymentId, long amountPaise, string receipt, CancellationToken cancellationToken);
+
+    /// <summary>Every payment Razorpay created between <paramref name="from"/> and <paramref name="to"/>, all pages.</summary>
+    Task<IReadOnlyList<RazorpayPaymentRecord>> ListPaymentsAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken);
+
+    /// <summary>Every refund Razorpay created between <paramref name="from"/> and <paramref name="to"/>, all pages.</summary>
+    Task<IReadOnlyList<RazorpayRefundRecord>> ListRefundsAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken);
+
+    /// <summary>One payment, or null when Razorpay has no such payment.</summary>
+    Task<RazorpayPaymentRecord?> FetchPaymentAsync(string paymentId, CancellationToken cancellationToken);
 }
 
 internal readonly record struct RecordedRefund(string PaymentId, long AmountPaise, string Receipt, string RefundId);
@@ -173,6 +188,16 @@ public sealed class FakeRazorpayClient : IRazorpayClient
         return Task.FromResult<string?>(refundId);
     }
 
+    /// <summary>The fake keeps no ledger; reconciliation skips the gateway comparison when this client is in use.</summary>
+    public Task<IReadOnlyList<RazorpayPaymentRecord>> ListPaymentsAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<RazorpayPaymentRecord>>([]);
+
+    public Task<IReadOnlyList<RazorpayRefundRecord>> ListRefundsAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<RazorpayRefundRecord>>([]);
+
+    public Task<RazorpayPaymentRecord?> FetchPaymentAsync(string paymentId, CancellationToken cancellationToken) =>
+        Task.FromResult<RazorpayPaymentRecord?>(null);
+
     private void EnsureKeyId()
     {
         if (string.IsNullOrWhiteSpace(_options.KeyId))
@@ -244,7 +269,7 @@ public sealed class RazorpayHttpClient : IRazorpayClient
         if (!RazorpaySignatures.MatchesPayment(_options.KeySecret, orderId, paymentId, signature))
             throw new DomainException("Payment signature is invalid.");
 
-        var remote = await FetchPaymentAsync(paymentId, cancellationToken)
+        var remote = await FetchPaymentWireAsync(paymentId, cancellationToken)
             ?? throw new DomainException("Payment was not found at Razorpay.");
         if (!string.Equals(remote.Status, RazorpayWire.CapturedStatus, StringComparison.OrdinalIgnoreCase))
             throw new DomainException("Payment is not captured.");
@@ -296,8 +321,62 @@ public sealed class RazorpayHttpClient : IRazorpayClient
         }
     }
 
+    public Task<IReadOnlyList<RazorpayPaymentRecord>> ListPaymentsAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken) =>
+        ListAllAsync<PaymentWire, RazorpayPaymentRecord>("payments", from, to, ToRecord, cancellationToken);
+
+    public Task<IReadOnlyList<RazorpayRefundRecord>> ListRefundsAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken) =>
+        ListAllAsync<RefundListWire, RazorpayRefundRecord>(
+            "refunds",
+            from,
+            to,
+            r => new RazorpayRefundRecord(r.Id, r.PaymentId, r.Amount, r.Status, r.Receipt),
+            cancellationToken);
+
+    public async Task<RazorpayPaymentRecord?> FetchPaymentAsync(string paymentId, CancellationToken cancellationToken)
+    {
+        EnsureConfigured();
+        var payment = await FetchPaymentWireAsync(paymentId, cancellationToken);
+        return payment is null ? null : ToRecord(payment);
+    }
+
+    private static RazorpayPaymentRecord ToRecord(PaymentWire p) =>
+        new(p.Id, p.OrderId, p.Status, p.Amount, p.AmountRefunded, p.Currency);
+
+    /// <summary>Razorpay's largest page. Pages are read until one comes back short.</summary>
+    private const int ListPageSize = 100;
+
+    private async Task<IReadOnlyList<TRecord>> ListAllAsync<TWire, TRecord>(
+        string resource,
+        DateTimeOffset from,
+        DateTimeOffset to,
+        Func<TWire, TRecord> map,
+        CancellationToken cancellationToken)
+    {
+        EnsureConfigured();
+        var action = "list " + resource;
+        var all = new List<TRecord>();
+        for (var skip = 0; ; skip += ListPageSize)
+        {
+            var url = $"v1/{resource}?from={from.ToUnixTimeSeconds()}&to={to.ToUnixTimeSeconds()}&count={ListPageSize}&skip={skip}";
+            using var response = await SendAsync(action, ListUnavailableMessage, () => _http.GetAsync(url, cancellationToken), cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                await LogFailureAsync(action, response, cancellationToken);
+                throw new DomainException(ListUnavailableMessage, 502);
+            }
+
+            var page = await response.Content.ReadFromJsonAsync<CollectionWire<TWire>>(cancellationToken: cancellationToken);
+            var items = page?.Items ?? [];
+            all.AddRange(items.Select(map));
+            if (items.Count < ListPageSize)
+                return all;
+        }
+    }
+
+    private const string ListUnavailableMessage = "Could not read payments from Razorpay. Try again.";
+
     /// <summary>A read, so a dropped connection or a Razorpay 5xx is retried before giving up.</summary>
-    private async Task<PaymentWire?> FetchPaymentAsync(string paymentId, CancellationToken cancellationToken)
+    private async Task<PaymentWire?> FetchPaymentWireAsync(string paymentId, CancellationToken cancellationToken)
     {
         for (var attempt = 1; ; attempt++)
         {
@@ -387,5 +466,15 @@ public sealed class RazorpayHttpClient : IRazorpayClient
         [property: JsonPropertyName("order_id")] string OrderId,
         [property: JsonPropertyName("status")] string? Status,
         [property: JsonPropertyName("amount")] long Amount,
-        [property: JsonPropertyName("currency")] string? Currency);
+        [property: JsonPropertyName("currency")] string? Currency,
+        [property: JsonPropertyName("amount_refunded")] long AmountRefunded = 0);
+
+    private sealed record RefundListWire(
+        [property: JsonPropertyName("id")] string Id,
+        [property: JsonPropertyName("payment_id")] string PaymentId,
+        [property: JsonPropertyName("amount")] long Amount,
+        [property: JsonPropertyName("status")] string? Status,
+        [property: JsonPropertyName("receipt")] string? Receipt);
+
+    private sealed record CollectionWire<T>([property: JsonPropertyName("items")] List<T>? Items);
 }

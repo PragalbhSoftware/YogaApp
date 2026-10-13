@@ -4,6 +4,8 @@ export type User = {
   phone: string;
   gender: string | null;
   role: string;
+  /** True when the user has not accepted the current Terms and Privacy version. */
+  consentRequired?: boolean;
 };
 
 export type OtpResponse = {

@@ -109,7 +109,7 @@ public class DemoDataLoaderTests : IClassFixture<YogaApiFactory>
     private async Task<HttpClient> SignInAsync(string phone, bool isNewUser)
     {
         var client = _factory.CreateClient();
-        var otp = await PostAsync<OtpBody>(client, "/api/auth/otp/request", new { phone, name = "Demo Gate", gender = "Other", isNewUser });
+        var otp = await PostAsync<OtpBody>(client, "/api/auth/otp/request", new { phone, name = "Demo Gate", gender = "Other", isNewUser, acceptedPolicies = true });
         var auth = await PostAsync<AuthBody>(client, "/api/auth/otp/verify", new { phone, code = otp.DevCode });
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth.Token);
         return client;

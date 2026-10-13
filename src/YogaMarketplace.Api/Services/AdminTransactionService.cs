@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Linq.Expressions;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using YogaMarketplace.Api.Security;
 using YogaMarketplace.Domain;
 using YogaMarketplace.Infrastructure.Persistence;
 
@@ -18,6 +19,16 @@ public interface IAdminTransactionService
     Task<PayoutCsv> DownloadPayoutsCsvAsync(string? status, CancellationToken cancellationToken);
 
     Task<PayoutCsv> ExportPendingPayoutsAsync(CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<ReconciliationRunResponse>> ListReconciliationRunsAsync(CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<ReconciliationItemResponse>> ListReconciliationItemsAsync(
+        Guid? runId,
+        string? type,
+        string? status,
+        CancellationToken cancellationToken);
+
+    Task<ReconciliationItemResponse> ResolveReconciliationItemAsync(Guid id, string? note, CancellationToken cancellationToken);
 }
 
 public record PayoutCsv(string FileName, byte[] Content, int Count);
@@ -42,17 +53,99 @@ public class AdminTransactionService : IAdminTransactionService
 
     private readonly YogaDbContext _db;
     private readonly IPlatformSettingsService _settings;
+    private readonly ICurrentUser _current;
     private readonly ILogger<AdminTransactionService> _logger;
 
     public AdminTransactionService(
         YogaDbContext db,
         IPlatformSettingsService settings,
+        ICurrentUser current,
         ILogger<AdminTransactionService> logger)
     {
         _db = db;
         _settings = settings;
+        _current = current;
         _logger = logger;
     }
+
+    public async Task<IReadOnlyList<ReconciliationRunResponse>> ListReconciliationRunsAsync(CancellationToken cancellationToken)
+    {
+        var runs = await _db.ReconciliationRuns.AsNoTracking().ToListAsync(cancellationToken);
+        var open = await _db.ReconciliationItems.AsNoTracking()
+            .Where(i => i.Status == ReconciliationItemStatus.Open)
+            .GroupBy(i => i.RunId)
+            .Select(g => new { RunId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(g => g.RunId, g => g.Count, cancellationToken);
+        return runs
+            .OrderByDescending(r => r.StartedAt)
+            .Take(AdminQuery.PageSize)
+            .Select(r => new ReconciliationRunResponse(
+                r.Id, r.MarketDate, r.WindowStart, r.WindowEnd, r.StartedAt, r.CompletedAt, r.Status.ToString(),
+                r.GatewayCompared, r.ItemCount, open.GetValueOrDefault(r.Id), r.Error))
+            .ToList();
+    }
+
+    public async Task<IReadOnlyList<ReconciliationItemResponse>> ListReconciliationItemsAsync(
+        Guid? runId,
+        string? type,
+        string? status,
+        CancellationToken cancellationToken)
+    {
+        var parsedType = AdminQuery.ParseOptional<ReconciliationItemType>(type, "Unknown reconciliation item type.");
+        var parsedStatus = AdminQuery.ParseOptional<ReconciliationItemStatus>(status, "Status must be Open or Resolved.");
+        var query = _db.ReconciliationItems.AsNoTracking();
+        if (runId is Guid run)
+            query = query.Where(i => i.RunId == run);
+        if (parsedType is not null)
+            query = query.Where(i => i.Type == parsedType);
+        if (parsedStatus is not null)
+            query = query.Where(i => i.Status == parsedStatus);
+
+        var rows = await ReconciliationRows(query).ToListAsync(cancellationToken);
+        return rows
+            .OrderByDescending(r => r.Item.CreatedAt)
+            .ThenBy(r => r.Item.Type)
+            .Take(AdminQuery.PageSize)
+            .Select(ToReconciliationItem)
+            .ToList();
+    }
+
+    public async Task<ReconciliationItemResponse> ResolveReconciliationItemAsync(Guid id, string? note, CancellationToken cancellationToken)
+    {
+        var item = await _db.ReconciliationItems.SingleOrDefaultAsync(i => i.Id == id, cancellationToken)
+            ?? throw new DomainException("Reconciliation item not found.", 404);
+        ReconciliationRules.Resolve(item, _current.UserId, note, DateTimeOffset.UtcNow);
+        await _db.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("Admin {AdminId} resolved reconciliation item {ItemId} ({Type}).", _current.UserId, item.Id, item.Type);
+        var row = await ReconciliationRows(_db.ReconciliationItems.AsNoTracking().Where(i => i.Id == id)).SingleAsync(cancellationToken);
+        return ToReconciliationItem(row);
+    }
+
+    private IQueryable<ReconciliationRow> ReconciliationRows(IQueryable<ReconciliationItem> items) =>
+        from item in items
+        join run in _db.ReconciliationRuns.AsNoTracking() on item.RunId equals run.Id
+        join admin in _db.Users.AsNoTracking() on item.ResolvedByUserId equals (Guid?)admin.Id into admins
+        from admin in admins.DefaultIfEmpty()
+        select new ReconciliationRow(item, run.MarketDate, admin == null ? null : admin.Name);
+
+    private static ReconciliationItemResponse ToReconciliationItem(ReconciliationRow row) => new(
+        row.Item.Id,
+        row.Item.RunId,
+        row.MarketDate,
+        row.Item.Type.ToString(),
+        row.Item.Status.ToString(),
+        row.Item.GatewayPaymentId,
+        row.Item.GatewayRefundId,
+        row.Item.Reference,
+        row.Item.DatabaseValue,
+        row.Item.GatewayValue,
+        row.Item.Detail,
+        row.Item.CreatedAt,
+        row.Item.ResolvedAt,
+        row.ResolvedByName,
+        row.Item.ResolutionNote);
+
+    private sealed record ReconciliationRow(ReconciliationItem Item, DateOnly MarketDate, string? ResolvedByName);
 
     public async Task<IReadOnlyList<AdminPaymentResponse>> ListPaymentsAsync(
         string? status,

@@ -26,6 +26,7 @@ import {
   type PayMethod,
 } from "@/features/bookings/utils/pay-method";
 import { CreditsPanel } from "@/features/credits/components/credits-panel";
+import { PayAgreement } from "@/features/content/components/pay-agreement";
 import { useInstructor, useInstructorOpenSlots } from "@/features/marketplace/hooks/use-instructors";
 import { areaClosedDescription, areaClosedTitle } from "@/features/marketplace/utils/areas";
 import { offeredSessionModes } from "@/features/marketplace/utils/modes";
@@ -233,6 +234,7 @@ export function BookPage() {
           ) : (
             <div className="hidden lg:block">{payButton}</div>
           )}
+          <PayAgreement />
         </aside>
 
         <div className="space-y-6">

@@ -29,7 +29,15 @@ public sealed record PlatformSettingsChanges(
     bool? CreditBookingStandsAfterExpiry = null,
     bool? PackRefundsEnabled = null,
     decimal? PackReferenceSessionPrice = null,
-    decimal? PackRefundFee = null);
+    decimal? PackRefundFee = null,
+    TimeOnly? ReconciliationTime = null,
+    int? WebhookStuckMinutes = null,
+    int? RefundPendingHours = null,
+    int? PolicyVersion = null,
+    int? WebhookPayloadRetentionDays = null);
+
+/// <summary>When the daily reconciliation runs and how long a webhook or refund may wait before it is reported.</summary>
+public sealed record ReconciliationTerms(TimeOnly RunAt, int WebhookStuckMinutes, int RefundPendingHours);
 
 public sealed record SettingChange(string Field, string? OldValue, string? NewValue);
 
@@ -42,6 +50,18 @@ public static class PlatformSettingsRules
     public const int BannerSubtitleMax = 160;
     public const int BannerOfferMax = 60;
     public const decimal DefaultPackReferenceSessionPrice = 799m;
+    public static readonly TimeOnly DefaultReconciliationTime = new(6, 0);
+    public const int DefaultWebhookStuckMinutes = 60;
+    public const int DefaultRefundPendingHours = 48;
+    public const int MaxWebhookStuckMinutes = 7 * 24 * 60;
+    public const int MaxRefundPendingHours = 30 * 24;
+    public const int DefaultWebhookPayloadRetentionDays = 90;
+    public const int MaxWebhookPayloadRetentionDays = 3650;
+
+    public static ReconciliationTerms ReconciliationTermsFor(PlatformSettings settings) => new(
+        settings.ReconciliationTime,
+        settings.WebhookStuckMinutes,
+        settings.RefundPendingHours);
 
     public static BookingTerms TermsFor(PlatformSettings settings) => new(
         settings.CommissionPercent,
@@ -91,6 +111,11 @@ public static class PlatformSettingsRules
         var refunds = changes.PackRefundsEnabled ?? settings.PackRefundsEnabled;
         var referencePrice = changes.PackReferenceSessionPrice is decimal rp ? Flat(rp, "Reference session price") : settings.PackReferenceSessionPrice;
         var refundFee = changes.PackRefundFee is decimal rf ? Flat(rf, "Pack refund fee") : settings.PackRefundFee;
+        var reconcileAt = changes.ReconciliationTime is TimeOnly rt ? WholeMinute(rt) : settings.ReconciliationTime;
+        var stuckMinutes = changes.WebhookStuckMinutes is int sm ? Between(sm, MaxWebhookStuckMinutes, "Stuck webhook threshold", "minutes") : settings.WebhookStuckMinutes;
+        var pendingHours = changes.RefundPendingHours is int ph ? Between(ph, MaxRefundPendingHours, "Pending refund threshold", "hours") : settings.RefundPendingHours;
+        var policyVersion = changes.PolicyVersion is int pv ? NotLower(pv, settings.PolicyVersion) : settings.PolicyVersion;
+        var retentionDays = changes.WebhookPayloadRetentionDays is int rd ? Between(rd, MaxWebhookPayloadRetentionDays, "Webhook payload retention", "days") : settings.WebhookPayloadRetentionDays;
 
         var log = new List<SettingChange>();
         Set(log, nameof(settings.CommissionPercent), settings.CommissionPercent, commission, v => settings.CommissionPercent = v);
@@ -111,7 +136,33 @@ public static class PlatformSettingsRules
         Set(log, nameof(settings.PackRefundsEnabled), settings.PackRefundsEnabled, refunds, v => settings.PackRefundsEnabled = v);
         Set(log, nameof(settings.PackReferenceSessionPrice), settings.PackReferenceSessionPrice, referencePrice, v => settings.PackReferenceSessionPrice = v);
         Set(log, nameof(settings.PackRefundFee), settings.PackRefundFee, refundFee, v => settings.PackRefundFee = v);
+        Set(log, nameof(settings.ReconciliationTime), settings.ReconciliationTime, reconcileAt, v => settings.ReconciliationTime = v);
+        Set(log, nameof(settings.WebhookStuckMinutes), settings.WebhookStuckMinutes, stuckMinutes, v => settings.WebhookStuckMinutes = v);
+        Set(log, nameof(settings.RefundPendingHours), settings.RefundPendingHours, pendingHours, v => settings.RefundPendingHours = v);
+        Set(log, nameof(settings.PolicyVersion), settings.PolicyVersion, policyVersion, v => settings.PolicyVersion = v);
+        Set(log, nameof(settings.WebhookPayloadRetentionDays), settings.WebhookPayloadRetentionDays, retentionDays, v => settings.WebhookPayloadRetentionDays = v);
         return log;
+    }
+
+    private static int NotLower(int value, int current)
+    {
+        if (value < current)
+            throw new DomainException($"Policy version can only go up. It is {current} now.");
+        return value;
+    }
+
+    private static TimeOnly WholeMinute(TimeOnly value)
+    {
+        if (value.Second != 0 || value.Millisecond != 0)
+            throw new DomainException("Reconciliation time must be a whole minute.");
+        return value;
+    }
+
+    private static int Between(int value, int max, string label, string unit)
+    {
+        if (value < 1 || value > max)
+            throw new DomainException($"{label} must be between 1 and {max} {unit}.");
+        return value;
     }
 
     private static void ValidateLateFee(LateCancelFeeType type, decimal value)

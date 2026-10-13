@@ -1,6 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { adminApi } from "@/features/admin/api/admin-api";
-import type { BookingListQuery, UpdateSettingsInput, UserListQuery } from "@/features/admin/types";
+import type {
+  BookingListQuery,
+  ReconciliationItemQuery,
+  UpdateSettingsInput,
+  UserListQuery,
+} from "@/features/admin/types";
 import { ApiError } from "@/services/http/api-error";
 
 export function useAdminSummary() {
@@ -170,6 +175,33 @@ export function useMarkPayoutPaid() {
       void queryClient.invalidateQueries({ queryKey: ["admin-payouts"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-summary"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-booking", payout.bookingId] });
+    },
+  });
+}
+
+export function useReconciliationRuns(enabled = true) {
+  return useQuery({
+    queryKey: ["admin-reconciliation-runs"],
+    queryFn: adminApi.reconciliationRuns,
+    enabled,
+  });
+}
+
+export function useReconciliationItems(query: ReconciliationItemQuery, enabled = true) {
+  return useQuery({
+    queryKey: ["admin-reconciliation-items", query.runId ?? "", query.type ?? "", query.status ?? ""],
+    queryFn: () => adminApi.reconciliationItems(query),
+    enabled,
+  });
+}
+
+export function useResolveReconciliationItem() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { id: string; note: string }) => adminApi.resolveReconciliationItem(input.id, input.note),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin-reconciliation-items"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-reconciliation-runs"] });
     },
   });
 }

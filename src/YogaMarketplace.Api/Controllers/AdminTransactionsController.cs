@@ -42,4 +42,23 @@ public class AdminTransactionsController : AdminControllerBase
     [HttpPost("payouts/{id:guid}/paid")]
     public async Task<ActionResult<AdminPayoutResponse>> MarkPaid(Guid id, CancellationToken cancellationToken) =>
         Ok(await _transactions.MarkPaidAsync(id, cancellationToken));
+
+    [HttpGet("reconciliation/runs")]
+    public async Task<ActionResult<IReadOnlyList<ReconciliationRunResponse>>> ReconciliationRuns(CancellationToken cancellationToken) =>
+        Ok(await _transactions.ListReconciliationRunsAsync(cancellationToken));
+
+    [HttpGet("reconciliation/items")]
+    public async Task<ActionResult<IReadOnlyList<ReconciliationItemResponse>>> ReconciliationItems(
+        [FromQuery] Guid? runId,
+        [FromQuery] string? type,
+        [FromQuery] string? status,
+        CancellationToken cancellationToken) =>
+        Ok(await _transactions.ListReconciliationItemsAsync(runId, type, status, cancellationToken));
+
+    [HttpPost("reconciliation/items/{id:guid}/resolve")]
+    public async Task<ActionResult<ReconciliationItemResponse>> ResolveReconciliationItem(
+        Guid id,
+        [FromBody] ResolveReconciliationItemRequest request,
+        CancellationToken cancellationToken) =>
+        Ok(await _transactions.ResolveReconciliationItemAsync(id, request.Note, cancellationToken));
 }

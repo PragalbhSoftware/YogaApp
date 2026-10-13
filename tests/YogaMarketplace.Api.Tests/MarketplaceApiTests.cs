@@ -34,11 +34,11 @@ public class MarketplaceApiTests : IClassFixture<YogaApiFactory>
         var phone = NewPhone();
         var client = _factory.CreateClient();
 
-        var missing = await client.PostAsJsonAsync("/api/auth/otp/request", new { phone, isNewUser = true });
+        var missing = await client.PostAsJsonAsync("/api/auth/otp/request", new { phone, isNewUser = true, acceptedPolicies = true });
         Assert.Equal(HttpStatusCode.BadRequest, missing.StatusCode);
         Assert.Contains("Name", (await missing.Content.ReadFromJsonAsync<ErrorBody>(Json))!.Error, StringComparison.Ordinal);
 
-        var otp = await Post<OtpBody>(client, "/api/auth/otp/request", new { phone, name = "Rahul Sharma", gender = "Male", isNewUser = true });
+        var otp = await Post<OtpBody>(client, "/api/auth/otp/request", new { phone, name = "Rahul Sharma", gender = "Male", isNewUser = true, acceptedPolicies = true });
         Assert.False(string.IsNullOrWhiteSpace(otp.DevCode));
 
         var wrong = otp.DevCode == "000000" ? "111111" : "000000";
@@ -60,7 +60,7 @@ public class MarketplaceApiTests : IClassFixture<YogaApiFactory>
     {
         var phone = NewPhone();
         var client = _factory.CreateClient();
-        await Post<OtpBody>(client, "/api/auth/otp/request", new { phone, name = "Meera Iyer", gender = "Female", isNewUser = true });
+        await Post<OtpBody>(client, "/api/auth/otp/request", new { phone, name = "Meera Iyer", gender = "Female", isNewUser = true, acceptedPolicies = true });
         var first = await Post<OtpBody>(client, "/api/auth/otp/resend", new { phone });
         var second = await Post<OtpBody>(client, "/api/auth/otp/resend", new { phone });
         Assert.NotEqual(first.DevCode, second.DevCode);
@@ -299,7 +299,7 @@ public class MarketplaceApiTests : IClassFixture<YogaApiFactory>
     private async Task<(string Token, string Phone)> SignUpAsync(HttpClient client, string name, string gender)
     {
         var phone = NewPhone();
-        var otp = await Post<OtpBody>(client, "/api/auth/otp/request", new { phone, name, gender, isNewUser = true });
+        var otp = await Post<OtpBody>(client, "/api/auth/otp/request", new { phone, name, gender, isNewUser = true, acceptedPolicies = true });
         var auth = await Post<AuthBody>(client, "/api/auth/otp/verify", new { phone, code = otp.DevCode });
         return (auth.Token, phone);
     }

@@ -383,7 +383,7 @@ public class CancellationAndPayoutTests : IClassFixture<YogaApiFactory>
     {
         var client = _factory.CreateClient();
         var phone = "+9195" + Random.Shared.Next(10000000, 99999999);
-        var otp = await PostAsync<OtpBody>(client, "/api/auth/otp/request", new { phone, name, gender, isNewUser = true });
+        var otp = await PostAsync<OtpBody>(client, "/api/auth/otp/request", new { phone, name, gender, isNewUser = true, acceptedPolicies = true });
         var auth = await PostAsync<AuthBody>(client, "/api/auth/otp/verify", new { phone, code = otp.DevCode });
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth.Token);
         return client;
@@ -462,6 +462,15 @@ public class CancellationAndPayoutTests : IClassFixture<YogaApiFactory>
             await _beforeRefund();
             return await _inner.RefundPaymentAsync(paymentId, amountPaise, receipt, cancellationToken);
         }
+
+        public Task<IReadOnlyList<RazorpayPaymentRecord>> ListPaymentsAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken) =>
+            _inner.ListPaymentsAsync(from, to, cancellationToken);
+
+        public Task<IReadOnlyList<RazorpayRefundRecord>> ListRefundsAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken) =>
+            _inner.ListRefundsAsync(from, to, cancellationToken);
+
+        public Task<RazorpayPaymentRecord?> FetchPaymentAsync(string paymentId, CancellationToken cancellationToken) =>
+            _inner.FetchPaymentAsync(paymentId, cancellationToken);
     }
 
     private sealed record OtpBody(Guid ChallengeId, DateTimeOffset ExpiresAt, string? DevCode);

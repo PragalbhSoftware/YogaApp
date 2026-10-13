@@ -9,6 +9,7 @@ import { CustomerLayout } from "@/app/layouts/customer-layout";
 import { InstructorLayout } from "@/app/layouts/instructor-layout";
 import { AllowGuestOr, RedirectIfSignedIn, RequireAuth, RequireRole } from "@/app/router/guards";
 import { routes } from "@/constants/routes";
+import { ConsentPrompt } from "@/features/auth/components/consent-prompt";
 
 const LoginPage = lazy(() =>
   import("@/features/auth/pages/login-page").then((module) => ({ default: module.LoginPage })),
@@ -130,9 +131,6 @@ export function AppRouter() {
                 <Route path={routes.home} element={<HomePage />} />
                 <Route path={routes.teacher} element={<TeacherPage />} />
                 <Route path={routes.packs} element={<PacksPage />} />
-                <Route path={routes.refundPolicy} element={<RefundPolicyPage />} />
-                <Route path={routes.terms} element={<TermsPage />} />
-                <Route path={routes.privacy} element={<PrivacyPage />} />
                 <Route element={<RequireAuth />}>
                   <Route element={<RequireRole roles={["Customer"]} />}>
                     <Route path={routes.book} element={<BookPage />} />
@@ -142,6 +140,11 @@ export function AppRouter() {
                   </Route>
                 </Route>
               </Route>
+            </Route>
+            <Route element={<CustomerLayout />}>
+              <Route path={routes.refundPolicy} element={<RefundPolicyPage />} />
+              <Route path={routes.terms} element={<TermsPage />} />
+              <Route path={routes.privacy} element={<PrivacyPage />} />
             </Route>
             <Route element={<RequireAuth />}>
               <Route element={<RequireRole roles={["Provider"]} />}>
@@ -168,6 +171,7 @@ export function AppRouter() {
             </Route>
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
+          <ConsentPrompt />
         </Suspense>
       </AppErrorBoundary>
     </BrowserRouter>

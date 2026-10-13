@@ -13,6 +13,7 @@ import { useAdminPayments, useAdminPayouts, useMarkPayoutPaid } from "@/features
 import { paymentStatuses, payoutStatuses } from "@/features/admin/types";
 import { displayName, formatAdminWhen, listCap, paymentTitle } from "@/features/admin/utils";
 import { PayoutExportBar } from "@/features/admin/components/payout-export-bar";
+import { ReconciliationPanel } from "@/features/admin/components/reconciliation-panel";
 import { paymentStatusLabel } from "@/features/bookings/utils/status";
 import { toUserMessage } from "@/services/http/api-error";
 
@@ -23,9 +24,11 @@ const paymentFilters = [
 
 const payoutFilters = payoutStatuses.map((status) => ({ value: status, label: status }));
 
+const transactionTabs = ["payments", "payouts", "reconciliation"] as const;
+
 export function TransactionsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const tab = searchParams.get("tab") === "payouts" ? "payouts" : "payments";
+  const tab = transactionTabs.find((t) => t === searchParams.get("tab")) ?? "payments";
   const paymentStatus = paymentStatuses.includes(searchParams.get("status") as (typeof paymentStatuses)[number])
     ? searchParams.get("status") ?? undefined
     : undefined;
@@ -47,7 +50,7 @@ export function TransactionsPage() {
     <AdminPage
       kicker="Money"
       title="Transactions"
-      lead="Customer payments and pack sales stay here. When a session is completed, marked no-show, or cancelled late, a payout appears so you can send the instructor their share and keep your take."
+      lead="Customer payments and pack sales stay here. When a session is completed, marked no-show, or cancelled late, a payout appears so you can send the instructor their share and keep your take. Reconciliation lists where Razorpay and our records disagree each day."
       note={listCap}
     >
       <Tabs
@@ -61,8 +64,10 @@ export function TransactionsPage() {
       >
         <Tab value="payments" label="Payments" />
         <Tab value="payouts" label="Payouts" />
+        <Tab value="reconciliation" label="Reconciliation" />
       </Tabs>
 
+      {tab === "reconciliation" ? <ReconciliationPanel /> : null}
       {tab === "payments" ? (
         <>
           <FilterChips
@@ -124,7 +129,8 @@ export function TransactionsPage() {
               ))
             : null}
         </>
-      ) : (
+      ) : null}
+      {tab === "payouts" ? (
         <>
           <FilterChips
             value={payoutStatus}
@@ -163,7 +169,7 @@ export function TransactionsPage() {
               ))
             : null}
         </>
-      )}
+      ) : null}
     </AdminPage>
   );
 }
