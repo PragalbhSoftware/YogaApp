@@ -4,6 +4,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Options;
 using YogaMarketplace.Api.Options;
@@ -15,7 +16,11 @@ public static class RazorpayWire
 {
     public const string CapturedStatus = "captured";
     public const string PaymentCapturedEvent = "payment.captured";
+    public const string PaymentFailedEvent = "payment.failed";
+    public const string RefundProcessedEvent = "refund.processed";
+    public const string RefundFailedEvent = "refund.failed";
     public const string SignatureHeader = "X-Razorpay-Signature";
+    public const string EventIdHeader = "X-Razorpay-Event-Id";
 }
 
 public sealed record RazorpayCreatedOrder(string OrderId, long AmountPaise, string Currency);
@@ -49,12 +54,13 @@ public interface IRazorpayClient
     bool VerifyWebhookSignature(string rawBody, string? signature);
 
     /// <summary>
-    /// Refunds a captured payment in full or in part. The fake client records the call and does not contact Razorpay.
+    /// Refunds a captured payment in full or in part and returns Razorpay's refund id, or null if the reply had none.
+    /// The fake client records the call and does not contact Razorpay.
     /// </summary>
-    Task RefundPaymentAsync(string paymentId, long amountPaise, string receipt, CancellationToken cancellationToken);
+    Task<string?> RefundPaymentAsync(string paymentId, long amountPaise, string receipt, CancellationToken cancellationToken);
 }
 
-internal readonly record struct RecordedRefund(string PaymentId, long AmountPaise, string Receipt);
+internal readonly record struct RecordedRefund(string PaymentId, long AmountPaise, string Receipt, string RefundId);
 
 internal static class RazorpaySignatures
 {
@@ -93,6 +99,8 @@ internal static class RazorpayMoney
             throw new DomainException("Amount must be a whole number of paise, at least ₹1.");
         return (long)paise;
     }
+
+    public static decimal FromPaise(long paise) => paise / 100m;
 }
 
 /// <summary>
@@ -154,14 +162,15 @@ public sealed class FakeRazorpayClient : IRazorpayClient
     public bool VerifyWebhookSignature(string rawBody, string? signature) =>
         RazorpaySignatures.MatchesWebhook(_options.WebhookSecret, rawBody, signature);
 
-    public Task RefundPaymentAsync(string paymentId, long amountPaise, string receipt, CancellationToken cancellationToken)
+    public Task<string?> RefundPaymentAsync(string paymentId, long amountPaise, string receipt, CancellationToken cancellationToken)
     {
         EnsureKeyId();
         if (string.IsNullOrWhiteSpace(paymentId) || amountPaise <= 0 || string.IsNullOrWhiteSpace(receipt))
             throw new DomainException("This payment cannot be refunded.");
 
-        _refunds.Enqueue(new RecordedRefund(paymentId, amountPaise, receipt));
-        return Task.CompletedTask;
+        var refundId = "rfnd_fake_" + Guid.NewGuid().ToString("N");
+        _refunds.Enqueue(new RecordedRefund(paymentId, amountPaise, receipt, refundId));
+        return Task.FromResult<string?>(refundId);
     }
 
     private void EnsureKeyId()
@@ -253,7 +262,7 @@ public sealed class RazorpayHttpClient : IRazorpayClient
     public bool VerifyWebhookSignature(string rawBody, string? signature) =>
         RazorpaySignatures.MatchesWebhook(_options.WebhookSecret, rawBody, signature);
 
-    public async Task RefundPaymentAsync(string paymentId, long amountPaise, string receipt, CancellationToken cancellationToken)
+    public async Task<string?> RefundPaymentAsync(string paymentId, long amountPaise, string receipt, CancellationToken cancellationToken)
     {
         EnsureConfigured();
         if (string.IsNullOrWhiteSpace(paymentId) || amountPaise <= 0 || string.IsNullOrWhiteSpace(receipt))
@@ -272,6 +281,18 @@ public sealed class RazorpayHttpClient : IRazorpayClient
         {
             await LogFailureAsync("refund payment", response, cancellationToken);
             throw new DomainException("Could not refund the payment. Try again.", 502);
+        }
+
+        // The refund went through; a missing or unreadable id must not undo it.
+        try
+        {
+            var refund = await response.Content.ReadFromJsonAsync<RefundWire>(cancellationToken: CancellationToken.None);
+            return string.IsNullOrWhiteSpace(refund?.Id) ? null : refund.Id;
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogWarning(ex, "Razorpay refund of payment {PaymentId} returned no readable refund id.", paymentId);
+            return null;
         }
     }
 
@@ -358,6 +379,8 @@ public sealed class RazorpayHttpClient : IRazorpayClient
         [property: JsonPropertyName("id")] string Id,
         [property: JsonPropertyName("amount")] long Amount,
         [property: JsonPropertyName("currency")] string Currency);
+
+    private sealed record RefundWire([property: JsonPropertyName("id")] string? Id);
 
     private sealed record PaymentWire(
         [property: JsonPropertyName("id")] string Id,

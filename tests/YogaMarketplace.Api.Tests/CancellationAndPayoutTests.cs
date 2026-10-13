@@ -457,10 +457,10 @@ public class CancellationAndPayoutTests : IClassFixture<YogaApiFactory>
 
         public bool VerifyWebhookSignature(string rawBody, string? signature) => _inner.VerifyWebhookSignature(rawBody, signature);
 
-        public async Task RefundPaymentAsync(string paymentId, long amountPaise, string receipt, CancellationToken cancellationToken)
+        public async Task<string?> RefundPaymentAsync(string paymentId, long amountPaise, string receipt, CancellationToken cancellationToken)
         {
             await _beforeRefund();
-            await _inner.RefundPaymentAsync(paymentId, amountPaise, receipt, cancellationToken);
+            return await _inner.RefundPaymentAsync(paymentId, amountPaise, receipt, cancellationToken);
         }
     }
 

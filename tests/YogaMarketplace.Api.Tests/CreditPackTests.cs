@@ -81,7 +81,7 @@ public class CreditPackTests : IClassFixture<YogaApiFactory>
         var second = await PostWebhookAsync(body);
 
         Assert.NotNull(first.CreditBatchId);
-        Assert.Equal(first.CreditBatchId, second.CreditBatchId);
+        Assert.Null(second.CreditBatchId);
         var status = await OrderStatusAsync(customer, order.OrderId);
         Assert.Equal("Completed", status.Status);
         Assert.Equal(first.CreditBatchId, status.Batch!.Id);

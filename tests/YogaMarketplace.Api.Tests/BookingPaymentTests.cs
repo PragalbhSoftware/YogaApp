@@ -7,6 +7,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
+using YogaMarketplace.Api.Services;
 using YogaMarketplace.Domain;
 using YogaMarketplace.Infrastructure.Persistence;
 
@@ -226,43 +227,65 @@ public class BookingPaymentTests : IClassFixture<YogaApiFactory>
         var before = await CountBookingsAsync(slot.Id);
 
         var body = CapturedBody(order.OrderId, "pay_bad_sig", order.AmountPaise);
-        var response = await PostWebhookAsync(body, "deadbeef");
+        var response = await PostWebhookAsync(body, "deadbeef", "evt_bad_sig");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Contains("signature", (await response.Content.ReadFromJsonAsync<ErrorBody>(Json))!.Error, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(before, await CountBookingsAsync(slot.Id));
         Assert.Equal(CheckoutStatus.Open, await CheckoutStatusOfAsync(order.OrderId));
+        Assert.Equal(0, await CountAsync(db => db.WebhookEvents.CountAsync(e => e.EventId == "evt_bad_sig")));
     }
 
     [Fact]
-    public async Task Webhook_capture_books_once_and_a_failed_event_does_not()
+    public async Task Late_capture_after_a_failed_event_books_once_and_repeats_change_nothing()
     {
         var client = _factory.CreateClient();
         var (token, _) = await SignUpAsync(client, "Imran Qureshi", "Male");
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         var slot = await FirstOpenSlotAsync(client, "Studio");
         var order = await CreateOrderAsync(client, slot.Id, null, null);
+        var before = await CountBookingsAsync(slot.Id);
 
-        var failed = "{\"event\":\"payment.failed\",\"payload\":{\"payment\":{\"entity\":{\"id\":\"pay_failed\",\"order_id\":\""
-            + order.OrderId + "\",\"status\":\"failed\",\"amount\":" + order.AmountPaise + ",\"currency\":\"INR\"}}}}";
-        var failedResponse = await PostWebhookAsync(failed, SignWebhook(failed));
-        Assert.Equal(HttpStatusCode.OK, failedResponse.StatusCode);
-        var failedBody = await failedResponse.Content.ReadFromJsonAsync<WebhookBody>(Json);
-        Assert.False(failedBody!.Booked);
-        Assert.Equal(0, await CountBookingsAsync(slot.Id));
+        var failedPaymentId = "pay_failed_" + Guid.NewGuid().ToString("N");
+        var failed = FailedBody(order.OrderId, failedPaymentId, order.AmountPaise);
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            var failedResponse = await PostWebhookAsync(failed, SignWebhook(failed));
+            Assert.Equal(HttpStatusCode.OK, failedResponse.StatusCode);
+            Assert.False((await failedResponse.Content.ReadFromJsonAsync<WebhookBody>(Json))!.Booked);
+        }
+        Assert.Equal(before, await CountBookingsAsync(slot.Id));
+        Assert.Equal(CheckoutStatus.Failed, await CheckoutStatusOfAsync(order.OrderId));
+        Assert.Equal(1, await CountAsync(db => db.WebhookEvents.CountAsync(e => e.EventId == "payment.failed:" + failedPaymentId)));
 
-        var paymentId = "pay_studio_webhook";
+        var paymentId = "pay_studio_" + Guid.NewGuid().ToString("N");
+        var eventId = "evt_" + Guid.NewGuid().ToString("N");
         var body = CapturedBody(order.OrderId, paymentId, order.AmountPaise);
-        var first = await PostWebhookAsync(body, SignWebhook(body));
-        var second = await PostWebhookAsync(body, SignWebhook(body));
+        var first = await PostWebhookAsync(body, SignWebhook(body), eventId);
+        var second = await PostWebhookAsync(body, SignWebhook(body), eventId);
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
         Assert.Equal(HttpStatusCode.OK, second.StatusCode);
 
         var booked = await first.Content.ReadFromJsonAsync<WebhookBody>(Json);
         var replay = await second.Content.ReadFromJsonAsync<WebhookBody>(Json);
         Assert.True(booked!.Booked);
-        Assert.Equal(booked.BookingId, replay!.BookingId);
-        Assert.Equal(1, await CountBookingsAsync(slot.Id));
+        Assert.False(replay!.Booked);
+        Assert.Equal(before + 1, await CountBookingsAsync(slot.Id));
+        Assert.Equal(CheckoutStatus.Completed, await CheckoutStatusOfAsync(order.OrderId));
+        Assert.Equal(WebhookEventStatus.Processed, await EventStatusAsync(eventId));
+
+        var duplicate = CapturedBody(order.OrderId, "pay_dup_" + Guid.NewGuid().ToString("N"), order.AmountPaise);
+        var duplicateResponse = await PostWebhookAsync(duplicate, SignWebhook(duplicate), "evt_" + Guid.NewGuid().ToString("N"));
+        Assert.Equal(HttpStatusCode.OK, duplicateResponse.StatusCode);
+        Assert.False((await duplicateResponse.Content.ReadFromJsonAsync<WebhookBody>(Json))!.Booked);
+        var clientDuplicate = await client.PostAsJsonAsync("/api/bookings/confirm", new
+        {
+            orderId = order.OrderId,
+            paymentId = "pay_dup_client",
+            signature = SignPayment(order.OrderId, "pay_dup_client")
+        });
+        Assert.Equal(HttpStatusCode.Conflict, clientDuplicate.StatusCode);
+        Assert.Equal(before + 1, await CountBookingsAsync(slot.Id));
 
         var mine = await client.GetFromJsonAsync<List<BookingBody>>("/api/bookings/me", Json);
         var booking = Assert.Single(mine!, b => b.Id == booked.BookingId);
@@ -273,6 +296,116 @@ public class BookingPaymentTests : IClassFixture<YogaApiFactory>
         Assert.Null(booking.HomeAddress);
         Assert.Equal(749m, booking.Amount);
         Assert.Equal(paymentId, booking.GatewayPaymentId);
+    }
+
+    [Fact]
+    public async Task Failed_payment_frees_the_slot_and_a_late_capture_is_refunded_when_it_is_gone()
+    {
+        var late = _factory.CreateClient();
+        var (lateToken, _) = await SignUpAsync(late, "Farah Siddiqui", "Female");
+        late.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", lateToken);
+        var slot = await FirstOpenSlotAsync(late, "Studio");
+        var order = await CreateOrderAsync(late, slot.Id, null, null);
+        var before = await CountBookingsAsync(slot.Id);
+
+        var failed = FailedBody(order.OrderId, "pay_failed_" + Guid.NewGuid().ToString("N"), order.AmountPaise);
+        Assert.Equal(HttpStatusCode.OK, (await PostWebhookAsync(failed, SignWebhook(failed), "evt_" + Guid.NewGuid().ToString("N"))).StatusCode);
+
+        var other = _factory.CreateClient();
+        var (otherToken, _) = await SignUpAsync(other, "Kabir Malhotra", "Male");
+        other.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", otherToken);
+        var otherOrder = await CreateOrderAsync(other, slot.Id, null, null);
+        await ConfirmAsync(other, otherOrder.OrderId, "pay_slot_taker_" + Guid.NewGuid().ToString("N"));
+
+        var latePaymentId = "pay_late_" + Guid.NewGuid().ToString("N");
+        var capture = CapturedBody(order.OrderId, latePaymentId, order.AmountPaise);
+        var response = await PostWebhookAsync(capture, SignWebhook(capture), "evt_" + Guid.NewGuid().ToString("N"));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.False((await response.Content.ReadFromJsonAsync<WebhookBody>(Json))!.Booked);
+        Assert.Equal(before + 1, await CountBookingsAsync(slot.Id));
+        Assert.Equal(CheckoutStatus.Refunded, await CheckoutStatusOfAsync(order.OrderId));
+        var refund = Assert.Single(RefundsFor(latePaymentId));
+        Assert.Equal(order.AmountPaise, refund.AmountPaise);
+    }
+
+    [Fact]
+    public async Task Refund_before_capture_is_stored_and_applied_when_the_payment_is_captured()
+    {
+        var client = _factory.CreateClient();
+        var (token, _) = await SignUpAsync(client, "Nikhil Bose", "Male");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var slot = await FirstOpenSlotAsync(client, "Studio");
+        var order = await CreateOrderAsync(client, slot.Id, null, null);
+        var paymentId = "pay_early_refund_" + Guid.NewGuid().ToString("N");
+        var refundId = "rfnd_early_" + Guid.NewGuid().ToString("N");
+        var before = await CountBookingsAsync(slot.Id);
+
+        var refundEvent = "evt_" + Guid.NewGuid().ToString("N");
+        var refund = RefundBody(RefundProcessed, refundId, paymentId, order.AmountPaise);
+        Assert.Equal(HttpStatusCode.OK, (await PostWebhookAsync(refund, SignWebhook(refund), refundEvent)).StatusCode);
+        Assert.Equal(WebhookEventStatus.Pending, await EventStatusAsync(refundEvent));
+        Assert.Equal(before, await CountBookingsAsync(slot.Id));
+
+        var capture = CapturedBody(order.OrderId, paymentId, order.AmountPaise);
+        var captured = await PostWebhookAsync(capture, SignWebhook(capture), "evt_" + Guid.NewGuid().ToString("N"));
+        var bookingId = (await captured.Content.ReadFromJsonAsync<WebhookBody>(Json))!.BookingId;
+
+        Assert.NotNull(bookingId);
+        Assert.Equal(WebhookEventStatus.Processed, await EventStatusAsync(refundEvent));
+        var payment = await PaymentAsync(paymentId);
+        Assert.Equal(PaymentStatus.Refunded, payment.Status);
+        Assert.Equal(order.Amount, payment.RefundedAmount);
+        Assert.Equal(refundId, payment.GatewayRefundId);
+        Assert.Equal(RefundStatus.Processed, payment.RefundStatus);
+        Assert.Equal(BookingStatus.Cancelled, await CountAsync(db => db.Bookings.Where(b => b.Id == bookingId).Select(b => b.Status).SingleAsync()));
+        Assert.Empty(RefundsFor(paymentId));
+    }
+
+    [Fact]
+    public async Task Refund_webhook_for_our_own_cancel_is_not_applied_twice()
+    {
+        var client = _factory.CreateClient();
+        var (token, _) = await SignUpAsync(client, "Tara Menon", "Female");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var slot = await FirstOpenSlotAsync(client, "Studio");
+        var order = await CreateOrderAsync(client, slot.Id, null, null);
+        var paymentId = "pay_own_cancel_" + Guid.NewGuid().ToString("N");
+        var booked = await ConfirmAsync(client, order.OrderId, paymentId);
+        Assert.True((await client.PostAsync($"/api/bookings/{booked.Id}/cancel", null)).IsSuccessStatusCode);
+
+        var ours = Assert.Single(RefundsFor(paymentId));
+        var before = await PaymentAsync(paymentId);
+        Assert.Equal(ours.RefundId, before.GatewayRefundId);
+        Assert.Equal(RefundStatus.Pending, before.RefundStatus);
+
+        var refund = RefundBody(RefundProcessed, ours.RefundId, paymentId, ours.AmountPaise);
+        Assert.Equal(HttpStatusCode.OK, (await PostWebhookAsync(refund, SignWebhook(refund), "evt_" + Guid.NewGuid().ToString("N"))).StatusCode);
+
+        var after = await PaymentAsync(paymentId);
+        Assert.Equal(before.RefundedAmount, after.RefundedAmount);
+        Assert.Equal(PaymentStatus.Refunded, after.Status);
+        Assert.Equal(RefundStatus.Processed, after.RefundStatus);
+        Assert.Single(RefundsFor(paymentId));
+    }
+
+    [Fact]
+    public async Task Failed_refund_is_recorded_on_the_payment()
+    {
+        var client = _factory.CreateClient();
+        var (token, _) = await SignUpAsync(client, "Aditi Rao", "Female");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var slot = await FirstOpenSlotAsync(client, "Studio");
+        var order = await CreateOrderAsync(client, slot.Id, null, null);
+        var paymentId = "pay_refund_fails_" + Guid.NewGuid().ToString("N");
+        var booked = await ConfirmAsync(client, order.OrderId, paymentId);
+        Assert.True((await client.PostAsync($"/api/bookings/{booked.Id}/cancel", null)).IsSuccessStatusCode);
+        var ours = Assert.Single(RefundsFor(paymentId));
+
+        var failed = RefundBody("refund.failed", ours.RefundId, paymentId, ours.AmountPaise);
+        Assert.Equal(HttpStatusCode.OK, (await PostWebhookAsync(failed, SignWebhook(failed), "evt_" + Guid.NewGuid().ToString("N"))).StatusCode);
+
+        Assert.Equal(RefundStatus.Failed, (await PaymentAsync(paymentId)).RefundStatus);
     }
 
     [Fact]
@@ -339,15 +472,27 @@ public class BookingPaymentTests : IClassFixture<YogaApiFactory>
         });
     }
 
-    private async Task<HttpResponseMessage> PostWebhookAsync(string body, string signature)
+    private async Task<HttpResponseMessage> PostWebhookAsync(string body, string signature, string? eventId = null)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, "/api/webhooks/razorpay")
         {
             Content = new StringContent(body, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), "application/json")
         };
         request.Headers.TryAddWithoutValidation("X-Razorpay-Signature", signature);
+        if (eventId is not null)
+            request.Headers.TryAddWithoutValidation("X-Razorpay-Event-Id", eventId);
         return await _factory.CreateClient().SendAsync(request);
     }
+
+    private IReadOnlyList<RecordedRefund> RefundsFor(string paymentId) =>
+        Assert.IsType<FakeRazorpayClient>(_factory.Services.GetRequiredService<IRazorpayClient>())
+            .Refunds.Where(r => r.PaymentId == paymentId).ToArray();
+
+    private Task<Payment> PaymentAsync(string paymentId) =>
+        CountAsync(db => db.Payments.AsNoTracking().SingleAsync(p => p.GatewayPaymentId == paymentId));
+
+    private Task<WebhookEventStatus> EventStatusAsync(string eventId) =>
+        CountAsync(db => db.WebhookEvents.Where(e => e.EventId == eventId).Select(e => e.Status).SingleAsync());
 
     private async Task<SlotBody> FirstOpenSlotAsync(HttpClient client, string mode)
     {
@@ -408,6 +553,16 @@ public class BookingPaymentTests : IClassFixture<YogaApiFactory>
     private static string CapturedBody(string orderId, string paymentId, long paise) =>
         "{\"event\":\"payment.captured\",\"payload\":{\"payment\":{\"entity\":{\"id\":\"" + paymentId
         + "\",\"order_id\":\"" + orderId + "\",\"status\":\"captured\",\"amount\":" + paise + ",\"currency\":\"INR\"}}}}";
+
+    private const string RefundProcessed = "refund.processed";
+
+    private static string FailedBody(string orderId, string paymentId, long paise) =>
+        "{\"event\":\"payment.failed\",\"payload\":{\"payment\":{\"entity\":{\"id\":\"" + paymentId
+        + "\",\"order_id\":\"" + orderId + "\",\"status\":\"failed\",\"amount\":" + paise + ",\"currency\":\"INR\"}}}}";
+
+    private static string RefundBody(string eventName, string refundId, string paymentId, long paise) =>
+        "{\"event\":\"" + eventName + "\",\"payload\":{\"refund\":{\"entity\":{\"id\":\"" + refundId
+        + "\",\"payment_id\":\"" + paymentId + "\",\"amount\":" + paise + ",\"currency\":\"INR\"}}}}";
 
     private static string NewPhone() => "+9197" + Random.Shared.Next(10000000, 99999999).ToString();
 

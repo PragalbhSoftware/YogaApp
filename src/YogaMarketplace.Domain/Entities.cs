@@ -240,8 +240,30 @@ public class Payment
     public string? Gateway { get; set; }
     public string? GatewayOrderId { get; set; }
     public string? GatewayPaymentId { get; set; }
+
+    /// <summary>Razorpay's id for the refund on this payment; a refund webhook with this id is already recorded.</summary>
+    public string? GatewayRefundId { get; set; }
+    public RefundStatus? RefundStatus { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? UpdatedAt { get; set; }
+}
+
+/// <summary>
+/// One gateway webhook delivery, unique per provider and event id, so a redelivery is not processed twice.
+/// A refund that arrives before its payment is captured stays <see cref="WebhookEventStatus.Pending"/> and is applied at capture.
+/// </summary>
+public class WebhookEvent
+{
+    public Guid Id { get; set; }
+    public string Provider { get; set; } = "";
+    public string EventId { get; set; } = "";
+    public string EventType { get; set; } = "";
+    public string? GatewayPaymentId { get; set; }
+    public string Payload { get; set; } = "";
+    public DateTimeOffset ReceivedAt { get; set; }
+    public DateTimeOffset? ProcessedAt { get; set; }
+    public WebhookEventStatus Status { get; set; } = WebhookEventStatus.Received;
+    public string? Error { get; set; }
 }
 
 public class Review
