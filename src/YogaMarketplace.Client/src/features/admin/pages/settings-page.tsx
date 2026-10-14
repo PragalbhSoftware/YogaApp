@@ -7,6 +7,7 @@ import { CategorySettings } from "@/features/admin/components/category-settings"
 import { CreditRulesSettings } from "@/features/admin/components/credit-rules-settings";
 import { ErrorAlertSettings } from "@/features/admin/components/error-alert-settings";
 import { FeeSettings } from "@/features/admin/components/fee-settings";
+import { NotificationSettings } from "@/features/admin/components/notification-settings";
 import { PackSettings } from "@/features/admin/components/pack-settings";
 import { PageSettings } from "@/features/admin/components/page-settings";
 import { PrivacySettings } from "@/features/admin/components/privacy-settings";
@@ -27,7 +28,7 @@ export function SettingsPage() {
     <AdminPage
       kicker="Owner"
       title="Settings"
-      lead="Fees and payouts, session packs and credit rules, the neighbourhoods customers can pick, the home banner, the yoga label on browse, the policy pages, and error alerts."
+      lead="Fees and payouts, session packs and credit rules, the neighbourhoods customers can pick, the home banner, the yoga label on browse, the policy pages, error alerts and booking emails."
     >
       <Tabs
         value={tab}
@@ -74,7 +75,12 @@ export function SettingsPage() {
           <PrivacySettings />
         </div>
       ) : null}
-      {tab === "alerts" ? <ErrorAlertSettings /> : null}
+      {tab === "alerts" ? (
+        <div className="space-y-8">
+          <ErrorAlertSettings />
+          <NotificationSettings />
+        </div>
+      ) : null}
     </AdminPage>
   );
 }

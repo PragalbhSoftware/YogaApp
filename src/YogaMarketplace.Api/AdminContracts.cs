@@ -245,6 +245,8 @@ public class UpdateSettingsRequest
     public int? ErrorAlertThrottleMinutes { get; set; }
     public int? ErrorAlertCheckMinutes { get; set; }
     public int? ErrorEventRetentionDays { get; set; }
+    public bool? EmailNotificationsEnabled { get; set; }
+    public int? NotificationMaxAttempts { get; set; }
 }
 
 public record AdminSettingsResponse(
@@ -284,7 +286,9 @@ public record AdminSettingsResponse(
     string? ErrorAlertEmail,
     int ErrorAlertThrottleMinutes,
     int ErrorAlertCheckMinutes,
-    int ErrorEventRetentionDays);
+    int ErrorEventRetentionDays,
+    bool EmailNotificationsEnabled,
+    int NotificationMaxAttempts);
 
 public record AdminErrorEventResponse(
     Guid Id,

@@ -74,6 +74,7 @@ public partial class BookingService : IBookingService, IBookingHandshake, IRazor
     private readonly IPlatformSettingsService _settings;
     private readonly CreditLedger _credits;
     private readonly CreditPurchaseService _packs;
+    private readonly BookingNotifications _notifications;
     private readonly ILogger<BookingService> _logger;
 
     public BookingService(
@@ -83,6 +84,7 @@ public partial class BookingService : IBookingService, IBookingHandshake, IRazor
         IPlatformSettingsService settings,
         CreditLedger credits,
         CreditPurchaseService packs,
+        BookingNotifications notifications,
         ILogger<BookingService> logger)
     {
         _db = db;
@@ -91,6 +93,7 @@ public partial class BookingService : IBookingService, IBookingHandshake, IRazor
         _settings = settings;
         _credits = credits;
         _packs = packs;
+        _notifications = notifications;
         _logger = logger;
     }
 
@@ -286,6 +289,7 @@ public partial class BookingService : IBookingService, IBookingHandshake, IRazor
 
         var payment = RequireRefundablePayment(booking);
         BookingRules.Decline(booking);
+        await _notifications.RefundedAsync(booking, payment.Amount, false, cancellationToken);
         await RefundAndSaveAsync(booking, payment, payment.Amount, cancellationToken);
         _logger.LogInformation(
             "Instructor {ProviderId} declined booking {BookingId} and refunded payment {PaymentId}.",
@@ -339,6 +343,7 @@ public partial class BookingService : IBookingService, IBookingHandshake, IRazor
             payout = PayoutCalculator.ForLateCancel(booking, settlement.LateCancelFee);
             _db.PayoutsPending.Add(payout);
         }
+        await _notifications.CancelledAsync(booking, settlement.Refund, false, cancellationToken);
         await RefundAndSaveAsync(booking, payment, settlement.Refund, cancellationToken);
 
         _logger.LogInformation(
@@ -581,6 +586,7 @@ public partial class BookingService : IBookingService, IBookingHandshake, IRazor
             booking.Payment = payment;
 
             _db.Bookings.Add(booking);
+            await _notifications.ConfirmedAsync(booking, cancellationToken);
             await _db.SaveChangesAsync(cancellationToken);
             await tx.CommitAsync(cancellationToken);
             await ApplyPendingRefundsAsync(paymentId, cancellationToken);

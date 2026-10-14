@@ -347,6 +347,10 @@ public class PlatformSettings
     public int ErrorAlertThrottleMinutes { get; set; } = PlatformSettingsRules.DefaultErrorAlertThrottleMinutes;
     public int ErrorAlertCheckMinutes { get; set; } = PlatformSettingsRules.DefaultErrorAlertCheckMinutes;
     public int ErrorEventRetentionDays { get; set; } = PlatformSettingsRules.DefaultErrorEventRetentionDays;
+
+    /// <summary>Customer and instructor notification emails: the feature flag and how many times one send is tried.</summary>
+    public bool EmailNotificationsEnabled { get; set; }
+    public int NotificationMaxAttempts { get; set; } = PlatformSettingsRules.DefaultNotificationMaxAttempts;
     public int Version { get; set; } = 1;
     public DateTimeOffset? UpdatedAt { get; set; }
 }

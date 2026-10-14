@@ -838,6 +838,177 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                     b.ToTable("ErrorEvents");
                 });
 
+            modelBuilder.Entity("YogaMarketplace.Domain.NotificationOutbox", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("CategoryId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Channel")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Data")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<string>("EventKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int>("MaxAttempts")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Recipient")
+                        .HasMaxLength(254)
+                        .HasColumnType("nvarchar(254)");
+
+                    b.Property<DateTimeOffset?>("SentAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status", "CreatedAt");
+
+                    b.ToTable("NotificationOutbox", (string)null);
+                });
+
+            modelBuilder.Entity("YogaMarketplace.Domain.NotificationTemplate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<Guid?>("CategoryId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Channel")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<string>("DltTemplateId")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("EventKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CategoryId");
+
+                    b.HasIndex(new[] { "EventKey", "Channel", "CategoryId" }, "IX_NotificationTemplates_OneActivePerEventChannelCategory")
+                        .IsUnique()
+                        .HasFilter("[IsActive] = 1");
+
+                    b.ToTable("NotificationTemplates");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("8f0c2a51-3b7e-4c1d-9a20-000000000001"),
+                            Body = "Hi {{customerName}},\n\nYour session is booked.\n\nInstructor: {{instructorName}}\nSession: {{serviceTitle}}\nWhen: {{sessionDate}} at {{sessionTime}}\nBooking reference: {{bookingRef}}\n\nYou can see the details and cancel from My bookings.",
+                            Channel = "Email",
+                            EventKey = "booking.confirmed.customer",
+                            IsActive = true,
+                            Subject = "Booked: {{serviceTitle}} with {{instructorName}} on {{sessionDate}}"
+                        },
+                        new
+                        {
+                            Id = new Guid("8f0c2a51-3b7e-4c1d-9a20-000000000002"),
+                            Body = "Hi {{instructorName}},\n\n{{customerName}} booked {{serviceTitle}} on {{sessionDate}} at {{sessionTime}}.\nBooking reference: {{bookingRef}}\n\nOpen your bookings to accept or decline the request.",
+                            Channel = "Email",
+                            EventKey = "booking.confirmed.instructor",
+                            IsActive = true,
+                            Subject = "New booking: {{serviceTitle}} on {{sessionDate}}"
+                        },
+                        new
+                        {
+                            Id = new Guid("8f0c2a51-3b7e-4c1d-9a20-000000000003"),
+                            Body = "Hi {{customerName}},\n\nYour booking for {{serviceTitle}} with {{instructorName}} on {{sessionDate}} at {{sessionTime}} is cancelled.\nRefund: {{refund}}\nBooking reference: {{bookingRef}}",
+                            Channel = "Email",
+                            EventKey = "booking.cancelled.customer",
+                            IsActive = true,
+                            Subject = "Cancelled: {{serviceTitle}} on {{sessionDate}}"
+                        },
+                        new
+                        {
+                            Id = new Guid("8f0c2a51-3b7e-4c1d-9a20-000000000004"),
+                            Body = "Hi {{instructorName}},\n\nThe booking by {{customerName}} for {{serviceTitle}} on {{sessionDate}} at {{sessionTime}} is cancelled.\nBooking reference: {{bookingRef}}\n\nThe slot is open again for other customers.",
+                            Channel = "Email",
+                            EventKey = "booking.cancelled.instructor",
+                            IsActive = true,
+                            Subject = "Booking cancelled: {{serviceTitle}} on {{sessionDate}}"
+                        },
+                        new
+                        {
+                            Id = new Guid("8f0c2a51-3b7e-4c1d-9a20-000000000005"),
+                            Body = "Hi {{customerName}},\n\nWe refunded your booking for {{serviceTitle}} with {{instructorName}} on {{sessionDate}} at {{sessionTime}}.\nRefund: {{refund}}\nBooking reference: {{bookingRef}}",
+                            Channel = "Email",
+                            EventKey = "booking.refunded.customer",
+                            IsActive = true,
+                            Subject = "Refund for {{serviceTitle}} on {{sessionDate}}"
+                        },
+                        new
+                        {
+                            Id = new Guid("8f0c2a51-3b7e-4c1d-9a20-000000000006"),
+                            Body = "Hi {{instructorName}},\n\nThe booking by {{customerName}} for {{serviceTitle}} on {{sessionDate}} at {{sessionTime}} was refunded.\nBooking reference: {{bookingRef}}",
+                            Channel = "Email",
+                            EventKey = "booking.refunded.instructor",
+                            IsActive = true,
+                            Subject = "Booking refunded: {{serviceTitle}} on {{sessionDate}}"
+                        },
+                        new
+                        {
+                            Id = new Guid("8f0c2a51-3b7e-4c1d-9a20-000000000007"),
+                            Body = "Hi {{instructorName}},\n\nWe sent your payout of {{amount}}.\nPayout reference: {{payoutRef}}",
+                            Channel = "Email",
+                            EventKey = "payout.paid.instructor",
+                            IsActive = true,
+                            Subject = "Payout sent: {{amount}}"
+                        });
+                });
+
             modelBuilder.Entity("YogaMarketplace.Domain.OtpChallenge", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1077,6 +1248,11 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                         .HasColumnType("bit")
                         .HasDefaultValue(false);
 
+                    b.Property<bool>("EmailNotificationsEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
                     b.Property<int>("ErrorAlertCheckMinutes")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int")
@@ -1106,6 +1282,11 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                     b.Property<decimal>("LateCancelFeeValue")
                         .HasPrecision(10, 2)
                         .HasColumnType("decimal(10,2)");
+
+                    b.Property<int>("NotificationMaxAttempts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(5);
 
                     b.Property<decimal>("PackReferenceSessionPrice")
                         .ValueGeneratedOnAdd()
@@ -1942,6 +2123,14 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                         .HasForeignKey("CustomerId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("YogaMarketplace.Domain.NotificationTemplate", b =>
+                {
+                    b.HasOne("YogaMarketplace.Domain.Category", null)
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("YogaMarketplace.Domain.Payment", b =>

@@ -23,6 +23,7 @@ public sealed record CurrentSettings(
     int WebhookPayloadRetentionDays,
     RecurringJobTerms Jobs,
     ErrorAlertTerms ErrorAlerts,
+    NotificationTerms Notifications,
     int Version,
     DateTimeOffset? UpdatedAt)
 {
@@ -41,6 +42,7 @@ public sealed record CurrentSettings(
         settings.WebhookPayloadRetentionDays,
         PlatformSettingsRules.RecurringJobTermsFor(settings),
         PlatformSettingsRules.ErrorAlertTermsFor(settings),
+        PlatformSettingsRules.NotificationTermsFor(settings),
         settings.Version,
         settings.UpdatedAt);
 }
@@ -199,7 +201,9 @@ public class PlatformSettingsService : IPlatformSettingsService
         request.ErrorAlertEmail,
         request.ErrorAlertThrottleMinutes,
         request.ErrorAlertCheckMinutes,
-        request.ErrorEventRetentionDays);
+        request.ErrorEventRetentionDays,
+        request.EmailNotificationsEnabled,
+        request.NotificationMaxAttempts);
 
     private static TimeOnly? ParseTime(string? value, string label)
     {
@@ -249,5 +253,7 @@ public class PlatformSettingsService : IPlatformSettingsService
         settings.ErrorAlertEmail,
         settings.ErrorAlertThrottleMinutes,
         settings.ErrorAlertCheckMinutes,
-        settings.ErrorEventRetentionDays);
+        settings.ErrorEventRetentionDays,
+        settings.EmailNotificationsEnabled,
+        settings.NotificationMaxAttempts);
 }

@@ -41,6 +41,8 @@ public class YogaDbContext : DbContext
     public DbSet<ReconciliationItem> ReconciliationItems => Set<ReconciliationItem>();
     public DbSet<ConsentRecord> ConsentRecords => Set<ConsentRecord>();
     public DbSet<ErrorEvent> ErrorEvents => Set<ErrorEvent>();
+    public DbSet<NotificationTemplate> NotificationTemplates => Set<NotificationTemplate>();
+    public DbSet<NotificationOutbox> NotificationOutbox => Set<NotificationOutbox>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
