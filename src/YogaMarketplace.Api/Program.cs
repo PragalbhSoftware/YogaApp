@@ -90,9 +90,18 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 builder.Services.AddAuthorization();
 
-var productionWarnings = ProductionSafety.Check(builder.Configuration, builder.Environment.EnvironmentName);
-
 var app = builder.Build();
+
+IReadOnlyList<string> productionWarnings;
+try
+{
+    productionWarnings = ProductionSafety.Check(builder.Configuration, builder.Environment.EnvironmentName);
+}
+catch (InvalidOperationException ex)
+{
+    app.Logger.LogCritical("Startup refused in {Environment}: {Problems}", builder.Environment.EnvironmentName, ex.Message);
+    throw;
+}
 
 foreach (var warning in productionWarnings)
     app.Logger.LogWarning("{ProductionWarning}", warning);

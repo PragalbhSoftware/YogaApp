@@ -77,7 +77,7 @@ public class MarketplaceApiTests : IClassFixture<YogaApiFactory>
         Assert.Equal("Female", signedIn.User.Gender);
 
         var unknown = await client.PostAsJsonAsync("/api/auth/otp/request", new { phone = NewPhone(), isNewUser = false });
-        Assert.Equal(HttpStatusCode.NotFound, unknown.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, unknown.StatusCode);
     }
 
     [Fact]

@@ -11,6 +11,8 @@ namespace YogaMarketplace.Api.Tests;
 
 public class YogaApiFactory : WebApplicationFactory<Program>
 {
+    /// <summary>Tests only: far above the admin maximums, which real settings can never reach.</summary>
+    public const int UnlimitedOtp = 10_000;
     private readonly string _dbPath = Path.Combine(Path.GetTempPath(), $"yoga-marketplace-{Guid.NewGuid():N}.db");
     private readonly string _storagePath = Path.Combine(Path.GetTempPath(), $"yoga-marketplace-uploads-{Guid.NewGuid():N}");
 
@@ -116,6 +118,10 @@ public class YogaApiFactory : WebApplicationFactory<Program>
             var db = scope.ServiceProvider.GetRequiredService<YogaDbContext>();
             await _factory.CreateDatabaseAsync(db, cancellationToken);
             await scope.ServiceProvider.GetRequiredService<DbSeeder>().SeedAsync(cancellationToken);
+            // Shared factories sign the same seeded phones in many times. OtpPhoneLimitTests sets real limits itself.
+            await db.Settings.ExecuteUpdateAsync(s => s
+                .SetProperty(x => x.OtpMaxSendsPerPhone, UnlimitedOtp)
+                .SetProperty(x => x.OtpMaxWrongCodesPerPhone, UnlimitedOtp), cancellationToken);
         }
 
         public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;

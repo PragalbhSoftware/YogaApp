@@ -247,6 +247,9 @@ public class UpdateSettingsRequest
     public int? ErrorEventRetentionDays { get; set; }
     public bool? EmailNotificationsEnabled { get; set; }
     public int? NotificationMaxAttempts { get; set; }
+    public int? OtpMaxSendsPerPhone { get; set; }
+    public int? OtpMaxWrongCodesPerPhone { get; set; }
+    public int? OtpLockMinutes { get; set; }
 }
 
 public record AdminSettingsResponse(
@@ -288,7 +291,10 @@ public record AdminSettingsResponse(
     int ErrorAlertCheckMinutes,
     int ErrorEventRetentionDays,
     bool EmailNotificationsEnabled,
-    int NotificationMaxAttempts);
+    int NotificationMaxAttempts,
+    int OtpMaxSendsPerPhone,
+    int OtpMaxWrongCodesPerPhone,
+    int OtpLockMinutes);
 
 public record AdminErrorEventResponse(
     Guid Id,

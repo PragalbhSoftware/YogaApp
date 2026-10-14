@@ -10,6 +10,7 @@ import {
   privacySettingsSchema,
   reconciliationSettingsSchema,
   resolveItemSchema,
+  signInLimitSettingsSchema,
 } from "@/features/admin/schemas";
 
 const valid = {
@@ -180,6 +181,31 @@ describe("booking emails form", () => {
     expect(notificationErrors({ notificationMaxAttempts: 0 })).toEqual(["notificationMaxAttempts"]);
     expect(notificationErrors({ notificationMaxAttempts: 11 })).toEqual(["notificationMaxAttempts"]);
     expect(notificationErrors({ notificationMaxAttempts: 2.5 })).toEqual(["notificationMaxAttempts"]);
+  });
+});
+
+describe("sign-in limits form", () => {
+  const limitErrors = (input: Record<string, unknown>) => {
+    const result = signInLimitSettingsSchema.safeParse({
+      otpMaxSendsPerPhone: 5,
+      otpMaxWrongCodesPerPhone: 10,
+      otpLockMinutes: 30,
+      ...input,
+    });
+    return result.success ? [] : result.error.issues.map((issue) => issue.path.join("."));
+  };
+
+  it("accepts the range ends", () => {
+    expect(limitErrors({ otpMaxSendsPerPhone: 1, otpMaxWrongCodesPerPhone: 1, otpLockMinutes: 1 })).toEqual([]);
+    expect(limitErrors({ otpMaxSendsPerPhone: "20", otpMaxWrongCodesPerPhone: 50, otpLockMinutes: 1440 })).toEqual([]);
+  });
+
+  it("rejects values out of range or not whole", () => {
+    expect(limitErrors({ otpMaxSendsPerPhone: 0 })).toEqual(["otpMaxSendsPerPhone"]);
+    expect(limitErrors({ otpMaxSendsPerPhone: 21 })).toEqual(["otpMaxSendsPerPhone"]);
+    expect(limitErrors({ otpMaxWrongCodesPerPhone: 51 })).toEqual(["otpMaxWrongCodesPerPhone"]);
+    expect(limitErrors({ otpLockMinutes: 1441 })).toEqual(["otpLockMinutes"]);
+    expect(limitErrors({ otpLockMinutes: 2.5 })).toEqual(["otpLockMinutes"]);
   });
 });
 

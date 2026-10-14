@@ -1,10 +1,14 @@
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using YogaMarketplace.Api.Middleware;
 using YogaMarketplace.Api.Options;
 using YogaMarketplace.Api.Services;
@@ -139,6 +143,41 @@ public class ProductionSafetyTests : IClassFixture<YogaApiFactory>
             Config([("Database:AutoMigrate", "true"), ("Razorpay:KeyId", ""), .. DemoSignIn]), environment));
     }
 
+    [Theory]
+    [InlineData("Production", "Razorpay:UseFakeGateway")]
+    [InlineData("Production", "Otp:ExposeCode")]
+    [InlineData("Production", "Otp:UseFixedCode")]
+    [InlineData("Staging", "Razorpay:UseFakeGateway")]
+    [InlineData("Staging", "Otp:ExposeCode")]
+    [InlineData("Staging", "Otp:UseFixedCode")]
+    public void Hardened_host_refuses_to_start_with_a_test_flag_on(string environment, string flag)
+    {
+        var logs = new LogCapture();
+        using var host = HostIn(environment, logs, (flag, "true"));
+
+        var error = Record.Exception(() => host.CreateClient());
+
+        Assert.NotNull(error);
+        Assert.Contains(flag, error.Message);
+        var critical = Assert.Single(logs.Lines, line => line.StartsWith("Critical", StringComparison.Ordinal));
+        Assert.Contains($"Startup refused in \"{environment}\"", critical);
+        Assert.Contains(flag, critical);
+    }
+
+    [Fact]
+    public async Task Development_host_starts_with_test_flags_on()
+    {
+        _factory.CreateClient();
+        var logs = new LogCapture();
+        using var host = HostIn(Environments.Development, logs,
+            ("Razorpay:UseFakeGateway", "true"), ("Otp:ExposeCode", "true"), ("Otp:UseFixedCode", "true"));
+
+        var response = await host.CreateClient().GetAsync("/health");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.DoesNotContain(logs.Lines, line => line.StartsWith("Critical", StringComparison.Ordinal));
+    }
+
     [Fact]
     public async Task Unknown_api_routes_return_a_json_error()
     {
@@ -173,6 +212,23 @@ public class ProductionSafetyTests : IClassFixture<YogaApiFactory>
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
+    private WebApplicationFactory<Program> HostIn(string environment, LogCapture logs, params (string Key, string Value)[] overrides) =>
+        _factory.WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment(environment);
+            // UseSetting, unlike ConfigureAppConfiguration, is already visible to the checks Program runs before Build.
+            foreach (var (key, value) in SafeProduction)
+                builder.UseSetting(key, value);
+            if (environment == Environments.Staging)
+                foreach (var (key, value) in StagingKeys)
+                    builder.UseSetting(key, value);
+            builder.UseSetting("Cors:AllowedOrigins:0", "https://app.example.test");
+            builder.UseSetting("Jwt:Key", "testing-key-at-least-32-characters-long");
+            foreach (var (key, value) in overrides)
+                builder.UseSetting(key, value);
+            builder.ConfigureLogging(logging => logging.AddProvider(logs));
+        });
+
     private static IConfiguration Config(params (string Key, string Value)[] overrides)
     {
         var values = new Dictionary<string, string?>(SafeProduction);
@@ -182,4 +238,25 @@ public class ProductionSafetyTests : IClassFixture<YogaApiFactory>
     }
 
     private sealed record ErrorBody(string Error, string? TraceId);
+
+    private sealed class LogCapture : ILoggerProvider
+    {
+        public ConcurrentQueue<string> Lines { get; } = new();
+
+        public ILogger CreateLogger(string categoryName) => new Logger(Lines);
+
+        public void Dispose()
+        {
+        }
+
+        private sealed class Logger(ConcurrentQueue<string> lines) : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+            public bool IsEnabled(LogLevel logLevel) => true;
+
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+                lines.Enqueue($"{logLevel} {formatter(state, exception)}");
+        }
+    }
 }

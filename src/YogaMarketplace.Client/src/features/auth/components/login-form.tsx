@@ -85,7 +85,7 @@ export function LoginForm() {
     resendOtp.mutate(phone, {
       onSuccess: (data) => {
         applyChallenge(data);
-        toast.success("A new code was sent.");
+        toast.success("If this number can sign in, a new code is on its way.");
       },
       onError: (err) => setError(toUserMessage(err)),
     });

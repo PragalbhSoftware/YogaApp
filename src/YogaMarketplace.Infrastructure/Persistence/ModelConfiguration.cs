@@ -29,7 +29,8 @@ internal static class ModelConfiguration
         ConfigureSettingsAudit(modelBuilder.Entity<SettingsAudit>());
         ConfigureContentPage(modelBuilder.Entity<ContentPage>());
         ConfigureBackgroundJob(modelBuilder.Entity<BackgroundJob>(), sqlite);
-        ConfigureOtp(modelBuilder.Entity<OtpChallenge>());
+        ConfigureOtp(modelBuilder.Entity<OtpChallenge>(), sqlite);
+        ConfigureOtpPhoneLock(modelBuilder.Entity<OtpPhoneLock>());
         ConfigureCreditPack(modelBuilder.Entity<CreditPack>());
         ConfigureCreditBatch(modelBuilder.Entity<CreditBatch>(), sqlite);
         ConfigureCreditLedger(modelBuilder.Entity<CreditLedgerEntry>());
@@ -473,6 +474,9 @@ internal static class ModelConfiguration
         entity.Property(s => s.ErrorEventRetentionDays).HasDefaultValue(PlatformSettingsRules.DefaultErrorEventRetentionDays);
         entity.Property(s => s.EmailNotificationsEnabled).HasDefaultValue(false);
         entity.Property(s => s.NotificationMaxAttempts).HasDefaultValue(PlatformSettingsRules.DefaultNotificationMaxAttempts);
+        entity.Property(s => s.OtpMaxSendsPerPhone).HasDefaultValue(PlatformSettingsRules.DefaultOtpMaxSendsPerPhone);
+        entity.Property(s => s.OtpMaxWrongCodesPerPhone).HasDefaultValue(PlatformSettingsRules.DefaultOtpMaxWrongCodesPerPhone);
+        entity.Property(s => s.OtpLockMinutes).HasDefaultValue(PlatformSettingsRules.DefaultOtpLockMinutes);
     }
 
     private static void ConfigureErrorEvent(EntityTypeBuilder<ErrorEvent> entity, bool sqlite)
@@ -532,8 +536,11 @@ internal static class ModelConfiguration
         }
     }
 
-    private static void ConfigureOtp(EntityTypeBuilder<OtpChallenge> entity)
+    private static void ConfigureOtp(EntityTypeBuilder<OtpChallenge> entity, bool sqlite)
     {
+        if (sqlite)
+            // SQLite cannot compare DateTimeOffset text; the per-phone limits filter on this in SQL.
+            entity.Property(c => c.CreatedAt).HasConversion<DateTimeOffsetToBinaryConverter>();
         entity.Property(c => c.Phone).HasMaxLength(16);
         entity.Property(c => c.CodeHash).HasMaxLength(64);
         entity.Property(c => c.PendingName).HasMaxLength(80);
@@ -541,5 +548,11 @@ internal static class ModelConfiguration
         entity.Property(c => c.IntendedRole).HasConversion<string>().HasMaxLength(16);
         entity.Property(c => c.ConsentAccepted).HasDefaultValue(false);
         entity.HasIndex(c => new { c.Phone, c.CreatedAt });
+    }
+
+    private static void ConfigureOtpPhoneLock(EntityTypeBuilder<OtpPhoneLock> entity)
+    {
+        entity.HasKey(l => l.Phone);
+        entity.Property(l => l.Phone).HasMaxLength(16);
     }
 }

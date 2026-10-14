@@ -12,8 +12,9 @@ import { PackSettings } from "@/features/admin/components/pack-settings";
 import { PageSettings } from "@/features/admin/components/page-settings";
 import { PrivacySettings } from "@/features/admin/components/privacy-settings";
 import { ReconciliationSettings } from "@/features/admin/components/reconciliation-settings";
+import { SignInLimitSettings } from "@/features/admin/components/sign-in-limit-settings";
 
-const tabs = ["earnings", "packs", "areas", "banner", "catalog", "pages", "alerts"] as const;
+const tabs = ["earnings", "packs", "areas", "banner", "catalog", "pages", "alerts", "sign-in"] as const;
 type SettingsTab = (typeof tabs)[number];
 
 function readTab(value: string | null): SettingsTab {
@@ -28,7 +29,7 @@ export function SettingsPage() {
     <AdminPage
       kicker="Owner"
       title="Settings"
-      lead="Fees and payouts, session packs and credit rules, the neighbourhoods customers can pick, the home banner, the yoga label on browse, the policy pages, error alerts and booking emails."
+      lead="Fees and payouts, session packs and credit rules, the neighbourhoods customers can pick, the home banner, the yoga label on browse, the policy pages, error alerts, booking emails and sign-in code limits."
     >
       <Tabs
         value={tab}
@@ -52,6 +53,7 @@ export function SettingsPage() {
         <Tab value="catalog" label="Catalog" />
         <Tab value="pages" label="Pages" />
         <Tab value="alerts" label="Alerts" />
+        <Tab value="sign-in" label="Sign-in" />
       </Tabs>
 
       {tab === "earnings" ? (
@@ -81,6 +83,7 @@ export function SettingsPage() {
           <NotificationSettings />
         </div>
       ) : null}
+      {tab === "sign-in" ? <SignInLimitSettings /> : null}
     </AdminPage>
   );
 }
