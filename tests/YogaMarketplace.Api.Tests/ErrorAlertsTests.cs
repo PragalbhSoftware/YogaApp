@@ -366,6 +366,31 @@ public class ErrorAlertsTests
     }
 
     [Fact]
+    public async Task Client_errors_400_401_403_and_409_create_no_error_rows()
+    {
+        await using var factory = new YogaApiFactory();
+        var (host, _, _) = NewHost(factory);
+        await using var _ = host;
+        var admin = await SignInAsync(host, SeedIds.AdminPhone);
+        var customer = await SignUpAsync(host);
+        await DrainErrorsAsync(host);
+
+        var responses = new[]
+        {
+            await SendAsync(host.CreateClient(), HttpMethod.Post, "/api/auth/otp/request", "corr-400", new { phone = "123", isNewUser = false }),
+            await SendAsync(host.CreateClient(), HttpMethod.Get, "/api/admin/errors", "corr-401"),
+            await SendAsync(customer, HttpMethod.Get, "/api/admin/errors", "corr-403"),
+            await SendAsync(admin, HttpMethod.Post, "/api/admin/errors/test-alert", "corr-409")
+        };
+
+        Assert.Equal(
+            [HttpStatusCode.BadRequest, HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden, HttpStatusCode.Conflict],
+            responses.Select(r => r.StatusCode));
+        Assert.Equal(0, await DrainErrorsAsync(host));
+        Assert.False(await AnyErrorAsync(host, e => e.LastCorrelationId != null && e.LastCorrelationId.StartsWith("corr-4")));
+    }
+
+    [Fact]
     public async Task A_5xx_is_recorded_a_4xx_is_not_and_a_failed_error_write_still_returns_500()
     {
         await using var factory = new YogaApiFactory();
@@ -429,7 +454,10 @@ public class ErrorAlertsTests
         await Assert.ThrowsAsync<DomainException>(() => razorpay.RefundPaymentAsync("pay_logs", 100, "rcpt_logs", CancellationToken.None));
 
         var all = string.Join('\n', logs.Lines);
-        Assert.Contains("corr-logs", all);
+        var unhandled = Assert.Single(logs.Lines, l => l.StartsWith("Error An unhandled exception", StringComparison.Ordinal));
+        Assert.Contains("CorrelationId=corr-logs", unhandled);
+        Assert.Contains("RequestPath=/api/pages/terms ", unhandled);
+        Assert.Contains("RequestId=", unhandled);
         Assert.Contains("Razorpay \"refund payment\" failed with 400: \"BAD_REQUEST_ERROR\"", all);
         Assert.DoesNotMatch($"(?<![0-9A-Za-z]){Regex.Escape(otp.DevCode)}(?![0-9A-Za-z])", all);
         Assert.DoesNotMatch($"(?<![0-9A-Za-z]){Regex.Escape(wrongCode)}(?![0-9A-Za-z])", all);
@@ -605,7 +633,10 @@ public class ErrorAlertsTests
         }
     }
 
-    /// <summary>Every event Serilog lets through: level, message, every property (scope ones included) and the exception.</summary>
+    /// <summary>
+    /// Every event Serilog lets through, as "level message | properties | exception". Serilog folds logger scopes
+    /// (CorrelationId, RequestId, RequestPath, ActionName, ...) into the event properties, so they are captured too.
+    /// </summary>
     private sealed class LogCapture : ILoggerProvider
     {
         public ConcurrentQueue<string> Lines { get; } = new();
