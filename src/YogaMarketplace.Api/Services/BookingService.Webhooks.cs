@@ -130,7 +130,9 @@ public partial class BookingService
     private async Task<bool> ApplyRefundProcessedAsync(RazorpayRefund refund, CancellationToken cancellationToken)
     {
         var payment = await _db.Payments
-            .Include(p => p.Booking)
+            .Include(p => p.Booking!).ThenInclude(b => b.Provider)
+            .Include(p => p.Booking!).ThenInclude(b => b.Service)
+            .Include(p => p.Booking!).ThenInclude(b => b.Slot)
             .SingleOrDefaultAsync(p => p.GatewayPaymentId == refund.PaymentId, cancellationToken);
         if (payment is null)
             return await RefundedOutsideBookingsAsync(refund.PaymentId, cancellationToken);
@@ -156,11 +158,14 @@ public partial class BookingService
         }
 
         var now = DateTimeOffset.UtcNow;
-        PaymentRules.Refund(payment, RazorpayMoney.FromPaise(refund.AmountPaise));
+        var amount = RazorpayMoney.FromPaise(refund.AmountPaise);
+        PaymentRules.Refund(payment, amount);
         payment.GatewayRefundId = refund.RefundId;
         payment.RefundStatus = RefundStatus.Processed;
         if (payment is { Status: PaymentStatus.Refunded, Booking: { CreditBatchId: null, Status: BookingStatus.PendingAccept or BookingStatus.Upcoming } booking })
             BookingRules.AdminCancel(booking, RefundedInGatewayReason, now);
+        if (payment.Booking is not null)
+            await _notifications.RefundedAsync(payment.Booking, amount, false, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
         _logger.LogInformation(
             "Recorded Razorpay refund {RefundId} of {AmountPaise} paise on payment {PaymentId} for booking {BookingId}.",

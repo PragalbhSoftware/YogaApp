@@ -44,7 +44,9 @@ public sealed record PlatformSettingsChanges(
     string? ErrorAlertEmail = null,
     int? ErrorAlertThrottleMinutes = null,
     int? ErrorAlertCheckMinutes = null,
-    int? ErrorEventRetentionDays = null);
+    int? ErrorEventRetentionDays = null,
+    bool? EmailNotificationsEnabled = null,
+    int? NotificationMaxAttempts = null);
 
 /// <summary>When the daily reconciliation runs and how long a webhook or refund may wait before it is reported.</summary>
 public sealed record ReconciliationTerms(TimeOnly RunAt, int WebhookStuckMinutes, int RefundPendingHours);
@@ -81,6 +83,12 @@ public static class PlatformSettingsRules
     public const int DefaultErrorEventRetentionDays = 30;
     public const int MaxErrorEventRetentionDays = 3650;
     public const int ErrorAlertEmailMax = 254;
+    public const int DefaultNotificationMaxAttempts = 5;
+    public const int MaxNotificationMaxAttempts = 10;
+
+    public static NotificationTerms NotificationTermsFor(PlatformSettings settings) => new(
+        settings.EmailNotificationsEnabled,
+        settings.NotificationMaxAttempts);
 
     public static ErrorAlertTerms ErrorAlertTermsFor(PlatformSettings settings) => new(
         settings.EmailAlertsEnabled,
@@ -166,6 +174,8 @@ public static class PlatformSettingsRules
         var throttleMinutes = changes.ErrorAlertThrottleMinutes is int tm ? Between(tm, MaxErrorAlertThrottleMinutes, "Alert throttle", "minutes") : settings.ErrorAlertThrottleMinutes;
         var checkMinutes = changes.ErrorAlertCheckMinutes is int cm ? Between(cm, MaxErrorAlertCheckMinutes, "Error check interval", "minutes") : settings.ErrorAlertCheckMinutes;
         var errorRetentionDays = changes.ErrorEventRetentionDays is int ed ? Between(ed, MaxErrorEventRetentionDays, "Error retention", "days") : settings.ErrorEventRetentionDays;
+        var notificationsOn = changes.EmailNotificationsEnabled ?? settings.EmailNotificationsEnabled;
+        var notificationAttempts = changes.NotificationMaxAttempts is int na ? Between(na, MaxNotificationMaxAttempts, "Notification attempts", "tries") : settings.NotificationMaxAttempts;
 
         var log = new List<SettingChange>();
         Set(log, nameof(settings.CommissionPercent), settings.CommissionPercent, commission, v => settings.CommissionPercent = v);
@@ -201,6 +211,8 @@ public static class PlatformSettingsRules
         Set(log, nameof(settings.ErrorAlertThrottleMinutes), settings.ErrorAlertThrottleMinutes, throttleMinutes, v => settings.ErrorAlertThrottleMinutes = v);
         Set(log, nameof(settings.ErrorAlertCheckMinutes), settings.ErrorAlertCheckMinutes, checkMinutes, v => settings.ErrorAlertCheckMinutes = v);
         Set(log, nameof(settings.ErrorEventRetentionDays), settings.ErrorEventRetentionDays, errorRetentionDays, v => settings.ErrorEventRetentionDays = v);
+        Set(log, nameof(settings.EmailNotificationsEnabled), settings.EmailNotificationsEnabled, notificationsOn, v => settings.EmailNotificationsEnabled = v);
+        Set(log, nameof(settings.NotificationMaxAttempts), settings.NotificationMaxAttempts, notificationAttempts, v => settings.NotificationMaxAttempts = v);
         return log;
     }
 

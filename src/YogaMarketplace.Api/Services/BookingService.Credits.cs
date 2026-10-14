@@ -62,6 +62,7 @@ public partial class BookingService
         booking.Slot = slot;
         booking.Payment = payment;
         _db.Bookings.Add(booking);
+        await _notifications.ConfirmedAsync(booking, cancellationToken);
 
         try
         {
@@ -214,6 +215,7 @@ public partial class BookingService
         }
         if (settlement.ReturnCredit)
             await _credits.ReturnAsync(booking, now, cancellationToken);
+        await _notifications.CancelledAsync(booking, settlement.FeeRefund, settlement.ReturnCredit, cancellationToken);
         await RefundAndSaveAsync(booking, payment, settlement.FeeRefund, cancellationToken);
 
         _logger.LogInformation(
@@ -232,6 +234,7 @@ public partial class BookingService
         var payment = booking.Payment ?? throw new DomainException("This booking has no payment record.");
         BookingRules.Decline(booking);
         await _credits.ReturnAsync(booking, DateTimeOffset.UtcNow, cancellationToken);
+        await _notifications.RefundedAsync(booking, payment.Amount, true, cancellationToken);
         await RefundAndSaveAsync(booking, payment, payment.Amount, cancellationToken);
     }
 

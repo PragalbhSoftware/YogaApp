@@ -38,6 +38,34 @@ internal static class ModelConfiguration
         ConfigureReconciliationItem(modelBuilder.Entity<ReconciliationItem>(), sqlite);
         ConfigureConsent(modelBuilder.Entity<ConsentRecord>());
         ConfigureErrorEvent(modelBuilder.Entity<ErrorEvent>(), sqlite);
+        ConfigureNotificationTemplate(modelBuilder.Entity<NotificationTemplate>(), sqlite);
+        ConfigureNotificationOutbox(modelBuilder.Entity<NotificationOutbox>());
+    }
+
+    private static void ConfigureNotificationTemplate(EntityTypeBuilder<NotificationTemplate> entity, bool sqlite)
+    {
+        entity.Property(t => t.EventKey).HasMaxLength(NotificationTemplate.EventKeyMax);
+        entity.Property(t => t.Channel).HasConversion<string>().HasMaxLength(16);
+        entity.Property(t => t.Subject).HasMaxLength(NotificationTemplate.SubjectMax);
+        entity.Property(t => t.Body).HasMaxLength(NotificationTemplate.BodyMax);
+        entity.Property(t => t.DltTemplateId).HasMaxLength(NotificationTemplate.DltTemplateIdMax);
+        entity.HasIndex(t => new { t.EventKey, t.Channel, t.CategoryId }, "IX_NotificationTemplates_OneActivePerEventChannelCategory")
+            .IsUnique()
+            .HasFilter(sqlite ? "\"IsActive\" = 1" : "[IsActive] = 1");
+        entity.HasOne<Category>().WithMany().HasForeignKey(t => t.CategoryId).OnDelete(DeleteBehavior.Restrict);
+        entity.HasData(NotificationTemplateDefaults.All());
+    }
+
+    private static void ConfigureNotificationOutbox(EntityTypeBuilder<NotificationOutbox> entity)
+    {
+        entity.ToTable("NotificationOutbox");
+        entity.Property(o => o.EventKey).HasMaxLength(NotificationTemplate.EventKeyMax);
+        entity.Property(o => o.Channel).HasConversion<string>().HasMaxLength(16);
+        entity.Property(o => o.Recipient).HasMaxLength(NotificationOutbox.RecipientMax);
+        entity.Property(o => o.Data).HasMaxLength(NotificationOutbox.DataMax);
+        entity.Property(o => o.Status).HasConversion<string>().HasMaxLength(16);
+        entity.Property(o => o.LastError).HasMaxLength(NotificationOutbox.LastErrorMax);
+        entity.HasIndex(o => new { o.Status, o.CreatedAt });
     }
 
     private static void ConfigureConsent(EntityTypeBuilder<ConsentRecord> entity)
@@ -443,6 +471,8 @@ internal static class ModelConfiguration
         entity.Property(s => s.ErrorAlertThrottleMinutes).HasDefaultValue(PlatformSettingsRules.DefaultErrorAlertThrottleMinutes);
         entity.Property(s => s.ErrorAlertCheckMinutes).HasDefaultValue(PlatformSettingsRules.DefaultErrorAlertCheckMinutes);
         entity.Property(s => s.ErrorEventRetentionDays).HasDefaultValue(PlatformSettingsRules.DefaultErrorEventRetentionDays);
+        entity.Property(s => s.EmailNotificationsEnabled).HasDefaultValue(false);
+        entity.Property(s => s.NotificationMaxAttempts).HasDefaultValue(PlatformSettingsRules.DefaultNotificationMaxAttempts);
     }
 
     private static void ConfigureErrorEvent(EntityTypeBuilder<ErrorEvent> entity, bool sqlite)

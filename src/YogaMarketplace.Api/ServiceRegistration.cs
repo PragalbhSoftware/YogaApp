@@ -53,6 +53,10 @@ public static class ServiceRegistration
         services.AddScoped<ErrorAlertJob>();
         services.AddScoped<IBackgroundJobHandler>(sp => sp.GetRequiredService<ErrorAlertJob>());
         services.AddSingleton(ErrorAlertJob.Recurring);
+        services.AddSingleton(TimeProvider.System);
+        services.AddScoped<INotificationService, NotificationService>();
+        services.AddScoped<BookingNotifications>();
+        services.AddScoped<IBackgroundJobHandler, NotificationSendJob>();
         services.AddScoped<AdminErrorService>();
         services.AddScoped<AdminJobService>();
         services.AddScoped<IAdminProviderService, AdminProviderService>();

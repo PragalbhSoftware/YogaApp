@@ -238,11 +238,18 @@ export type ErrorAlertSettings = {
   errorEventRetentionDays: number;
 };
 
+/** Booking emails to customers and instructors: feature flag and how many times one email is tried. */
+export type NotificationSettings = {
+  emailNotificationsEnabled: boolean;
+  notificationMaxAttempts: number;
+};
+
 export type AdminSettings = CreditSettings &
   ReconciliationSettings &
   PrivacySettings &
   JobScheduleSettings &
-  ErrorAlertSettings & {
+  ErrorAlertSettings &
+  NotificationSettings & {
   version: number;
   currency: string;
   commissionPercent: number;
@@ -276,6 +283,7 @@ export type UpdateSettingsInput = Partial<
     | keyof PrivacySettings
     | keyof JobScheduleSettings
     | Exclude<keyof ErrorAlertSettings, "errorAlertEmail">
+    | keyof NotificationSettings
   >
 > & {
   version: number;

@@ -171,6 +171,13 @@ export const errorAlertSettingsSchema = z
     message: "Add the email that gets alerts before turning them on.",
   });
 
+export const maxNotificationAttempts = 10;
+
+export const notificationSettingsSchema = z.object({
+  emailNotificationsEnabled: z.boolean(),
+  notificationMaxAttempts: wholeBetween("tries", maxNotificationAttempts),
+});
+
 export const maxWebhookPayloadRetentionDays = 3650;
 
 /** The policy version may only go up, so the current value is the floor. */
@@ -253,5 +260,6 @@ export type PackFormValues = z.infer<typeof packSchema>;
 export type ReconciliationSettingsValues = z.infer<typeof reconciliationSettingsSchema>;
 export type JobScheduleSettingsValues = z.infer<typeof jobScheduleSettingsSchema>;
 export type ErrorAlertSettingsValues = z.infer<typeof errorAlertSettingsSchema>;
+export type NotificationSettingsValues = z.infer<typeof notificationSettingsSchema>;
 export type ResolveItemValues = z.infer<typeof resolveItemSchema>;
 export type PrivacySettingsValues = z.infer<ReturnType<typeof privacySettingsSchema>>;

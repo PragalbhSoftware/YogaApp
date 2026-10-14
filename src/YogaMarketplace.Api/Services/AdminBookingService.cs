@@ -27,6 +27,7 @@ public class AdminBookingService : IAdminBookingService
     private readonly ICurrentUser _current;
     private readonly IPlatformSettingsService _settings;
     private readonly CreditLedger _credits;
+    private readonly BookingNotifications _notifications;
     private readonly ILogger<AdminBookingService> _logger;
 
     public AdminBookingService(
@@ -35,6 +36,7 @@ public class AdminBookingService : IAdminBookingService
         ICurrentUser current,
         IPlatformSettingsService settings,
         CreditLedger credits,
+        BookingNotifications notifications,
         ILogger<AdminBookingService> logger)
     {
         _db = db;
@@ -42,6 +44,7 @@ public class AdminBookingService : IAdminBookingService
         _current = current;
         _settings = settings;
         _credits = credits;
+        _notifications = notifications;
         _logger = logger;
     }
 
@@ -75,6 +78,7 @@ public class AdminBookingService : IAdminBookingService
         BookingRules.AdminCancel(booking, request.Reason, now);
         if (paidWithCredit)
             await _credits.ReturnAsync(booking, now, cancellationToken);
+        await _notifications.CancelledAsync(booking, payment.Amount, paidWithCredit, cancellationToken);
         await PaymentRefunds.RefundAndSaveAsync(_db, _razorpay, _logger, booking, payment, payment.Amount, cancellationToken);
 
         _logger.LogInformation(

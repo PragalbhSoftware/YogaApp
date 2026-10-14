@@ -3,6 +3,7 @@ import {
   bannerSchema,
   creditSettingsSchema,
   errorAlertSettingsSchema,
+  notificationSettingsSchema,
   feeSettingsSchema,
   jobScheduleSettingsSchema,
   packSchema,
@@ -161,6 +162,24 @@ describe("error alerts form", () => {
     expect(alertErrors({ errorAlertThrottleMinutes: 0 })).toEqual(["errorAlertThrottleMinutes"]);
     expect(alertErrors({ errorAlertCheckMinutes: 1441 })).toEqual(["errorAlertCheckMinutes"]);
     expect(alertErrors({ errorEventRetentionDays: 2.5 })).toEqual(["errorEventRetentionDays"]);
+  });
+});
+
+describe("booking emails form", () => {
+  const notificationErrors = (input: Record<string, unknown>) => {
+    const result = notificationSettingsSchema.safeParse({ emailNotificationsEnabled: false, notificationMaxAttempts: 5, ...input });
+    return result.success ? [] : result.error.issues.map((issue) => issue.path.join("."));
+  };
+
+  it("accepts the flag and a whole number of tries from 1 to 10", () => {
+    expect(notificationErrors({ emailNotificationsEnabled: true, notificationMaxAttempts: "10" })).toEqual([]);
+    expect(notificationErrors({ notificationMaxAttempts: 1 })).toEqual([]);
+  });
+
+  it("rejects tries out of range or not whole", () => {
+    expect(notificationErrors({ notificationMaxAttempts: 0 })).toEqual(["notificationMaxAttempts"]);
+    expect(notificationErrors({ notificationMaxAttempts: 11 })).toEqual(["notificationMaxAttempts"]);
+    expect(notificationErrors({ notificationMaxAttempts: 2.5 })).toEqual(["notificationMaxAttempts"]);
   });
 });
 
