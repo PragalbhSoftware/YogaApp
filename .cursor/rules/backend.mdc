@@ -56,4 +56,4 @@ alwaysApply: false
 ## Security
 
 - Every new admin endpoint is admin-only.
-- Every read or change of user data checks that the caller owns it (or is admin).
+- Every read or change of user data checks the owner.
