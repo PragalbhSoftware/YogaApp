@@ -2,7 +2,8 @@ import { AxiosError, AxiosHeaders, type AxiosResponse, type InternalAxiosRequest
 import { toast } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/services/http/api-error";
-import { http, REFRESH_PATH } from "@/services/http/http-client";
+import { CORRELATION_HEADER, http, REFRESH_PATH } from "@/services/http/http-client";
+import { toastError } from "@/services/http/toast-error";
 import { useAuthStore } from "@/stores/auth-store";
 
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
@@ -99,7 +100,7 @@ describe("http client session handling", () => {
     expect((error as ApiError).status).toBe(401);
     expect(useAuthStore.getState().token).toBeNull();
     expect(useAuthStore.getState().user).toBeNull();
-    expect(toast.error).toHaveBeenCalledWith("Your session has ended. Sign in again.", { id: "session-ended" });
+    expect(toast.error).toHaveBeenCalledWith("Your session has ended. Sign in again.", { id: "session-ended", description: expect.stringMatching(/^Ref: [0-9a-f]{12}$/) });
   });
 
   it("signs a blocked user out on their next request with the suspension message", async () => {
@@ -112,7 +113,7 @@ describe("http client session handling", () => {
 
     expect(useAuthStore.getState().token).toBeNull();
     expect(refreshCalls(calls)).toHaveLength(1);
-    expect(toast.error).toHaveBeenCalledWith(suspended, { id: "session-ended" });
+    expect(toast.error).toHaveBeenCalledWith(suspended, { id: "session-ended", description: expect.stringMatching(/^Ref: [0-9a-f]{12}$/) });
   });
 
   it("does not loop when the retried request is still unauthorized", async () => {
@@ -133,6 +134,27 @@ describe("http client session handling", () => {
     expect((error as ApiError).message).toBe("Admin access required.");
     expect(useAuthStore.getState().token).toBe("expired-token");
     expect(refreshCalls(calls)).toHaveLength(0);
+  });
+
+  it("sends a short correlation id on every call and keeps it on the error", async () => {
+    const calls = serve((config) => (config.url === "/api/fails" ? { status: 500, data: { error: "Broken." } } : { status: 200 }));
+
+    await http.get("/api/works");
+    const error = (await http.get("/api/fails").catch((reason: unknown) => reason)) as ApiError;
+
+    const ids = calls.map((call) => String(call.headers[CORRELATION_HEADER]));
+    expect(ids).toHaveLength(2);
+    ids.forEach((id) => expect(id).toMatch(/^[0-9a-f]{12}$/));
+    expect(ids[0]).not.toBe(ids[1]);
+    expect(error.correlationId).toBe(ids[1]);
+  });
+
+  it("shows the reference under an API error toast", () => {
+    toastError(new ApiError("Could not save.", 500, false, "abc123def456"));
+    toastError(new Error("not from the API"));
+
+    expect(toast.error).toHaveBeenCalledWith("Could not save.", { description: "Ref: abc123def456" });
+    expect(toast.error).toHaveBeenCalledWith("Something went wrong. Try again.");
   });
 
   it("never refreshes for signed-out visitors", async () => {

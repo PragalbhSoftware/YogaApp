@@ -14,6 +14,7 @@ import type { AdminCertificate } from "@/features/admin/types";
 import { certificateFileName } from "@/features/instructor/media-rules";
 import { toUserMessage } from "@/services/http/api-error";
 import { saveBlob } from "@/utils/download";
+import { toastError } from "@/services/http/toast-error";
 
 const filters = [
   { value: "Pending", label: "Pending" },
@@ -42,7 +43,7 @@ export function CertificateReviewList({ status, onStatusChange }: CertificateRev
         certificateFileName(`${certificate.providerName} ${certificate.title}`, certificate.contentType),
       );
     } catch (error) {
-      toast.error(toUserMessage(error));
+      toastError(error);
     }
   }
 
@@ -71,7 +72,7 @@ export function CertificateReviewList({ status, onStatusChange }: CertificateRev
               onApprove={(id) =>
                 approve.mutate(id, {
                   onSuccess: () => toast.success("Approved. The instructor now shows as Verified."),
-                  onError: (error) => toast.error(toUserMessage(error)),
+                  onError: (error) => toastError(error),
                 })
               }
               onReject={(id, reason) =>
@@ -79,7 +80,7 @@ export function CertificateReviewList({ status, onStatusChange }: CertificateRev
                   { id, reason },
                   {
                     onSuccess: () => toast.success("Rejected. The instructor can upload a new copy."),
-                    onError: (error) => toast.error(toUserMessage(error)),
+                    onError: (error) => toastError(error),
                   },
                 )
               }

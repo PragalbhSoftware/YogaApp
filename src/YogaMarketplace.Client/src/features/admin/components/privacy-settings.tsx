@@ -10,6 +10,7 @@ import { privacySettingsSchema, type PrivacySettingsValues } from "@/features/ad
 import type { AdminSettings } from "@/features/admin/types";
 import { changedFields, settingsSaveError } from "@/features/admin/utils";
 import { toUserMessage } from "@/services/http/api-error";
+import { toastError } from "@/services/http/toast-error";
 
 export function PrivacySettings() {
   const settings = useAdminSettings();
@@ -48,7 +49,7 @@ function PrivacyForm({ settings }: { settings: AdminSettings }) {
               { version: settings.version, ...changedFields(values, form.formState.dirtyFields) },
               {
                 onSuccess: () => toast.success("Saved."),
-                onError: (error) => toast.error(settingsSaveError(error)),
+                onError: (error) => toastError(error, settingsSaveError(error)),
               },
             ),
           )}

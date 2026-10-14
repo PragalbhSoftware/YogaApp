@@ -10,6 +10,7 @@ import { errorAlertSettingsSchema, type ErrorAlertSettingsValues } from "@/featu
 import type { AdminSettings } from "@/features/admin/types";
 import { changedFields, settingsSaveError } from "@/features/admin/utils";
 import { toUserMessage } from "@/services/http/api-error";
+import { toastError } from "@/services/http/toast-error";
 
 function toFormValues(settings: AdminSettings): ErrorAlertSettingsValues {
   return {
@@ -57,7 +58,7 @@ function ErrorAlertForm({ settings }: { settings: AdminSettings }) {
               { version: settings.version, ...changedFields(values, form.formState.dirtyFields) },
               {
                 onSuccess: () => toast.success("Error alerts saved."),
-                onError: (error) => toast.error(settingsSaveError(error)),
+                onError: (error) => toastError(error, settingsSaveError(error)),
               },
             ),
           )}
@@ -128,7 +129,7 @@ function ErrorAlertForm({ settings }: { settings: AdminSettings }) {
               onClick={() =>
                 sendTest.mutate(undefined, {
                   onSuccess: () => toast.success(`Test email sent to ${settings.errorAlertEmail ?? "the alert address"}.`),
-                  onError: (error) => toast.error(toUserMessage(error)),
+                  onError: (error) => toastError(error),
                 })
               }
               sx={{ minHeight: 44, borderRadius: "14px" }}

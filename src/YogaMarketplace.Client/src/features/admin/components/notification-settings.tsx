@@ -10,6 +10,7 @@ import { notificationSettingsSchema, type NotificationSettingsValues } from "@/f
 import type { AdminSettings } from "@/features/admin/types";
 import { changedFields, settingsSaveError } from "@/features/admin/utils";
 import { toUserMessage } from "@/services/http/api-error";
+import { toastError } from "@/services/http/toast-error";
 
 function toFormValues(settings: AdminSettings): NotificationSettingsValues {
   return {
@@ -52,7 +53,7 @@ function NotificationForm({ settings }: { settings: AdminSettings }) {
               { version: settings.version, ...changedFields(values, form.formState.dirtyFields) },
               {
                 onSuccess: () => toast.success("Booking emails saved."),
-                onError: (error) => toast.error(settingsSaveError(error)),
+                onError: (error) => toastError(error, settingsSaveError(error)),
               },
             ),
           )}

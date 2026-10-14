@@ -13,6 +13,7 @@ import type { AdminSettings } from "@/features/admin/types";
 import { changedFields, formatAdminDay, lateFeeLabel, settingsSaveError } from "@/features/admin/utils";
 import { toUserMessage } from "@/services/http/api-error";
 import { formatInr } from "@/utils/money";
+import { toastError } from "@/services/http/toast-error";
 
 export function FeeSettings() {
   const settings = useAdminSettings();
@@ -81,7 +82,7 @@ function FeeForm({ settings }: { settings: AdminSettings }) {
               { version: settings.version, ...changes },
               {
                 onSuccess: () => toast.success("Saved. New bookings use these fees."),
-                onError: (error) => toast.error(settingsSaveError(error)),
+                onError: (error) => toastError(error, settingsSaveError(error)),
               },
             );
           })}

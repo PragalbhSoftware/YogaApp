@@ -23,6 +23,7 @@ import {
 import { formatAdminWhen } from "@/features/admin/utils";
 import { toUserMessage } from "@/services/http/api-error";
 import { formatSlotDay } from "@/utils/clock";
+import { toastError } from "@/services/http/toast-error";
 
 const reconciliationTypeLabels: Record<ReconciliationItemType, string> = {
   MissingInDatabase: "Not in our records",
@@ -144,7 +145,7 @@ export function ReconciliationPanel() {
                 toast.success("Marked resolved.");
                 setResolving(null);
               },
-              onError: (error) => toast.error(toUserMessage(error)),
+              onError: (error) => toastError(error),
             },
           );
         }}

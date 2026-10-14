@@ -10,6 +10,7 @@ import { reconciliationSettingsSchema, type ReconciliationSettingsValues } from 
 import type { AdminSettings } from "@/features/admin/types";
 import { changedFields, settingsSaveError } from "@/features/admin/utils";
 import { toUserMessage } from "@/services/http/api-error";
+import { toastError } from "@/services/http/toast-error";
 
 function toFormValues(settings: AdminSettings): ReconciliationSettingsValues {
   return {
@@ -53,7 +54,7 @@ function ReconciliationForm({ settings }: { settings: AdminSettings }) {
               { version: settings.version, ...changedFields(values, form.formState.dirtyFields) },
               {
                 onSuccess: () => toast.success("Saved. The next daily check uses these values."),
-                onError: (error) => toast.error(settingsSaveError(error)),
+                onError: (error) => toastError(error, settingsSaveError(error)),
               },
             ),
           )}

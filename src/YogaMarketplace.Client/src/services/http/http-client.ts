@@ -1,8 +1,8 @@
 import axios, { type AxiosError, type AxiosInstance } from "axios";
-import { toast } from "sonner";
 import type { VerifyResponse } from "@/features/auth/types";
 import { useAuthStore } from "@/stores/auth-store";
 import { ApiError } from "@/services/http/api-error";
+import { toastError } from "@/services/http/toast-error";
 
 declare module "axios" {
   interface AxiosRequestConfig {
@@ -19,6 +19,7 @@ type ErrorBody = { error?: string };
 const FALLBACK_MESSAGE = "Something went wrong. Try again.";
 const SESSION_ENDED = "Your session has ended. Sign in again.";
 export const REFRESH_PATH = "/api/auth/refresh";
+export const CORRELATION_HEADER = "X-Correlation-Id";
 
 async function readErrorBody(data: unknown): Promise<ErrorBody | undefined> {
   if (data instanceof Blob) {
@@ -33,16 +34,23 @@ async function readErrorBody(data: unknown): Promise<ErrorBody | undefined> {
 }
 
 async function readApiError(error: AxiosError<ErrorBody | Blob>) {
+  const correlationId = error.config?.headers?.[CORRELATION_HEADER] as string | undefined;
   if (!error.response) {
     return new ApiError(
       "We couldn't reach the marketplace. Start the API and try again.",
       0,
       true,
+      correlationId,
     );
   }
 
   const body = await readErrorBody(error.response.data);
-  return new ApiError(body?.error ?? FALLBACK_MESSAGE, error.response.status);
+  return new ApiError(body?.error ?? FALLBACK_MESSAGE, error.response.status, false, correlationId);
+}
+
+/** Short enough to read out over the phone; the server keeps ids of letters and digits as they are. */
+export function newCorrelationId() {
+  return crypto.randomUUID().replaceAll("-", "").slice(0, 12);
 }
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
@@ -94,10 +102,11 @@ function endSession(reason?: unknown) {
   if (!useAuthStore.getState().token) return;
   useAuthStore.getState().signOut();
   const message = reason instanceof ApiError && reason.status === 403 ? reason.message : SESSION_ENDED;
-  toast.error(message, { id: "session-ended" });
+  toastError(reason, message, { id: "session-ended" });
 }
 
 http.interceptors.request.use((config) => {
+  config.headers[CORRELATION_HEADER] ??= newCorrelationId();
   const token = useAuthStore.getState().token;
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;

@@ -19,6 +19,7 @@ import type { BookingRecord, CreateReviewInput } from "@/features/bookings/types
 import { CreditsPanel } from "@/features/credits/components/credits-panel";
 import { toUserMessage } from "@/services/http/api-error";
 import { formatInr } from "@/utils/money";
+import { toastError } from "@/services/http/toast-error";
 
 function cancelledMessage(result: BookingRecord) {
   if (result.paidWithCredit) {
@@ -47,7 +48,7 @@ export function BookingsPage() {
       setCancelling(null);
       toast.success(cancelledMessage(result));
     } catch (error) {
-      toast.error(toUserMessage(error));
+      toastError(error);
     }
   }
 
@@ -62,7 +63,7 @@ export function BookingsPage() {
           : "Rescheduled. The session moved. Payment stays paid.",
       );
     } catch (error) {
-      toast.error(toUserMessage(error));
+      toastError(error);
     }
   }
 
@@ -71,7 +72,7 @@ export function BookingsPage() {
       await review.mutateAsync({ bookingId, ...values });
       toast.success("Thanks. Your review is saved.");
     } catch (error) {
-      toast.error(toUserMessage(error));
+      toastError(error);
     }
   }
 

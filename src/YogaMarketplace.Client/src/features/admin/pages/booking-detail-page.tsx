@@ -17,6 +17,7 @@ import { displayName, formatAdminWhen, formatSessionWhen, httpHref } from "@/fea
 import { paymentStatusLabel, statusFilterLabel } from "@/features/bookings/utils/status";
 import { toUserMessage } from "@/services/http/api-error";
 import { formatInr } from "@/utils/money";
+import { toastError } from "@/services/http/toast-error";
 
 const PAGE_LEAD = "Customers cancel or reschedule from their own bookings. Cancel here only when they can’t.";
 const CANCELLABLE_STATUSES = ["PendingAccept", "Upcoming"];
@@ -62,7 +63,7 @@ function BookingDetail({ booking }: { booking: AdminBooking }) {
               : `Cancelled. ${formatInr(updated.refundedAmount ?? updated.amount)} refunded to the customer.`,
           );
         },
-        onError: (error) => toast.error(toUserMessage(error)),
+        onError: (error) => toastError(error),
       },
     );
   };

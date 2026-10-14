@@ -11,6 +11,7 @@ import { useAdminContentPages, useUpdateContentPage } from "@/features/content/h
 import { contentPageSchema, type ContentPageValues } from "@/features/content/schemas";
 import { contentPageLimits, type ContentPage, type ContentSlug } from "@/features/content/types";
 import { toUserMessage } from "@/services/http/api-error";
+import { toastError } from "@/services/http/toast-error";
 
 const formatHelp = "Leave a blank line between paragraphs. Start a line with “## ” for a heading or “- ” for a bullet.";
 
@@ -70,7 +71,7 @@ function PageForm({ page }: { page: ContentPage }) {
             { slug: page.slug, version: page.version, ...values },
             {
               onSuccess: () => toast.success("Page saved."),
-              onError: (error) => toast.error(toUserMessage(error)),
+              onError: (error) => toastError(error),
             },
           );
         })}

@@ -12,6 +12,7 @@ import { useAdminJobs, useRetryJob } from "@/features/admin/hooks/use-admin";
 import { backgroundJobStatuses, type BackgroundJobStatus } from "@/features/admin/types";
 import { jobLabel } from "@/features/admin/utils";
 import { toUserMessage } from "@/services/http/api-error";
+import { toastError } from "@/services/http/toast-error";
 
 const statusFilters = backgroundJobStatuses.map((status) => ({ value: status, label: status }));
 
@@ -82,7 +83,7 @@ export function JobsPage() {
                   onRetry={() =>
                     retry.mutate(job.id, {
                       onSuccess: () => toast.success(`${jobLabel(job.type)} queued to run now.`),
-                      onError: (error) => toast.error(toUserMessage(error)),
+                      onError: (error) => toastError(error),
                     })
                   }
                 />

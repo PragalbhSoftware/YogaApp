@@ -12,6 +12,7 @@ import type { AdminPack } from "@/features/admin/types";
 import { changedFields } from "@/features/admin/utils";
 import { ApiError, toUserMessage } from "@/services/http/api-error";
 import { formatInr } from "@/utils/money";
+import { toastError } from "@/services/http/toast-error";
 
 const emptyPack: PackFormValues = { name: "", sessions: 8, price: 0, validityDays: 60, priceCap: 0 };
 
@@ -63,7 +64,7 @@ function CreatePackForm() {
             toast.success(`${saved.name} created.`);
             form.reset(emptyPack);
           },
-          onError: (error) => toast.error(toUserMessage(error)),
+          onError: (error) => toastError(error),
         }),
       )}
     >
@@ -97,7 +98,7 @@ function PackRow({ pack }: { pack: AdminPack }) {
   function save(changes: Partial<PackFormValues & { isActive: boolean }>, message: string) {
     updatePack.mutate(
       { id: pack.id, version: pack.version, ...changes },
-      { onSuccess: () => toast.success(message), onError: (error) => toast.error(packSaveError(error)) },
+      { onSuccess: () => toast.success(message), onError: (error) => toastError(error, packSaveError(error)) },
     );
   }
 

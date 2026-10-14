@@ -14,6 +14,7 @@ import { profileFormFromInstructor } from "@/features/instructor/schemas";
 import type { InstructorProfile } from "@/features/instructor/types";
 import { useAreas } from "@/features/marketplace/hooks/use-areas";
 import { toUserMessage } from "@/services/http/api-error";
+import { toastError } from "@/services/http/toast-error";
 
 export function InstructorProfilePage() {
   usePageTitle("Instructor profile");
@@ -50,7 +51,7 @@ export function InstructorProfilePage() {
             onSubmit={(input) => {
               updateProfile.mutate(input, {
                 onSuccess: () => toast.success("Profile saved."),
-                onError: (error) => toast.error(toUserMessage(error)),
+                onError: (error) => toastError(error),
               });
             }}
           />

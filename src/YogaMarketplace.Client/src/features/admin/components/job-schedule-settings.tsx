@@ -11,6 +11,7 @@ import { jobScheduleSettingsSchema, type JobScheduleSettingsValues } from "@/fea
 import type { AdminSettings } from "@/features/admin/types";
 import { changedFields, settingsSaveError } from "@/features/admin/utils";
 import { toUserMessage } from "@/services/http/api-error";
+import { toastError } from "@/services/http/toast-error";
 
 type SwitchName = "reconciliationEnabled" | "creditExpiryEnabled" | "webhookCleanupEnabled";
 
@@ -58,7 +59,7 @@ function JobScheduleForm({ settings }: { settings: AdminSettings }) {
               { version: settings.version, ...changedFields(values, form.formState.dirtyFields) },
               {
                 onSuccess: () => toast.success("Schedules saved."),
-                onError: (error) => toast.error(settingsSaveError(error)),
+                onError: (error) => toastError(error, settingsSaveError(error)),
               },
             ),
           )}

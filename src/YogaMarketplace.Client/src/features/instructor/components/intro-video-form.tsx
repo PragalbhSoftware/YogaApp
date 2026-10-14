@@ -6,7 +6,7 @@ import { MediaHeading } from "@/features/instructor/components/media-heading";
 import { IntroVideo } from "@/features/marketplace/components/intro-video";
 import { useSetIntroVideo } from "@/features/instructor/hooks/use-instructor-schedule";
 import { introVideoSchema, youTubeWatchUrl, type IntroVideoValues } from "@/features/instructor/media-rules";
-import { toUserMessage } from "@/services/http/api-error";
+import { toastError } from "@/services/http/toast-error";
 
 type IntroVideoFormProps = {
   name: string;
@@ -29,7 +29,7 @@ export function IntroVideoForm({ name, videoId }: IntroVideoFormProps) {
         onSubmit={form.handleSubmit((values) =>
           setIntroVideo.mutate(values.url, {
             onSuccess: (media) => toast.success(media.introVideoId ? "Intro video saved." : "Intro video removed."),
-            onError: (error) => toast.error(toUserMessage(error)),
+            onError: (error) => toastError(error),
           }),
         )}
       >

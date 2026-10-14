@@ -14,6 +14,7 @@ import {
 import type { ProviderService, ProviderTrial } from "@/features/instructor/types";
 import { toUserMessage } from "@/services/http/api-error";
 import { formatInr } from "@/utils/money";
+import { toastError } from "@/services/http/toast-error";
 
 export function TrialSettings({ services }: { services: ProviderService[] }) {
   const trial = useInstructorTrial();
@@ -55,7 +56,7 @@ function TrialForm({ trial, services }: { trial: ProviderTrial; services: Provid
       onSubmit={form.handleSubmit((values) =>
         update.mutate(toTrialPayload(values), {
           onSuccess: (saved) => toast.success(saved.enabled ? "Trial class saved." : "Trial class turned off."),
-          onError: (error) => toast.error(toUserMessage(error)),
+          onError: (error) => toastError(error),
         }),
       )}
     >

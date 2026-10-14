@@ -12,6 +12,7 @@ import { useRegisterInstructor } from "@/features/instructor/hooks/use-instructo
 import { useAreas } from "@/features/marketplace/hooks/use-areas";
 import { toUserMessage } from "@/services/http/api-error";
 import { useAreaStore } from "@/stores/area-store";
+import { toastError } from "@/services/http/toast-error";
 
 export function InstructorRegisterPage() {
   usePageTitle("Teach with us");
@@ -30,7 +31,7 @@ export function InstructorRegisterPage() {
       toast.success("Submitted for review. You can add slots after an admin verifies your profile.");
       navigate(routes.instructor, { replace: true });
     } catch (error) {
-      toast.error(toUserMessage(error));
+      toastError(error);
     }
   }
 

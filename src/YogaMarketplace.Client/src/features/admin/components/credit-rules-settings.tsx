@@ -11,6 +11,7 @@ import { lateCancelOptions, payBasisHint, payBasisOptions } from "@/features/adm
 import type { AdminSettings } from "@/features/admin/types";
 import { changedFields, settingsSaveError } from "@/features/admin/utils";
 import { toUserMessage } from "@/services/http/api-error";
+import { toastError } from "@/services/http/toast-error";
 
 type SwitchName =
   | "creditConvenienceFee"
@@ -64,7 +65,7 @@ function CreditRulesForm({ settings }: { settings: AdminSettings }) {
               { version: settings.version, ...changedFields(values, form.formState.dirtyFields) },
               {
                 onSuccess: () => toast.success("Saved. New pack purchases use these rules."),
-                onError: (error) => toast.error(settingsSaveError(error)),
+                onError: (error) => toastError(error, settingsSaveError(error)),
               },
             ),
           )}
