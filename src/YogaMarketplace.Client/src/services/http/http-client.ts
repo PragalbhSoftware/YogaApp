@@ -63,12 +63,15 @@ type RefreshResult = { ok: true; token: string } | { ok: false; error: unknown }
 
 let refreshInFlight: Promise<RefreshResult> | null = null;
 
-async function requestRefresh(): Promise<RefreshResult> {
+async function requestRefresh(timeoutMs?: number): Promise<RefreshResult> {
   let lastError: unknown;
   // A 409 means another tab rotated the cookie a moment ago; the browser now holds the newer one.
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const { data } = await http.post<VerifyResponse>(REFRESH_PATH, undefined, { skipAuthRefresh: true });
+      const { data } = await http.post<VerifyResponse>(REFRESH_PATH, undefined, {
+        skipAuthRefresh: true,
+        timeout: timeoutMs,
+      });
       useAuthStore.getState().signIn(data.token, data.user);
       return { ok: true, token: data.token };
     } catch (error) {
@@ -79,9 +82,9 @@ async function requestRefresh(): Promise<RefreshResult> {
   return { ok: false, error: lastError };
 }
 
-/** One refresh at a time; concurrent 401s wait for the same result. */
-export function refreshSession(): Promise<RefreshResult> {
-  refreshInFlight ??= requestRefresh().finally(() => {
+/** One refresh at a time; concurrent 401s wait for the same result. `timeoutMs` overrides the client default. */
+export function refreshSession(timeoutMs?: number): Promise<RefreshResult> {
+  refreshInFlight ??= requestRefresh(timeoutMs).finally(() => {
     refreshInFlight = null;
   });
   return refreshInFlight;

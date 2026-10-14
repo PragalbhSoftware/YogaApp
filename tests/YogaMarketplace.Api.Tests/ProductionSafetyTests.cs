@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -143,31 +144,38 @@ public class ProductionSafetyTests : IClassFixture<YogaApiFactory>
     }
 
     [Theory]
-    [InlineData("Razorpay:UseFakeGateway")]
-    [InlineData("Otp:ExposeCode")]
-    [InlineData("Otp:UseFixedCode")]
-    public void Production_host_refuses_to_start_with_a_test_flag_on(string flag)
+    [InlineData("Production", "Razorpay:UseFakeGateway")]
+    [InlineData("Production", "Otp:ExposeCode")]
+    [InlineData("Production", "Otp:UseFixedCode")]
+    [InlineData("Staging", "Razorpay:UseFakeGateway")]
+    [InlineData("Staging", "Otp:ExposeCode")]
+    [InlineData("Staging", "Otp:UseFixedCode")]
+    public void Hardened_host_refuses_to_start_with_a_test_flag_on(string environment, string flag)
     {
         var logs = new LogCapture();
-        using var host = _factory.WithWebHostBuilder(builder =>
-        {
-            builder.UseEnvironment(Environments.Production);
-            // UseSetting, unlike ConfigureAppConfiguration, is already visible to the checks Program runs before Build.
-            foreach (var (key, value) in SafeProduction)
-                builder.UseSetting(key, value);
-            builder.UseSetting("Cors:AllowedOrigins:0", "https://app.example.test");
-            builder.UseSetting("Jwt:Key", "testing-key-at-least-32-characters-long");
-            builder.UseSetting(flag, "true");
-            builder.ConfigureLogging(logging => logging.AddProvider(logs));
-        });
+        using var host = HostIn(environment, logs, (flag, "true"));
 
         var error = Record.Exception(() => host.CreateClient());
 
         Assert.NotNull(error);
         Assert.Contains(flag, error.Message);
         var critical = Assert.Single(logs.Lines, line => line.StartsWith("Critical", StringComparison.Ordinal));
-        Assert.Contains("Startup refused in \"Production\"", critical);
+        Assert.Contains($"Startup refused in \"{environment}\"", critical);
         Assert.Contains(flag, critical);
+    }
+
+    [Fact]
+    public async Task Development_host_starts_with_test_flags_on()
+    {
+        _factory.CreateClient();
+        var logs = new LogCapture();
+        using var host = HostIn(Environments.Development, logs,
+            ("Razorpay:UseFakeGateway", "true"), ("Otp:ExposeCode", "true"), ("Otp:UseFixedCode", "true"));
+
+        var response = await host.CreateClient().GetAsync("/health");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.DoesNotContain(logs.Lines, line => line.StartsWith("Critical", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -203,6 +211,23 @@ public class ProductionSafetyTests : IClassFixture<YogaApiFactory>
         var response = await _factory.CreateClient().GetAsync("/health");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
+
+    private WebApplicationFactory<Program> HostIn(string environment, LogCapture logs, params (string Key, string Value)[] overrides) =>
+        _factory.WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment(environment);
+            // UseSetting, unlike ConfigureAppConfiguration, is already visible to the checks Program runs before Build.
+            foreach (var (key, value) in SafeProduction)
+                builder.UseSetting(key, value);
+            if (environment == Environments.Staging)
+                foreach (var (key, value) in StagingKeys)
+                    builder.UseSetting(key, value);
+            builder.UseSetting("Cors:AllowedOrigins:0", "https://app.example.test");
+            builder.UseSetting("Jwt:Key", "testing-key-at-least-32-characters-long");
+            foreach (var (key, value) in overrides)
+                builder.UseSetting(key, value);
+            builder.ConfigureLogging(logging => logging.AddProvider(logs));
+        });
 
     private static IConfiguration Config(params (string Key, string Value)[] overrides)
     {

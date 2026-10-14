@@ -1,6 +1,6 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { useRestoredSession } from "@/features/auth/hooks/use-restored-session";
+import { SESSION_RESTORE_TIMEOUT_MS, useRestoredSession } from "@/features/auth/hooks/use-restored-session";
 import { refreshSession } from "@/services/http/http-client";
 import { useAuthStore } from "@/stores/auth-store";
 
@@ -40,7 +40,7 @@ describe("session storage", () => {
 
     expect(result.current).toBe(false);
     await waitFor(() => expect(result.current).toBe(true));
-    expect(refreshSession).toHaveBeenCalled();
+    expect(refreshSession).toHaveBeenCalledWith(SESSION_RESTORE_TIMEOUT_MS);
     expect(useAuthStore.getState().user?.id).toBe("u1");
     expect(storedText()).not.toContain("old-stored-token");
     expect(storedText()).not.toContain("restored-token");

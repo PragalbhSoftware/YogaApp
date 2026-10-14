@@ -4,13 +4,16 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
+using YogaMarketplace.Api;
 using YogaMarketplace.Api.Options;
 using YogaMarketplace.Api.Services;
 using YogaMarketplace.Domain;
@@ -49,14 +52,121 @@ public class OtpPhoneLimitTests
                      (blocked, false), (blocked, true), (locked, false), (locked, true)
                  })
         {
-            var response = await client.PostAsJsonAsync("/api/auth/otp/request", NewUserBody(phone, isNewUser), Json);
-            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-            var body = JsonNode.Parse(await response.Content.ReadAsStringAsync())!.AsObject();
-            shapes.Add(string.Join(",", body.Select(p => $"{p.Key}:{p.Value?.GetValueKind().ToString() ?? "null"}")));
+            shapes.Add(await ShapeAsync(await client.PostAsJsonAsync("/api/auth/otp/request", NewUserBody(phone, isNewUser), Json)));
         }
 
         Assert.StartsWith("challengeId:String,expiresAt:String", Assert.Single(shapes.Distinct()));
         Assert.Equal(new[] { signup, registered, registered }, sender.Sent.Select(s => s.Phone).ToArray());
+    }
+
+    [Fact]
+    public async Task Resending_a_code_answers_the_same_for_new_registered_blocked_and_locked_phones()
+    {
+        await using var factory = new YogaApiFactory();
+        var sender = new RecordingOtpSender();
+        var host = Host(factory, sender);
+        var registered = await SignUpAsync(host, sender);
+        var blocked = await SignUpAsync(host, sender);
+        var locked = NewPhone();
+        var unknown = NewPhone();
+        var signup = NewPhone();
+        await WithDbAsync(host, async db =>
+        {
+            await db.Users.Where(u => u.Phone == blocked).ExecuteUpdateAsync(s => s.SetProperty(u => u.IsBlocked, true));
+            db.OtpPhoneLocks.Add(new OtpPhoneLock { Phone = locked, LockedUntil = DateTimeOffset.UtcNow.AddHours(1) });
+            await db.SaveChangesAsync();
+        });
+        var client = host.CreateClient();
+        foreach (var (phone, isNewUser) in new[] { (unknown, false), (signup, true), (registered, false), (blocked, false), (locked, false) })
+            await RequestAsync(client, phone, isNewUser);
+        sender.Sent.Clear();
+
+        var shapes = new List<string>();
+        foreach (var phone in new[] { unknown, signup, registered, blocked, locked })
+            shapes.Add(await ShapeAsync(await client.PostAsJsonAsync("/api/auth/otp/resend", new { phone })));
+
+        Assert.StartsWith("challengeId:String,expiresAt:String", Assert.Single(shapes.Distinct()));
+        Assert.Equal(new[] { signup, registered }, sender.Sent.Select(s => s.Phone).ToArray());
+    }
+
+    [Fact]
+    public async Task An_instructor_phone_gets_the_same_answer_as_an_unknown_phone()
+    {
+        await using var factory = new YogaApiFactory();
+        var sender = new RecordingOtpSender();
+        var client = Host(factory, sender).CreateClient();
+        var unknown = NewPhone();
+
+        var forInstructor = await ShapeAsync(await client.PostAsJsonAsync("/api/auth/otp/request", NewUserBody(SeedIds.AnanyaPhone, false), Json));
+        var forUnknown = await ShapeAsync(await client.PostAsJsonAsync("/api/auth/otp/request", NewUserBody(unknown, false), Json));
+        var resendInstructor = await ShapeAsync(await client.PostAsJsonAsync("/api/auth/otp/resend", new { phone = SeedIds.AnanyaPhone }));
+        var resendUnknown = await ShapeAsync(await client.PostAsJsonAsync("/api/auth/otp/resend", new { phone = unknown }));
+
+        Assert.Equal(forInstructor, forUnknown);
+        Assert.Equal(forInstructor, resendInstructor);
+        Assert.Equal(forInstructor, resendUnknown);
+        Assert.Equal(new[] { SeedIds.AnanyaPhone, SeedIds.AnanyaPhone }, sender.Sent.Select(s => s.Phone).ToArray());
+    }
+
+    [Fact]
+    public async Task One_phone_asking_from_several_ips_still_hits_the_per_phone_limit()
+    {
+        await using var factory = new YogaApiFactory();
+        var sender = new RecordingOtpSender();
+        var host = Host(factory, sender);
+        await SetLimitsAsync(host, sender, version => new { version, otpMaxSendsPerPhone = 2, otpLockMinutes = 10 });
+        var phone = NewPhone();
+        var client = host.CreateClient();
+
+        foreach (var ip in new[] { "203.0.113.10", "198.51.100.20", "192.0.2.30" })
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, "/api/auth/otp/request")
+            {
+                Content = JsonContent.Create(NewUserBody(phone, isNewUser: true), options: Json)
+            };
+            request.Headers.Add(TestClientIp.Header, ip);
+            Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(request)).StatusCode);
+        }
+
+        Assert.Equal(2, sender.Sent.Count(s => s.Phone == phone));
+        Assert.True(await WithDbAsync(host, db => db.OtpPhoneLocks.AnyAsync(l => l.Phone == phone)));
+    }
+
+    [Theory]
+    [InlineData(5, 15)]
+    [InlineData(-5, 10)]
+    public async Task Two_first_time_locks_for_one_phone_keep_one_row_with_the_later_end(int otherClockMinutes, int keptMinutes)
+    {
+        await using var factory = new YogaApiFactory();
+        var sender = new RecordingOtpSender();
+        var clock = new ShiftedClock();
+        var race = new CompetingLock();
+        var host = Host(factory, sender, clock: clock, race: race);
+        await SetLimitsAsync(host, sender, version => new { version, otpMaxSendsPerPhone = 1, otpLockMinutes = 10 });
+        var phone = NewPhone();
+        var client = host.CreateClient();
+        await RequestAsync(client, phone, isNewUser: true);
+        OtpRequestResult? other = null;
+        race.BeforeFirstLockInsert = async () =>
+        {
+            // The other request reads the clock a little later or earlier, then wins the insert.
+            clock.Offset = TimeSpan.FromMinutes(otherClockMinutes);
+            using var scope = host.Services.CreateScope();
+            other = await scope.ServiceProvider.GetRequiredService<OtpService>()
+                .RequestAsync(new RequestOtpRequest { Phone = phone, IsNewUser = false }, CancellationToken.None);
+            clock.Offset = TimeSpan.Zero;
+        };
+
+        var racing = await client.PostAsJsonAsync("/api/auth/otp/request", NewUserBody(phone, isNewUser: false), Json);
+
+        Assert.Null(race.BeforeFirstLockInsert);
+        Assert.Equal(HttpStatusCode.OK, racing.StatusCode);
+        Assert.Null(JsonNode.Parse(await racing.Content.ReadAsStringAsync())!["devCode"]);
+        Assert.NotNull(other);
+        Assert.Null(other.DevCode);
+        Assert.Equal(1, sender.Sent.Count(s => s.Phone == phone));
+        var row = Assert.Single(await WithDbAsync(host, db => db.OtpPhoneLocks.AsNoTracking().Where(l => l.Phone == phone).ToListAsync()));
+        Assert.InRange(row.LockedUntil - DateTimeOffset.UtcNow, TimeSpan.FromMinutes(keptMinutes - 1), TimeSpan.FromMinutes(keptMinutes));
     }
 
     [Fact]
@@ -217,7 +327,7 @@ public class OtpPhoneLimitTests
     }
 
     private static WebApplicationFactory<Program> Host(
-        YogaApiFactory factory, RecordingOtpSender sender, LogCapture? logs = null, TimeProvider? clock = null) =>
+        YogaApiFactory factory, RecordingOtpSender sender, LogCapture? logs = null, TimeProvider? clock = null, CompetingLock? race = null) =>
         factory.WithWebHostBuilder(builder =>
         {
             if (logs is not null)
@@ -226,8 +336,11 @@ public class OtpPhoneLimitTests
             {
                 services.Configure<OtpOptions>(options => options.ExposeCode = false);
                 services.Replace(ServiceDescriptor.Singleton<IOtpSender>(sender));
+                services.AddSingleton<IStartupFilter, TestClientIp>();
                 if (clock is not null)
                     services.Replace(ServiceDescriptor.Singleton(clock));
+                if (race is not null)
+                    services.AddSingleton<IInterceptor>(race);
             });
         });
 
@@ -272,6 +385,13 @@ public class OtpPhoneLimitTests
         ? new { phone, isNewUser, name = "Limit Tester", gender = "Female", acceptedPolicies = true }
         : new { phone, isNewUser };
 
+    private static async Task<string> ShapeAsync(HttpResponseMessage response)
+    {
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = JsonNode.Parse(await response.Content.ReadAsStringAsync())!.AsObject();
+        return string.Join(",", body.Select(p => $"{p.Key}:{p.Value?.GetValueKind().ToString() ?? "null"}"));
+    }
+
     private static async Task<string> ErrorAsync(HttpResponseMessage response) =>
         JsonNode.Parse(await response.Content.ReadAsStringAsync())!["error"]!.GetValue<string>();
 
@@ -311,6 +431,41 @@ public class OtpPhoneLimitTests
         public TimeSpan Offset { get; set; }
 
         public override DateTimeOffset GetUtcNow() => System.GetUtcNow() + Offset;
+    }
+
+    /// <summary>Runs another request's lock insert just before this context saves its own new lock.</summary>
+    private sealed class CompetingLock : SaveChangesInterceptor
+    {
+        public Func<Task>? BeforeFirstLockInsert { get; set; }
+
+        public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            if (BeforeFirstLockInsert is { } competitor
+                && eventData.Context!.ChangeTracker.Entries<OtpPhoneLock>().Any(e => e.State == EntityState.Added))
+            {
+                BeforeFirstLockInsert = null;
+                await competitor();
+            }
+            return result;
+        }
+    }
+
+    /// <summary>Lets a test pick the caller's IP per request.</summary>
+    private sealed class TestClientIp : IStartupFilter
+    {
+        public const string Header = "X-Test-Client-Ip";
+
+        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
+        {
+            app.Use((context, nextMiddleware) =>
+            {
+                if (IPAddress.TryParse(context.Request.Headers[Header], out var ip))
+                    context.Connection.RemoteIpAddress = ip;
+                return nextMiddleware(context);
+            });
+            next(app);
+        };
     }
 
     private sealed class LogCapture : ILoggerProvider

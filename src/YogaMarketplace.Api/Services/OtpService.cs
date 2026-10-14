@@ -81,8 +81,9 @@ public class OtpService
 
         var previous = await LatestChallengeAsync(phone, openOnly: false, cancellationToken);
 
+        // Nothing to resend: answer like any other phone (a locked phone may have no stored code at all).
         if (previous is null)
-            throw new DomainException("Request a code before resending.");
+            return Silent(_time.GetUtcNow());
 
         var user = await _db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Phone == phone, cancellationToken);
         var deliver = user is null ? previous.IsNewUser : !user.IsBlocked;
@@ -122,6 +123,7 @@ public class OtpService
         {
             challenge.AttemptCount++;
             var limits = (await _settings.GetAsync(cancellationToken)).OtpLimits;
+            // Wrong tries count by when their code was created: tries on a code older than the window drop out.
             var wrong = (await RecentChallengesAsync(phone, now, limits, cancellationToken)).Sum(c => c.AttemptCount);
             if (wrong >= limits.MaxWrongCodes)
             {
@@ -176,8 +178,7 @@ public class OtpService
         CancellationToken cancellationToken)
     {
         var now = _time.GetUtcNow();
-        var expiresAt = now.AddMinutes(_options.ExpiryMinutes <= 0 ? 5 : _options.ExpiryMinutes);
-        var silent = new OtpRequestResult(Guid.NewGuid(), expiresAt, null);
+        var silent = Silent(now);
         if (await IsLockedAsync(phone, now, cancellationToken))
             return silent;
 
@@ -201,7 +202,7 @@ public class OtpService
             Id = Guid.NewGuid(),
             Phone = phone,
             CodeHash = OtpHasher.Hash(code, _options.Pepper),
-            ExpiresAt = expiresAt,
+            ExpiresAt = silent.ExpiresAt,
             IsNewUser = isNewUser,
             PendingName = name,
             PendingGender = gender,
@@ -224,16 +225,33 @@ public class OtpService
         return row is not null && row.LockedUntil > now;
     }
 
-    // ponytail: two requests locking the same phone at once can collide on the key; one of them fails with a 500. Upsert if that shows up.
     private async Task LockAsync(string phone, DateTimeOffset now, OtpLimitTerms limits, string reason, CancellationToken cancellationToken)
     {
         var until = now.AddMinutes(limits.LockMinutes);
         var row = await _db.OtpPhoneLocks.SingleOrDefaultAsync(l => l.Phone == phone, cancellationToken);
         if (row is null)
-            _db.OtpPhoneLocks.Add(new OtpPhoneLock { Phone = phone, LockedUntil = until });
+        {
+            row = new OtpPhoneLock { Phone = phone, LockedUntil = until };
+            _db.OtpPhoneLocks.Add(row);
+        }
         else
-            row.LockedUntil = until;
-        await _db.SaveChangesAsync(cancellationToken);
+        {
+            row.LockedUntil = Later(row.LockedUntil, until);
+        }
+
+        try
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex) when (UniqueViolation.Is(ex))
+        {
+            // Another request locked this phone first; keep whichever lock ends later.
+            _db.Entry(row).State = EntityState.Detached;
+            var existing = await _db.OtpPhoneLocks.SingleAsync(l => l.Phone == phone, cancellationToken);
+            existing.LockedUntil = Later(existing.LockedUntil, until);
+            await _db.SaveChangesAsync(cancellationToken);
+            until = existing.LockedUntil;
+        }
         _logger.LogWarning("Locked sign-in codes for {Phone} until {LockedUntil}: {Reason}.", LogMask.Phone(phone), until, reason);
     }
 
@@ -244,9 +262,14 @@ public class OtpService
         string phone, DateTimeOffset now, OtpLimitTerms limits, CancellationToken cancellationToken)
     {
         var since = now.AddMinutes(-limits.LockMinutes);
-        var challenges = await _db.OtpChallenges.Where(c => c.Phone == phone).ToListAsync(cancellationToken);
-        return challenges.Where(c => c.CreatedAt > since).ToList();
+        return await _db.OtpChallenges.Where(c => c.Phone == phone && c.CreatedAt > since).ToListAsync(cancellationToken);
     }
+
+    /// <summary>The answer a phone gets when no code is sent: same shape as a real one, no dev code.</summary>
+    private OtpRequestResult Silent(DateTimeOffset now) =>
+        new(Guid.NewGuid(), now.AddMinutes(_options.ExpiryMinutes <= 0 ? 5 : _options.ExpiryMinutes), null);
+
+    private static DateTimeOffset Later(DateTimeOffset a, DateTimeOffset b) => a > b ? a : b;
 
     private async Task<OtpChallenge?> LatestChallengeAsync(string phone, bool openOnly, CancellationToken cancellationToken)
     {
@@ -254,8 +277,7 @@ public class OtpService
         if (openOnly)
             query = query.Where(c => c.ConsumedAt == null);
 
-        var challenges = await query.ToListAsync(cancellationToken);
-        return challenges.MaxBy(c => c.CreatedAt);
+        return await query.OrderByDescending(c => c.CreatedAt).FirstOrDefaultAsync(cancellationToken);
     }
 
     private string NewCode(string phone)

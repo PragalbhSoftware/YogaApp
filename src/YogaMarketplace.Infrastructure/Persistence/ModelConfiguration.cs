@@ -29,7 +29,7 @@ internal static class ModelConfiguration
         ConfigureSettingsAudit(modelBuilder.Entity<SettingsAudit>());
         ConfigureContentPage(modelBuilder.Entity<ContentPage>());
         ConfigureBackgroundJob(modelBuilder.Entity<BackgroundJob>(), sqlite);
-        ConfigureOtp(modelBuilder.Entity<OtpChallenge>());
+        ConfigureOtp(modelBuilder.Entity<OtpChallenge>(), sqlite);
         ConfigureOtpPhoneLock(modelBuilder.Entity<OtpPhoneLock>());
         ConfigureCreditPack(modelBuilder.Entity<CreditPack>());
         ConfigureCreditBatch(modelBuilder.Entity<CreditBatch>(), sqlite);
@@ -536,8 +536,11 @@ internal static class ModelConfiguration
         }
     }
 
-    private static void ConfigureOtp(EntityTypeBuilder<OtpChallenge> entity)
+    private static void ConfigureOtp(EntityTypeBuilder<OtpChallenge> entity, bool sqlite)
     {
+        if (sqlite)
+            // SQLite cannot compare DateTimeOffset text; the per-phone limits filter on this in SQL.
+            entity.Property(c => c.CreatedAt).HasConversion<DateTimeOffsetToBinaryConverter>();
         entity.Property(c => c.Phone).HasMaxLength(16);
         entity.Property(c => c.CodeHash).HasMaxLength(64);
         entity.Property(c => c.PendingName).HasMaxLength(80);

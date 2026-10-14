@@ -11,6 +11,7 @@ namespace YogaMarketplace.Api.Tests;
 
 public class YogaApiFactory : WebApplicationFactory<Program>
 {
+    /// <summary>Tests only: far above the admin maximums, which real settings can never reach.</summary>
     public const int UnlimitedOtp = 10_000;
     private readonly string _dbPath = Path.Combine(Path.GetTempPath(), $"yoga-marketplace-{Guid.NewGuid():N}.db");
     private readonly string _storagePath = Path.Combine(Path.GetTempPath(), $"yoga-marketplace-uploads-{Guid.NewGuid():N}");
