@@ -8,6 +8,7 @@ import { ErrorEventCard } from "@/features/admin/components/error-event-card";
 import { FilterChips } from "@/features/admin/components/filter-chips";
 import { ListPagination } from "@/features/admin/components/list-pagination";
 import { useAcknowledgeError, useAdminErrors } from "@/features/admin/hooks/use-admin";
+import { useStepBackWhenEmpty } from "@/features/admin/hooks/use-step-back-when-empty";
 import { toUserMessage } from "@/services/http/api-error";
 
 const views = ["open", "acknowledged"] as const;
@@ -46,6 +47,8 @@ export function ErrorsPage() {
     }
     setSearchParams(params, { replace: true });
   }
+
+  useStepBackWhenEmpty(errors.data, page, (next) => setParams({ page: next }));
 
   return (
     <AdminPage
