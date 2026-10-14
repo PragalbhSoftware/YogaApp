@@ -1,0 +1,45 @@
+---
+description: Workflow, configuration, city, secrets and feature-flag rules for every change in this repo
+alwaysApply: true
+---
+
+# Project standards
+
+The product is a generic local-services marketplace (yoga first), launching in India city by city. ASP.NET Core 8 API + EF Core (SQL Server) with a React/Vite client served from the API's `wwwroot`.
+
+## Workflow
+
+- One slice per branch, created from the latest `main`. Never push to `main`.
+- Before editing: read the related code, give a short plan, and wait for OK.
+- Keep the PR small. The description has these sections:
+  - **Summary**
+  - **Tests added**
+  - **Tests run** (only what you actually ran)
+  - **Test steps** (how a reviewer checks it by hand)
+  - **Staging SQL Server checks** (what SQLite tests can't prove)
+- No unrelated refactors or reformatting. Touch only what the slice needs.
+
+## Settings, not constants
+
+- No NEW hardcoded fees, percentages, time windows, limits, thresholds, email addresses, phone country codes or schedules.
+- Business values live in `PlatformSettings`: admin-editable, validated in `PlatformSettingsRules`, and every change writes a `SettingsAudit` row.
+
+## City and timezone
+
+- No NEW hardcoded city or timezone in code, UI text or SEO metadata.
+- The launch city and timezone come from settings or seed config.
+- Existing Mumbai / +91 / `Asia/Kolkata` code is grandfathered until Sprint 4 (City master). Don't spread it to new places.
+
+## Secrets and protected files
+
+- Secrets come only from environment variables or secure config. Never commit them.
+- Never edit `web.config`, `appsettings.Production.json`, keys or uploaded files.
+
+## Feature flags
+
+- Optional integrations (email, SMS, …) sit behind an admin flag in `PlatformSettings`, default OFF.
+- When the flag is OFF or the config is missing, fall back to a no-op implementation and log one warning. Never crash.
+
+## Generic product
+
+- Customer-facing copy and category labels stay generic, not yoga-only, so new service categories fit without rewording.
