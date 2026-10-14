@@ -8,11 +8,13 @@ public class DbSeeder
 {
     private readonly YogaDbContext _db;
     private readonly IConfiguration _config;
+    private readonly TimeProvider _time;
 
-    public DbSeeder(YogaDbContext db, IConfiguration config)
+    public DbSeeder(YogaDbContext db, IConfiguration config, TimeProvider time)
     {
         _db = db;
         _config = config;
+        _time = time;
     }
 
     public async Task SeedAsync(CancellationToken cancellationToken = default)
@@ -74,7 +76,7 @@ public class DbSeeder
                 Name = "Marketplace Admin",
                 Email = "admin@yogamumbai.in",
                 Role = UserRole.Admin,
-                CreatedAt = DateTimeOffset.UtcNow
+                CreatedAt = _time.GetUtcNow()
             });
         }
 
@@ -84,7 +86,7 @@ public class DbSeeder
             return;
         }
 
-        var now = DateTimeOffset.UtcNow;
+        var now = _time.GetUtcNow();
         _db.Users.Add(new User
         {
             Id = SeedIds.AnanyaUserId,
@@ -135,7 +137,7 @@ public class DbSeeder
     /// </summary>
     private async Task EnsureAnanyaWeekAsync(CancellationToken cancellationToken)
     {
-        var today = MumbaiClock.Today();
+        var today = MumbaiClock.Today(_time.GetUtcNow());
         var next = today.AddMonths(1);
         var last = new DateOnly(next.Year, next.Month, DateTime.DaysInMonth(next.Year, next.Month));
         var existing = await _db.AvailabilitySlots

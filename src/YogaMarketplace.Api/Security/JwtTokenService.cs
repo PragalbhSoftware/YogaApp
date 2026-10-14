@@ -11,10 +11,12 @@ namespace YogaMarketplace.Api.Security;
 public class JwtTokenService
 {
     private readonly JwtOptions _options;
+    private readonly TimeProvider _time;
 
-    public JwtTokenService(IOptions<JwtOptions> options)
+    public JwtTokenService(IOptions<JwtOptions> options, TimeProvider time)
     {
         _options = options.Value;
+        _time = time;
     }
 
     public string Create(User user)
@@ -36,7 +38,7 @@ public class JwtTokenService
             issuer: _options.Issuer,
             audience: _options.Audience,
             claims: claims,
-            expires: DateTime.UtcNow.AddMinutes(_options.ExpiresMinutes),
+            expires: _time.GetUtcNow().UtcDateTime.AddMinutes(_options.ExpiresMinutes),
             signingCredentials: credentials);
 
         return new JwtSecurityTokenHandler().WriteToken(token);

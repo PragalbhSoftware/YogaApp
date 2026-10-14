@@ -228,7 +228,7 @@ public class MarketplaceApiTests : IClassFixture<YogaApiFactory>
 
         var areas = await client.GetFromJsonAsync<List<AreaBody>>("/api/areas", Json);
         var bandra = areas!.Single(a => a.Name == "Bandra");
-        var tomorrow = MumbaiClock.Today().AddDays(1);
+        var tomorrow = MumbaiClock.Today(DateTimeOffset.UtcNow).AddDays(1);
 
         var missingMeet = await client.PostAsJsonAsync("/api/providers/register", new
         {

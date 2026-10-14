@@ -33,14 +33,16 @@ public class DemoDataLoader
     private readonly YogaDbContext _db;
     private readonly IConfiguration _config;
     private readonly IHostEnvironment _environment;
+    private readonly TimeProvider _time;
     private int _created;
     private int _updated;
 
-    public DemoDataLoader(YogaDbContext db, IConfiguration config, IHostEnvironment environment)
+    public DemoDataLoader(YogaDbContext db, IConfiguration config, IHostEnvironment environment, TimeProvider time)
     {
         _db = db;
         _config = config;
         _environment = environment;
+        _time = time;
     }
 
     public async Task<DemoLoadResult> LoadAsync(bool testPayments, CancellationToken cancellationToken = default)
@@ -49,7 +51,7 @@ public class DemoDataLoader
             throw new InvalidOperationException("Demo data can't be loaded in Production.");
 
         var data = await ReadAsync(cancellationToken);
-        var now = DateTimeOffset.UtcNow;
+        var now = _time.GetUtcNow();
         _created = 0;
         _updated = 0;
 
@@ -149,7 +151,7 @@ public class DemoDataLoader
             provider.OnlineRate = item.OnlineRate;
             provider.StudioAddress = item.StudioAddress;
             provider.GoogleMeetLink = item.GoogleMeetLink;
-            ProviderApproval.Verify(provider);
+            ProviderApproval.Verify(provider, now);
 
             Service? first = null;
             foreach (var demoService in item.Services)
@@ -259,7 +261,7 @@ public class DemoDataLoader
             }
 
             var booking = BookingRules.CreateAfterPayment(
-                customer.Id, service, slot, amount, terms, item.HomeAddress, item.Landmark, provider.GoogleMeetLink, provider.StudioAddress);
+                customer.Id, service, slot, amount, terms, item.HomeAddress, item.Landmark, provider.GoogleMeetLink, provider.StudioAddress, now);
             booking.Id = id;
             var payment = new Payment
             {
@@ -271,28 +273,28 @@ public class DemoDataLoader
                 GatewayOrderId = TestOrderPrefix + item.Key,
                 CreatedAt = now
             };
-            PaymentRules.MarkPaid(payment, TestPaymentPrefix + item.Key);
+            PaymentRules.MarkPaid(payment, TestPaymentPrefix + item.Key, now);
             booking.Payment = payment;
             _db.Bookings.Add(booking);
-            ApplyStatus(booking, item);
+            ApplyStatus(booking, item, now);
             await SaveAsync(cancellationToken);
         }
         return skipped;
     }
 
-    private void ApplyStatus(Booking booking, DemoBooking item)
+    private void ApplyStatus(Booking booking, DemoBooking item, DateTimeOffset now)
     {
         switch (item.Status)
         {
             case BookingStatus.PendingAccept:
                 return;
             case BookingStatus.Upcoming:
-                BookingRules.Accept(booking);
+                BookingRules.Accept(booking, now);
                 return;
             case BookingStatus.Completed:
-                BookingRules.Accept(booking);
-                BookingRules.Complete(booking);
-                _db.PayoutsPending.Add(PayoutCalculator.ForCompletedBooking(booking));
+                BookingRules.Accept(booking, now);
+                BookingRules.Complete(booking, now);
+                _db.PayoutsPending.Add(PayoutCalculator.ForCompletedBooking(booking, now));
                 return;
             default:
                 throw new DomainException($"Booking {item.Key}: demo bookings can be PendingAccept, Upcoming or Completed.");

@@ -151,7 +151,7 @@ public class UserBlockingApiTests : IClassFixture<YogaApiFactory>
             Id = Guid.NewGuid(),
             ProviderId = providerId,
             Mode = SessionMode.Online,
-            Date = MumbaiClock.Today().AddDays(30),
+            Date = MumbaiClock.Today(DateTimeOffset.UtcNow).AddDays(30),
             StartTime = new TimeOnly(7, 0),
             EndTime = new TimeOnly(8, 0),
             IsBlocked = false

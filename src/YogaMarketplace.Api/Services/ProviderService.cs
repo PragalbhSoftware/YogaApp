@@ -14,12 +14,14 @@ public class ProviderService
     private readonly YogaDbContext _db;
     private readonly ICurrentUser _current;
     private readonly JwtTokenService _tokens;
+    private readonly TimeProvider _time;
 
-    public ProviderService(YogaDbContext db, ICurrentUser current, JwtTokenService tokens)
+    public ProviderService(YogaDbContext db, ICurrentUser current, JwtTokenService tokens, TimeProvider time)
     {
         _db = db;
         _current = current;
         _tokens = tokens;
+        _time = time;
     }
 
     public async Task<IReadOnlyList<ProviderSummary>> BrowseAsync(
@@ -153,7 +155,7 @@ public class ProviderService
             OnlineRate = request.OffersOnline ? RequireRate(request.OnlineRate, "Online") : null,
             StudioAddress = request.OffersStudio ? studioAddress : null,
             GoogleMeetLink = meetLink,
-            CreatedAt = DateTimeOffset.UtcNow
+            CreatedAt = _time.GetUtcNow()
         };
 
         user.Role = UserRole.Provider;
@@ -361,7 +363,7 @@ public class ProviderService
         if (request.Slots.Count > 40)
             throw new DomainException("Add at most 40 slots at a time.");
 
-        var today = MumbaiClock.Today();
+        var today = MumbaiClock.Today(_time.GetUtcNow());
         var created = new List<AvailabilitySlot>();
         foreach (var input in request.Slots)
         {
@@ -428,7 +430,7 @@ public class ProviderService
         if (!TimeOnly.TryParseExact(request.End, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var end))
             throw new DomainException("End time must be HH:mm.");
 
-        AvailabilityRules.Update(slot, taken, MumbaiClock.Today(), request.Date, start, end);
+        AvailabilityRules.Update(slot, taken, MumbaiClock.Today(_time.GetUtcNow()), request.Date, start, end);
 
         var clash = await _db.AvailabilitySlots.AnyAsync(
             s => s.Id != slot.Id
@@ -448,7 +450,7 @@ public class ProviderService
     {
         var slot = await RequireOwnedSlotAsync(slotId, cancellationToken);
         var taken = await SlotIsOccupiedAsync(slot.Id, cancellationToken);
-        AvailabilityRules.Block(slot, taken, MumbaiClock.Today());
+        AvailabilityRules.Block(slot, taken, MumbaiClock.Today(_time.GetUtcNow()));
         await _db.SaveChangesAsync(cancellationToken);
         return ToOwnedSlot(slot);
     }
@@ -457,7 +459,7 @@ public class ProviderService
     {
         var slot = await RequireOwnedSlotAsync(slotId, cancellationToken);
         var taken = await SlotIsOccupiedAsync(slot.Id, cancellationToken);
-        AvailabilityRules.Unblock(slot, taken, MumbaiClock.Today());
+        AvailabilityRules.Unblock(slot, taken, MumbaiClock.Today(_time.GetUtcNow()));
         await _db.SaveChangesAsync(cancellationToken);
         return ToOwnedSlot(slot);
     }
@@ -516,9 +518,9 @@ public class ProviderService
             throw new DomainException("Your profile must be verified before you can change slots.", 403);
     }
 
-    private static (DateOnly Start, DateOnly End) ResolveWindow(DateOnly? from, DateOnly? to)
+    private (DateOnly Start, DateOnly End) ResolveWindow(DateOnly? from, DateOnly? to)
     {
-        var start = from ?? MumbaiClock.Today();
+        var start = from ?? MumbaiClock.Today(_time.GetUtcNow());
         var end = to ?? start.AddDays(6);
         if (end < start)
             throw new DomainException("The end date is before the start date.");

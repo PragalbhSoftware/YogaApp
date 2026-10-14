@@ -29,6 +29,7 @@ public class AdminBookingService : IAdminBookingService
     private readonly CreditLedger _credits;
     private readonly BookingNotifications _notifications;
     private readonly ILogger<AdminBookingService> _logger;
+    private readonly TimeProvider _time;
 
     public AdminBookingService(
         YogaDbContext db,
@@ -37,7 +38,8 @@ public class AdminBookingService : IAdminBookingService
         IPlatformSettingsService settings,
         CreditLedger credits,
         BookingNotifications notifications,
-        ILogger<AdminBookingService> logger)
+        ILogger<AdminBookingService> logger,
+        TimeProvider time)
     {
         _db = db;
         _razorpay = razorpay;
@@ -46,6 +48,7 @@ public class AdminBookingService : IAdminBookingService
         _credits = credits;
         _notifications = notifications;
         _logger = logger;
+        _time = time;
     }
 
     public async Task<AdminBookingResponse> CancelAsync(
@@ -74,12 +77,12 @@ public class AdminBookingService : IAdminBookingService
             throw new DomainException("This booking has no captured payment to refund.", 409);
         }
 
-        var now = DateTimeOffset.UtcNow;
+        var now = _time.GetUtcNow();
         BookingRules.AdminCancel(booking, request.Reason, now);
         if (paidWithCredit)
             await _credits.ReturnAsync(booking, now, cancellationToken);
         await _notifications.CancelledAsync(booking, payment.Amount, paidWithCredit, cancellationToken);
-        await PaymentRefunds.RefundAndSaveAsync(_db, _razorpay, _logger, booking, payment, payment.Amount, cancellationToken);
+        await PaymentRefunds.RefundAndSaveAsync(_db, _razorpay, _logger, booking, payment, payment.Amount, now, cancellationToken);
 
         _logger.LogInformation(
             "Admin {AdminId} force-cancelled booking {BookingId} and refunded {Amount} on payment {PaymentId}.",

@@ -57,17 +57,20 @@ public class AdminTransactionService : IAdminTransactionService
     private readonly IPlatformSettingsService _settings;
     private readonly ICurrentUser _current;
     private readonly ILogger<AdminTransactionService> _logger;
+    private readonly TimeProvider _time;
 
     public AdminTransactionService(
         YogaDbContext db,
         IPlatformSettingsService settings,
         ICurrentUser current,
-        ILogger<AdminTransactionService> logger)
+        ILogger<AdminTransactionService> logger,
+        TimeProvider time)
     {
         _db = db;
         _settings = settings;
         _current = current;
         _logger = logger;
+        _time = time;
     }
 
     public async Task<PagedResponse<ReconciliationRunResponse>> ListReconciliationRunsAsync(
@@ -132,7 +135,7 @@ public class AdminTransactionService : IAdminTransactionService
     {
         var item = await _db.ReconciliationItems.SingleOrDefaultAsync(i => i.Id == id, cancellationToken)
             ?? throw new DomainException("Reconciliation item not found.", 404);
-        ReconciliationRules.Resolve(item, _current.UserId, note, DateTimeOffset.UtcNow);
+        ReconciliationRules.Resolve(item, _current.UserId, note, _time.GetUtcNow());
         await _db.SaveChangesAsync(cancellationToken);
         _logger.LogInformation("Admin {AdminId} resolved reconciliation item {ItemId} ({Type}).", _current.UserId, item.Id, item.Type);
         var row = await ReconciliationRows(_db.ReconciliationItems.AsNoTracking().Where(i => i.Id == id)).SingleAsync(cancellationToken);
@@ -291,7 +294,7 @@ public class AdminTransactionService : IAdminTransactionService
     public async Task<PayoutCsv> ExportPendingPayoutsAsync(CancellationToken cancellationToken)
     {
         var cycle = (await _settings.GetAsync(cancellationToken)).PayoutCycle;
-        var now = DateTimeOffset.UtcNow;
+        var now = _time.GetUtcNow();
         var cutoff = PayoutCycleRules.CurrentPeriodStart(cycle, now);
 
         // SQLite cannot compare DateTimeOffset, so pick the due rows here and claim them by id.
@@ -349,7 +352,7 @@ public class AdminTransactionService : IAdminTransactionService
         return payouts.Select(p => new PayoutRow(p, providers[p.ProviderId])).ToList();
     }
 
-    private static PayoutCsv BuildCsv(IReadOnlyList<PayoutRow> rows, string currency, string prefix)
+    private PayoutCsv BuildCsv(IReadOnlyList<PayoutRow> rows, string currency, string prefix)
     {
         var builder = new StringBuilder();
         builder.AppendLine(string.Join(',', CsvHeader));
@@ -376,7 +379,7 @@ public class AdminTransactionService : IAdminTransactionService
             builder.AppendLine(string.Join(',', cells.Select(CsvCell)));
         }
 
-        var stamp = DateTimeOffset.UtcNow.ToString("yyyyMMdd-HHmm", CultureInfo.InvariantCulture);
+        var stamp = _time.GetUtcNow().ToString("yyyyMMdd-HHmm", CultureInfo.InvariantCulture);
         var bytes = Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(builder.ToString())).ToArray();
         return new PayoutCsv($"{prefix}-{stamp}.csv", bytes, rows.Count);
     }

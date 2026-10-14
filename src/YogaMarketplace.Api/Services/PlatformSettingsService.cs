@@ -75,17 +75,20 @@ public class PlatformSettingsService : IPlatformSettingsService
     private readonly IMemoryCache _cache;
     private readonly ICurrentUser _current;
     private readonly ILogger<PlatformSettingsService> _logger;
+    private readonly TimeProvider _time;
 
     public PlatformSettingsService(
         YogaDbContext db,
         IMemoryCache cache,
         ICurrentUser current,
-        ILogger<PlatformSettingsService> logger)
+        ILogger<PlatformSettingsService> logger,
+        TimeProvider time)
     {
         _db = db;
         _cache = cache;
         _current = current;
         _logger = logger;
+        _time = time;
     }
 
     public async Task<CurrentSettings> GetAsync(CancellationToken cancellationToken)
@@ -115,7 +118,7 @@ public class PlatformSettingsService : IPlatformSettingsService
         if (changes.Count == 0)
             return ToAdmin(settings);
 
-        var now = DateTimeOffset.UtcNow;
+        var now = _time.GetUtcNow();
         _db.Entry(settings).Property(s => s.Version).OriginalValue = expected;
         settings.Version = expected + 1;
         settings.UpdatedAt = now;
@@ -221,7 +224,7 @@ public class PlatformSettingsService : IPlatformSettingsService
 
     private static string Time(TimeOnly value) => value.ToString("HH:mm", CultureInfo.InvariantCulture);
 
-    private static AdminSettingsResponse ToAdmin(PlatformSettings settings) => new(
+    private AdminSettingsResponse ToAdmin(PlatformSettings settings) => new(
         settings.Version,
         settings.Currency,
         settings.CommissionPercent,
@@ -231,7 +234,7 @@ public class PlatformSettingsService : IPlatformSettingsService
         settings.LateCancelFeeType.ToString(),
         settings.LateCancelFeeValue,
         settings.PayoutCycle.ToString(),
-        PayoutCycleRules.CurrentPeriodStart(settings.PayoutCycle, DateTimeOffset.UtcNow),
+        PayoutCycleRules.CurrentPeriodStart(settings.PayoutCycle, _time.GetUtcNow()),
         settings.PolicyNote,
         settings.BannerTitle,
         settings.BannerSubtitle,

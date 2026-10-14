@@ -75,6 +75,7 @@ public partial class BookingService : IBookingService, IBookingHandshake, IRazor
     private readonly CreditLedger _credits;
     private readonly CreditPurchaseService _packs;
     private readonly BookingNotifications _notifications;
+    private readonly TimeProvider _time;
     private readonly ILogger<BookingService> _logger;
 
     public BookingService(
@@ -85,6 +86,7 @@ public partial class BookingService : IBookingService, IBookingHandshake, IRazor
         CreditLedger credits,
         CreditPurchaseService packs,
         BookingNotifications notifications,
+        TimeProvider time,
         ILogger<BookingService> logger)
     {
         _db = db;
@@ -94,6 +96,7 @@ public partial class BookingService : IBookingService, IBookingHandshake, IRazor
         _credits = credits;
         _packs = packs;
         _notifications = notifications;
+        _time = time;
         _logger = logger;
     }
 
@@ -174,7 +177,7 @@ public partial class BookingService : IBookingService, IBookingHandshake, IRazor
             Gateway = PaymentGateways.Razorpay,
             GatewayOrderId = created.OrderId,
             Status = CheckoutStatus.Open,
-            CreatedAt = DateTimeOffset.UtcNow
+            CreatedAt = _time.GetUtcNow()
         };
         _db.CheckoutIntents.Add(checkout);
         await _db.SaveChangesAsync(cancellationToken);
@@ -270,7 +273,7 @@ public partial class BookingService : IBookingService, IBookingHandshake, IRazor
     public async Task<BookingResponse> AcceptAsync(Guid bookingId, CancellationToken cancellationToken)
     {
         var (booking, currency) = await LoadForInstructorAsync(bookingId, cancellationToken);
-        BookingRules.Accept(booking);
+        BookingRules.Accept(booking, _time.GetUtcNow());
         await _db.SaveChangesAsync(cancellationToken);
         _logger.LogInformation("Instructor {ProviderId} accepted booking {BookingId}.", booking.ProviderId, booking.Id);
         return ToResponse(booking, booking.Payment, currency);
@@ -288,7 +291,7 @@ public partial class BookingService : IBookingService, IBookingHandshake, IRazor
         }
 
         var payment = RequireRefundablePayment(booking);
-        BookingRules.Decline(booking);
+        BookingRules.Decline(booking, _time.GetUtcNow());
         await _notifications.RefundedAsync(booking, payment.Amount, false, cancellationToken);
         await RefundAndSaveAsync(booking, payment, payment.Amount, cancellationToken);
         _logger.LogInformation(
@@ -308,7 +311,7 @@ public partial class BookingService : IBookingService, IBookingHandshake, IRazor
             return await QuoteCreditCancelAsync(booking, currency, cancellationToken);
         var paid = booking.Payment?.Amount ?? booking.Amount + booking.ConvenienceFee;
         var start = SessionStartOf(booking);
-        var settlement = BookingRules.SettleCustomerCancel(booking, paid, start, DateTimeOffset.UtcNow);
+        var settlement = BookingRules.SettleCustomerCancel(booking, paid, start, _time.GetUtcNow());
         return new CancelQuoteResponse(
             paid,
             booking.Amount,
@@ -331,7 +334,7 @@ public partial class BookingService : IBookingService, IBookingHandshake, IRazor
             return await CancelCreditBookingAsync(booking, currency, cancellationToken);
         var payment = RequireRefundablePayment(booking);
         var start = SessionStartOf(booking);
-        var now = DateTimeOffset.UtcNow;
+        var now = _time.GetUtcNow();
         var settlement = BookingRules.SettleCustomerCancel(booking, payment.Amount, start, now);
 
         BookingRules.Cancel(booking, start, now);
@@ -340,7 +343,7 @@ public partial class BookingService : IBookingService, IBookingHandshake, IRazor
         PayoutPending? payout = null;
         if (settlement.LateCancelFee > 0)
         {
-            payout = PayoutCalculator.ForLateCancel(booking, settlement.LateCancelFee);
+            payout = PayoutCalculator.ForLateCancel(booking, settlement.LateCancelFee, now);
             _db.PayoutsPending.Add(payout);
         }
         await _notifications.CancelledAsync(booking, settlement.Refund, false, cancellationToken);
@@ -381,9 +384,9 @@ public partial class BookingService : IBookingService, IBookingHandshake, IRazor
                 ?? throw new DomainException("That slot is no longer available.", 404);
 
             var originalStart = SessionStartOf(booking);
-            BookingRules.Reschedule(booking, newSlot);
-            BookingRules.EnsureOutsideLateWindow(booking, originalStart, DateTimeOffset.UtcNow);
-            if (MumbaiClock.SessionStart(newSlot.Date, newSlot.EndTime) <= DateTimeOffset.UtcNow)
+            BookingRules.Reschedule(booking, newSlot, _time.GetUtcNow());
+            BookingRules.EnsureOutsideLateWindow(booking, originalStart, _time.GetUtcNow());
+            if (MumbaiClock.SessionStart(newSlot.Date, newSlot.EndTime) <= _time.GetUtcNow())
                 throw new DomainException("That slot has already ended.", 409);
             if (await SlotIsTakenAsync(newSlot.Id, cancellationToken, booking.Id))
                 throw new DomainException("That slot is no longer available.", 409);
@@ -421,14 +424,14 @@ public partial class BookingService : IBookingService, IBookingHandshake, IRazor
     {
         var (booking, currency) = await LoadForInstructorAsync(bookingId, cancellationToken);
         if (complete)
-            BookingRules.Complete(booking);
+            BookingRules.Complete(booking, _time.GetUtcNow());
         else
-            BookingRules.MarkNoShow(booking);
+            BookingRules.MarkNoShow(booking, _time.GetUtcNow());
 
         if (booking.Payout is not null)
             throw new DomainException("This booking already has a payout.", 409);
 
-        var payout = PayoutCalculator.ForCompletedBooking(booking);
+        var payout = PayoutCalculator.ForCompletedBooking(booking, _time.GetUtcNow());
         _db.PayoutsPending.Add(payout);
         try
         {
@@ -463,7 +466,7 @@ public partial class BookingService : IBookingService, IBookingHandshake, IRazor
         if (booking.Review is not null)
             throw new DomainException("This booking already has a review.", 409);
 
-        var review = ReviewRules.Create(booking, customer.Id, request.Rating, request.Comment);
+        var review = ReviewRules.Create(booking, customer.Id, request.Rating, request.Comment, _time.GetUtcNow());
         _db.Reviews.Add(review);
         try
         {
@@ -545,6 +548,7 @@ public partial class BookingService : IBookingService, IBookingHandshake, IRazor
             var batch = checkout.UsesCredit
                 ? await TakeCreditAtCaptureAsync(checkout, slot, paymentId, total, tx, cancellationToken)
                 : null;
+            var now = _time.GetUtcNow();
             var booking = BookingRules.CreateAfterPayment(
                 checkout.CustomerId,
                 service,
@@ -555,9 +559,9 @@ public partial class BookingService : IBookingService, IBookingHandshake, IRazor
                 checkout.Landmark,
                 provider.GoogleMeetLink,
                 provider.StudioAddress,
+                now,
                 checkout.IsTrial);
 
-            var now = DateTimeOffset.UtcNow;
             if (batch is not null)
             {
                 CreditRules.Attach(booking, batch);
@@ -573,7 +577,7 @@ public partial class BookingService : IBookingService, IBookingHandshake, IRazor
                 GatewayOrderId = orderId,
                 CreatedAt = now
             };
-            PaymentRules.MarkPaid(payment, paymentId);
+            PaymentRules.MarkPaid(payment, paymentId, now);
 
             checkout.Status = CheckoutStatus.Completed;
             checkout.BookingId = booking.Id;
@@ -625,7 +629,7 @@ public partial class BookingService : IBookingService, IBookingHandshake, IRazor
         if (checkout.UsesCredit)
         {
             var slot = await SlotsWithProvider().SingleAsync(s => s.Id == checkout.SlotId, cancellationToken);
-            if ((await _credits.ChooseAsync(checkout.CustomerId, RateOf(slot), SessionStartOf(slot), DateTimeOffset.UtcNow, cancellationToken)).Batch is null)
+            if ((await _credits.ChooseAsync(checkout.CustomerId, RateOf(slot), SessionStartOf(slot), _time.GetUtcNow(), cancellationToken)).Batch is null)
                 await RefundCheckoutAsync(checkout, paymentId, total, tx, CreditFeeRefundedMessage, cancellationToken);
             return;
         }
@@ -645,7 +649,7 @@ public partial class BookingService : IBookingService, IBookingHandshake, IRazor
         if (!ProviderApproval.IsListedNow(provider) || slot.IsBlocked || !provider.Offers(slot.Mode))
             throw new DomainException("That slot is no longer available.", 409);
         EnsureAreaOpen(provider);
-        if (MumbaiClock.SessionStart(slot.Date, slot.EndTime) <= DateTimeOffset.UtcNow)
+        if (MumbaiClock.SessionStart(slot.Date, slot.EndTime) <= _time.GetUtcNow())
             throw new DomainException("That slot has already ended.", 409);
         if (await SlotIsTakenAsync(slot.Id, cancellationToken))
             throw new DomainException("That slot was just booked.", 409);
@@ -675,7 +679,7 @@ public partial class BookingService : IBookingService, IBookingHandshake, IRazor
         EnsureAreaOpen(provider);
         if (slot.IsBlocked || !provider.Offers(slot.Mode))
             throw new DomainException("That slot is no longer available.", 409);
-        if (MumbaiClock.SessionStart(slot.Date, slot.EndTime) <= DateTimeOffset.UtcNow)
+        if (MumbaiClock.SessionStart(slot.Date, slot.EndTime) <= _time.GetUtcNow())
             throw new DomainException("That slot has already ended.", 409);
         if (await SlotIsTakenAsync(slot.Id, cancellationToken))
             throw new DomainException("That slot is no longer available.", 409);
@@ -752,7 +756,7 @@ public partial class BookingService : IBookingService, IBookingHandshake, IRazor
     {
         checkout.Status = CheckoutStatus.Refunded;
         checkout.GatewayPaymentId = paymentId;
-        checkout.CompletedAt = DateTimeOffset.UtcNow;
+        checkout.CompletedAt = _time.GetUtcNow();
         await _db.SaveChangesAsync(cancellationToken);
         await _razorpay.RefundPaymentAsync(paymentId, RazorpayMoney.ToPaise(total), checkout.Id.ToString("N"), CancellationToken.None);
         await tx.CommitAsync(CancellationToken.None);
@@ -879,7 +883,7 @@ public partial class BookingService : IBookingService, IBookingHandshake, IRazor
         Payment payment,
         decimal amount,
         CancellationToken cancellationToken) =>
-        PaymentRefunds.RefundAndSaveAsync(_db, _razorpay, _logger, booking, payment, amount, cancellationToken);
+        PaymentRefunds.RefundAndSaveAsync(_db, _razorpay, _logger, booking, payment, amount, _time.GetUtcNow(), cancellationToken);
 
     private static DateTimeOffset SessionStartOf(Booking booking)
     {

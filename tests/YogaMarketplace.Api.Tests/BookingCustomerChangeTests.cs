@@ -368,7 +368,7 @@ public class BookingCustomerChangeTests : IClassFixture<YogaApiFactory>
         var admin = await AdminClientAsync();
         var verified = await admin.PostAsJsonAsync($"/api/admin/providers/{me!.Id}/verify", new { });
         Assert.True(verified.IsSuccessStatusCode, await verified.Content.ReadAsStringAsync());
-        var day = MumbaiClock.Today().AddDays(2);
+        var day = MumbaiClock.Today(DateTimeOffset.UtcNow).AddDays(2);
         var created = await PostAsync<List<SlotBody>>(client, "/api/providers/me/slots", new
         {
             mode = "Home",
@@ -417,7 +417,7 @@ public class BookingCustomerChangeTests : IClassFixture<YogaApiFactory>
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<YogaDbContext>();
         var slot = await db.AvailabilitySlots.SingleAsync(s => s.Id == slotId);
-        slot.Date = MumbaiClock.Today().AddDays(-1);
+        slot.Date = MumbaiClock.Today(DateTimeOffset.UtcNow).AddDays(-1);
         await db.SaveChangesAsync();
     }
 

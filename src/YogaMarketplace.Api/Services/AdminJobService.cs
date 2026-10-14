@@ -11,12 +11,14 @@ public class AdminJobService
     private readonly YogaDbContext _db;
     private readonly ICurrentUser _current;
     private readonly ILogger<AdminJobService> _logger;
+    private readonly TimeProvider _time;
 
-    public AdminJobService(YogaDbContext db, ICurrentUser current, ILogger<AdminJobService> logger)
+    public AdminJobService(YogaDbContext db, ICurrentUser current, ILogger<AdminJobService> logger, TimeProvider time)
     {
         _db = db;
         _current = current;
         _logger = logger;
+        _time = time;
     }
 
     public async Task<PagedResponse<AdminJobResponse>> ListAsync(string? status, int? page, int? pageSize, CancellationToken cancellationToken)
@@ -40,7 +42,7 @@ public class AdminJobService
     /// <summary>Queues a Failed job to run at once with a fresh set of attempts. It keeps its last error until it succeeds.</summary>
     public async Task<AdminJobResponse> RetryAsync(Guid id, CancellationToken cancellationToken)
     {
-        var now = DateTimeOffset.UtcNow;
+        var now = _time.GetUtcNow();
         var retried = await _db.BackgroundJobs
             .Where(j => j.Id == id && j.Status == BackgroundJobStatus.Failed)
             .ExecuteUpdateAsync(

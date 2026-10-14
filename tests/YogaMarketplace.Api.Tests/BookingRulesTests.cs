@@ -4,6 +4,8 @@ namespace YogaMarketplace.Api.Tests;
 
 public class BookingRulesTests
 {
+    private static readonly DateTimeOffset Now = new(2026, 9, 24, 1, 30, 0, TimeSpan.Zero);
+
     [Fact]
     public void PayAtBook_creates_pending_accept_and_requires_home_address()
     {
@@ -11,11 +13,11 @@ public class BookingRulesTests
         var service = ServiceFor(slot);
 
         var missing = Assert.Throws<DomainException>(() =>
-            BookingRules.CreateAfterPayment(Guid.NewGuid(), service, slot, 899m, Terms, "Bandra West", null, null, null));
+            BookingRules.CreateAfterPayment(Guid.NewGuid(), service, slot, 899m, Terms, "Bandra West", null, null, null, Now));
         Assert.Contains("landmark", missing.Message, StringComparison.OrdinalIgnoreCase);
 
         var booking = BookingRules.CreateAfterPayment(
-            Guid.NewGuid(), service, slot, 899m, Terms, "14th Road, Bandra West", "Near the station", null, null);
+            Guid.NewGuid(), service, slot, 899m, Terms, "14th Road, Bandra West", "Near the station", null, null, Now);
 
         Assert.Equal(BookingStatus.PendingAccept, booking.Status);
         Assert.Equal("14th Road, Bandra West", booking.HomeAddress);
@@ -28,42 +30,42 @@ public class BookingRulesTests
     {
         var studioSlot = Slot(SessionMode.Studio);
         var studio = BookingRules.CreateAfterPayment(
-            Guid.NewGuid(), ServiceFor(studioSlot), studioSlot, 749m, Terms, null, null, null, "Lotus Studio, Bandra West");
+            Guid.NewGuid(), ServiceFor(studioSlot), studioSlot, 749m, Terms, null, null, null, "Lotus Studio, Bandra West", Now);
         Assert.Null(studio.HomeAddress);
         Assert.Equal("Lotus Studio, Bandra West", studio.StudioAddressSnapshot);
 
         var onlineSlot = Slot(SessionMode.Online);
         var online = BookingRules.CreateAfterPayment(
-            Guid.NewGuid(), ServiceFor(onlineSlot), onlineSlot, 599m, Terms, null, null, "https://meet.google.com/abc-defg-hij", null);
+            Guid.NewGuid(), ServiceFor(onlineSlot), onlineSlot, 599m, Terms, null, null, "https://meet.google.com/abc-defg-hij", null, Now);
         Assert.Equal("https://meet.google.com/abc-defg-hij", online.MeetLinkSnapshot);
 
         Assert.Throws<DomainException>(() =>
-            BookingRules.CreateAfterPayment(Guid.NewGuid(), ServiceFor(onlineSlot), onlineSlot, 599m, Terms, null, null, null, null));
+            BookingRules.CreateAfterPayment(Guid.NewGuid(), ServiceFor(onlineSlot), onlineSlot, 599m, Terms, null, null, null, null, Now));
     }
 
     [Fact]
     public void Accept_moves_to_upcoming_and_decline_frees_the_slot()
     {
         var booking = Sample(BookingStatus.PendingAccept);
-        BookingRules.Accept(booking);
+        BookingRules.Accept(booking, Now);
         Assert.Equal(BookingStatus.Upcoming, booking.Status);
 
         var declined = Sample(BookingStatus.PendingAccept);
-        BookingRules.Decline(declined);
+        BookingRules.Decline(declined, Now);
         Assert.Equal(BookingStatus.Declined, declined.Status);
         Assert.False(BookingRules.OccupiesSlot(declined.Status));
-        Assert.Throws<DomainException>(() => BookingRules.Accept(declined));
+        Assert.Throws<DomainException>(() => BookingRules.Accept(declined, Now));
     }
 
     [Fact]
     public void Upcoming_can_complete_no_show_or_cancel_and_reschedule_stays_upcoming()
     {
         var completed = Sample(BookingStatus.Upcoming);
-        BookingRules.Complete(completed);
+        BookingRules.Complete(completed, Now);
         Assert.Equal(BookingStatus.Completed, completed.Status);
 
         var noShow = Sample(BookingStatus.Upcoming);
-        BookingRules.MarkNoShow(noShow);
+        BookingRules.MarkNoShow(noShow, Now);
         Assert.Equal(BookingStatus.NoShow, noShow.Status);
         Assert.True(BookingRules.OccupiesSlot(noShow.Status));
 
@@ -76,13 +78,13 @@ public class BookingRulesTests
         var booking = Sample(BookingStatus.Upcoming);
         var sameMode = Slot(SessionMode.Home);
         sameMode.ProviderId = booking.ProviderId;
-        BookingRules.Reschedule(booking, sameMode);
+        BookingRules.Reschedule(booking, sameMode, Now);
         Assert.Equal(BookingStatus.Upcoming, booking.Status);
         Assert.Equal(sameMode.Id, booking.SlotId);
 
         var otherMode = Slot(SessionMode.Online);
         otherMode.ProviderId = booking.ProviderId;
-        Assert.Throws<DomainException>(() => BookingRules.Reschedule(booking, otherMode));
+        Assert.Throws<DomainException>(() => BookingRules.Reschedule(booking, otherMode, Now));
     }
 
     [Fact]
@@ -111,23 +113,23 @@ public class BookingRulesTests
     public void Review_unlocks_after_complete_and_payout_unlocks_after_complete_or_no_show()
     {
         var upcoming = Sample(BookingStatus.Upcoming);
-        Assert.Throws<DomainException>(() => ReviewRules.Create(upcoming, upcoming.CustomerId, 5, "Great"));
-        Assert.Throws<DomainException>(() => PayoutCalculator.ForCompletedBooking(upcoming));
+        Assert.Throws<DomainException>(() => ReviewRules.Create(upcoming, upcoming.CustomerId, 5, "Great", Now));
+        Assert.Throws<DomainException>(() => PayoutCalculator.ForCompletedBooking(upcoming, Now));
 
-        BookingRules.Complete(upcoming);
-        var review = ReviewRules.Create(upcoming, upcoming.CustomerId, 5, "Calm and clear");
+        BookingRules.Complete(upcoming, Now);
+        var review = ReviewRules.Create(upcoming, upcoming.CustomerId, 5, "Calm and clear", Now);
         Assert.Equal(5, review.Rating);
 
-        var payout = PayoutCalculator.ForCompletedBooking(upcoming);
+        var payout = PayoutCalculator.ForCompletedBooking(upcoming, Now);
         Assert.Equal(899m, payout.GrossAmount);
         Assert.Equal(134.85m, payout.FeeAmount);
         Assert.Equal(764.15m, payout.NetAmount);
         Assert.Equal(PayoutStatus.Pending, payout.Status);
 
         var missed = Sample(BookingStatus.Upcoming);
-        BookingRules.MarkNoShow(missed);
-        Assert.Throws<DomainException>(() => ReviewRules.Create(missed, missed.CustomerId, 5, "Late"));
-        var noShowPayout = PayoutCalculator.ForCompletedBooking(missed);
+        BookingRules.MarkNoShow(missed, Now);
+        Assert.Throws<DomainException>(() => ReviewRules.Create(missed, missed.CustomerId, 5, "Late", Now));
+        var noShowPayout = PayoutCalculator.ForCompletedBooking(missed, Now);
         Assert.Equal(899m, noShowPayout.GrossAmount);
         Assert.Equal(764.15m, noShowPayout.NetAmount);
     }
@@ -136,9 +138,9 @@ public class BookingRulesTests
     public void Refund_requires_a_captured_payment()
     {
         var payment = new Payment { Status = PaymentStatus.Pending, Amount = 899m };
-        Assert.Throws<DomainException>(() => PaymentRules.MarkRefunded(payment));
-        PaymentRules.MarkPaid(payment, "pay_test");
-        PaymentRules.MarkRefunded(payment);
+        Assert.Throws<DomainException>(() => PaymentRules.MarkRefunded(payment, Now));
+        PaymentRules.MarkPaid(payment, "pay_test", Now);
+        PaymentRules.MarkRefunded(payment, Now);
         Assert.Equal(PaymentStatus.Refunded, payment.Status);
     }
 
@@ -146,17 +148,17 @@ public class BookingRulesTests
     public void Partial_refund_keeps_the_rest_and_zero_leaves_the_payment_paid()
     {
         var payment = new Payment { Status = PaymentStatus.Paid, Amount = 899m };
-        Assert.Throws<DomainException>(() => PaymentRules.Refund(payment, 900m));
-        Assert.Throws<DomainException>(() => PaymentRules.Refund(payment, -1m));
+        Assert.Throws<DomainException>(() => PaymentRules.Refund(payment, 900m, Now));
+        Assert.Throws<DomainException>(() => PaymentRules.Refund(payment, -1m, Now));
 
-        PaymentRules.Refund(payment, 0m);
+        PaymentRules.Refund(payment, 0m, Now);
         Assert.Equal(PaymentStatus.Paid, payment.Status);
         Assert.Equal(0m, payment.RefundedAmount);
 
-        PaymentRules.Refund(payment, 449.50m);
+        PaymentRules.Refund(payment, 449.50m, Now);
         Assert.Equal(PaymentStatus.PartiallyRefunded, payment.Status);
         Assert.Equal(449.50m, payment.RefundedAmount);
-        Assert.Throws<DomainException>(() => PaymentRules.Refund(payment, 1m));
+        Assert.Throws<DomainException>(() => PaymentRules.Refund(payment, 1m, Now));
     }
 
     [Fact]
@@ -165,7 +167,7 @@ public class BookingRulesTests
         var slot = Slot(SessionMode.Online);
         var terms = new BookingTerms(18m, 29m, 24, LateCancelFeeType.Flat, 200m);
         var booking = BookingRules.CreateAfterPayment(
-            Guid.NewGuid(), ServiceFor(slot), slot, 599m, terms, null, null, "https://meet.google.com/abc-defg-hij", null);
+            Guid.NewGuid(), ServiceFor(slot), slot, 599m, terms, null, null, "https://meet.google.com/abc-defg-hij", null, Now);
 
         Assert.Equal(18m, booking.CommissionPercent);
         Assert.Equal(29m, booking.ConvenienceFee);
@@ -268,13 +270,13 @@ public class BookingRulesTests
     {
         var booking = Sample(BookingStatus.Upcoming);
         booking.CommissionPercent = 0m;
-        BookingRules.Complete(booking);
-        Assert.Equal(899m, PayoutCalculator.ForCompletedBooking(booking).NetAmount);
+        BookingRules.Complete(booking, Now);
+        Assert.Equal(899m, PayoutCalculator.ForCompletedBooking(booking, Now).NetAmount);
 
         var full = Sample(BookingStatus.Upcoming);
         full.CommissionPercent = 100m;
-        BookingRules.Complete(full);
-        Assert.Equal(0m, PayoutCalculator.ForCompletedBooking(full).NetAmount);
+        BookingRules.Complete(full, Now);
+        Assert.Equal(0m, PayoutCalculator.ForCompletedBooking(full, Now).NetAmount);
     }
 
     [Fact]
@@ -282,14 +284,14 @@ public class BookingRulesTests
     {
         var start = new DateTimeOffset(2026, 9, 24, 1, 30, 0, TimeSpan.Zero);
         var booking = Sample(BookingStatus.Upcoming);
-        Assert.Throws<DomainException>(() => PayoutCalculator.ForLateCancel(booking, 449.50m));
+        Assert.Throws<DomainException>(() => PayoutCalculator.ForLateCancel(booking, 449.50m, Now));
 
         BookingRules.Cancel(booking, start, start.AddHours(-1));
         Assert.Equal(CancelledBy.Customer, booking.CancelledBy);
-        Assert.Throws<DomainException>(() => PayoutCalculator.ForLateCancel(booking, 0m));
-        Assert.Throws<DomainException>(() => PayoutCalculator.ForLateCancel(booking, 900m));
+        Assert.Throws<DomainException>(() => PayoutCalculator.ForLateCancel(booking, 0m, Now));
+        Assert.Throws<DomainException>(() => PayoutCalculator.ForLateCancel(booking, 900m, Now));
 
-        var payout = PayoutCalculator.ForLateCancel(booking, 449.50m);
+        var payout = PayoutCalculator.ForLateCancel(booking, 449.50m, Now);
         Assert.Equal(449.50m, payout.GrossAmount);
         Assert.Equal(67.43m, payout.FeeAmount);
         Assert.Equal(382.07m, payout.NetAmount);

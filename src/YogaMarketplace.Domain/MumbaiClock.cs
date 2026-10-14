@@ -7,9 +7,9 @@ public static class MumbaiClock
 {
     public static TimeZoneInfo Zone { get; } = ResolveZone();
 
-    public static DateOnly Today(DateTimeOffset? utcNow = null)
+    public static DateOnly Today(DateTimeOffset utcNow)
     {
-        var utc = (utcNow ?? DateTimeOffset.UtcNow).UtcDateTime;
+        var utc = utcNow.UtcDateTime;
         return DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(utc, Zone));
     }
 

@@ -460,7 +460,7 @@ public class CancellationAndPayoutTests : IClassFixture<YogaApiFactory>
 
     private static async Task<Guid> SlotInDaysAsync(HttpClient instructor, string mode, string start, int days)
     {
-        var day = MumbaiClock.Today().AddDays(days);
+        var day = MumbaiClock.Today(DateTimeOffset.UtcNow).AddDays(days);
         var end = TimeOnly.Parse(start).AddMinutes(30).ToString("HH:mm");
         var created = await PostAsync<List<SlotBody>>(instructor, "/api/providers/me/slots", new
         {

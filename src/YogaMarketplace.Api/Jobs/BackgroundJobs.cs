@@ -27,10 +27,12 @@ public interface IBackgroundJobHandler
 public class BackgroundJobQueue
 {
     private readonly YogaDbContext _db;
+    private readonly TimeProvider _time;
 
-    public BackgroundJobQueue(YogaDbContext db)
+    public BackgroundJobQueue(YogaDbContext db, TimeProvider time)
     {
         _db = db;
+        _time = time;
     }
 
     /// <summary>Adds the job to the context. It is saved with the caller's next <c>SaveChanges</c>, so it commits with the caller's work.</summary>
@@ -38,7 +40,7 @@ public class BackgroundJobQueue
     {
         if (string.IsNullOrWhiteSpace(type))
             throw new ArgumentException("Job type is required.", nameof(type));
-        var now = DateTimeOffset.UtcNow;
+        var now = _time.GetUtcNow();
         var job = new BackgroundJob
         {
             Id = Guid.NewGuid(),
@@ -70,19 +72,22 @@ public class BackgroundJobRunner
     private readonly RecurringJobScheduler _recurring;
     private readonly JobsOptions _options;
     private readonly ILogger<BackgroundJobRunner> _logger;
+    private readonly TimeProvider _time;
 
     public BackgroundJobRunner(
         YogaDbContext db,
         IServiceScopeFactory scopes,
         RecurringJobScheduler recurring,
         IOptions<JobsOptions> options,
-        ILogger<BackgroundJobRunner> logger)
+        ILogger<BackgroundJobRunner> logger,
+        TimeProvider time)
     {
         _db = db;
         _scopes = scopes;
         _recurring = recurring;
         _options = options.Value;
         _logger = logger;
+        _time = time;
     }
 
     public string WorkerId { get; } = Truncate($"{Environment.MachineName}:{Guid.NewGuid():N}", 80);
@@ -197,7 +202,7 @@ public class BackgroundJobRunner
         CancellationToken cancellationToken)
     {
         var finished = status is BackgroundJobStatus.Succeeded or BackgroundJobStatus.Failed;
-        var completedAt = finished ? DateTimeOffset.UtcNow : (DateTimeOffset?)null;
+        var completedAt = finished ? _time.GetUtcNow() : (DateTimeOffset?)null;
         var runAt = retryAt ?? job.RunAt;
         var recurringType = finished ? null : job.RecurringType;
         var recorded = await _db.BackgroundJobs
@@ -232,17 +237,20 @@ public class BackgroundJobHostedService : BackgroundService
     private readonly JobsOptions _options;
     private readonly bool _scheduleRecurring;
     private readonly ILogger<BackgroundJobHostedService> _logger;
+    private readonly TimeProvider _time;
 
     public BackgroundJobHostedService(
         IServiceScopeFactory scopes,
         IOptions<JobsOptions> options,
         IHostEnvironment environment,
-        ILogger<BackgroundJobHostedService> logger)
+        ILogger<BackgroundJobHostedService> logger,
+        TimeProvider time)
     {
         _scopes = scopes;
         _options = options.Value;
         _scheduleRecurring = DatabaseStartup.ShouldScheduleRecurringJobs(environment);
         _logger = logger;
+        _time = time;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -256,7 +264,7 @@ public class BackgroundJobHostedService : BackgroundService
             try
             {
                 using var scope = _scopes.CreateScope();
-                var now = DateTimeOffset.UtcNow;
+                var now = _time.GetUtcNow();
                 if (_scheduleRecurring)
                     await scope.ServiceProvider.GetRequiredService<RecurringJobScheduler>().EnsureAsync(now, stoppingToken);
                 await scope.ServiceProvider.GetRequiredService<BackgroundJobRunner>().RunDueAsync(now, stoppingToken);

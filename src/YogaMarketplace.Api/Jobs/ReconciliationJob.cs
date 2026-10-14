@@ -27,17 +27,20 @@ public class ReconciliationJob : IBackgroundJobHandler
     private readonly IRazorpayClient _razorpay;
     private readonly IPlatformSettingsService _settings;
     private readonly ILogger<ReconciliationJob> _logger;
+    private readonly TimeProvider _time;
 
     public ReconciliationJob(
         YogaDbContext db,
         IRazorpayClient razorpay,
         IPlatformSettingsService settings,
-        ILogger<ReconciliationJob> logger)
+        ILogger<ReconciliationJob> logger,
+        TimeProvider time)
     {
         _db = db;
         _razorpay = razorpay;
         _settings = settings;
         _logger = logger;
+        _time = time;
     }
 
     public string Type => JobType;
@@ -49,7 +52,7 @@ public class ReconciliationJob : IBackgroundJobHandler
             r => r.MarketDate == marketDate && r.Status == ReconciliationRunStatus.Completed,
             cancellationToken);
         if (!done)
-            await ReconcileAsync(marketDate, DateTimeOffset.UtcNow, cancellationToken);
+            await ReconcileAsync(marketDate, _time.GetUtcNow(), cancellationToken);
     }
 
     public async Task<ReconciliationRun> ReconcileAsync(DateOnly marketDate, DateTimeOffset now, CancellationToken cancellationToken)
@@ -81,7 +84,7 @@ public class ReconciliationJob : IBackgroundJobHandler
             _db.ChangeTracker.Clear();
             run.Status = ReconciliationRunStatus.Failed;
             run.Error = ex.Message.Length > ErrorMax ? ex.Message[..ErrorMax] : ex.Message;
-            run.CompletedAt = DateTimeOffset.UtcNow;
+            run.CompletedAt = _time.GetUtcNow();
             _db.ReconciliationRuns.Add(run);
             await _db.SaveChangesAsync(CancellationToken.None);
             _logger.LogWarning(ex, "Reconciliation run {RunId} for {MarketDate} failed; the job will retry.", run.Id, marketDate);
@@ -96,7 +99,7 @@ public class ReconciliationJob : IBackgroundJobHandler
         }
         run.Status = ReconciliationRunStatus.Completed;
         run.ItemCount = items.Count;
-        run.CompletedAt = DateTimeOffset.UtcNow;
+        run.CompletedAt = _time.GetUtcNow();
         _db.ReconciliationRuns.Add(run);
         _db.ReconciliationItems.AddRange(items);
         try

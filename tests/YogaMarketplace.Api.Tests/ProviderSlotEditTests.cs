@@ -26,7 +26,7 @@ public class ProviderSlotEditTests : IClassFixture<YogaApiFactory>
         Assert.Equal(HttpStatusCode.Unauthorized, anon.StatusCode);
 
         var instructor = await InstructorClientAsync();
-        var today = MumbaiClock.Today();
+        var today = MumbaiClock.Today(DateTimeOffset.UtcNow);
         var windowEnd = today.AddDays(6);
 
         var mine = await instructor.GetFromJsonAsync<OwnedSlotListBody>(
@@ -110,7 +110,7 @@ public class ProviderSlotEditTests : IClassFixture<YogaApiFactory>
         Assert.True(freed.IsBlocked);
         await SetBlockedAsync(slot.Id, false);
 
-        var pastId = await InsertSlotAsync(MumbaiClock.Today().AddDays(-1), new TimeOnly(7, 0), new TimeOnly(8, 0));
+        var pastId = await InsertSlotAsync(MumbaiClock.Today(DateTimeOffset.UtcNow).AddDays(-1), new TimeOnly(7, 0), new TimeOnly(8, 0));
         var past = await instructor.PostAsync($"/api/providers/me/slots/{pastId}/block", null);
         Assert.Equal(HttpStatusCode.BadRequest, past.StatusCode);
         Assert.Contains("past", (await past.Content.ReadFromJsonAsync<ErrorBody>(Json))!.Error, StringComparison.OrdinalIgnoreCase);
@@ -142,7 +142,7 @@ public class ProviderSlotEditTests : IClassFixture<YogaApiFactory>
         var opened = await PostAsync<OwnedSlotBody>(instructor, $"/api/providers/me/slots/{slot.Id}/unblock");
         Assert.False(opened.IsBlocked);
 
-        var pastId = await InsertSlotAsync(MumbaiClock.Today().AddDays(-1), new TimeOnly(6, 0), new TimeOnly(7, 0), blocked: true);
+        var pastId = await InsertSlotAsync(MumbaiClock.Today(DateTimeOffset.UtcNow).AddDays(-1), new TimeOnly(6, 0), new TimeOnly(7, 0), blocked: true);
         var past = await instructor.PostAsync($"/api/providers/me/slots/{pastId}/unblock", null);
         Assert.Equal(HttpStatusCode.BadRequest, past.StatusCode);
         Assert.Contains("past", (await past.Content.ReadFromJsonAsync<ErrorBody>(Json))!.Error, StringComparison.OrdinalIgnoreCase);
@@ -186,7 +186,7 @@ public class ProviderSlotEditTests : IClassFixture<YogaApiFactory>
         var add = await other.PostAsJsonAsync("/api/providers/me/slots", new
         {
             mode = "Home",
-            slots = new[] { new { date = MumbaiClock.Today().AddDays(1), start = "06:30", end = "07:30" } }
+            slots = new[] { new { date = MumbaiClock.Today(DateTimeOffset.UtcNow).AddDays(1), start = "06:30", end = "07:30" } }
         });
         Assert.Equal(HttpStatusCode.Forbidden, add.StatusCode);
 
@@ -256,10 +256,10 @@ public class ProviderSlotEditTests : IClassFixture<YogaApiFactory>
         Assert.Equal(HttpStatusCode.Conflict, occupied.StatusCode);
         await DeleteBookingAsync(bookingId);
 
-        var pastId = await InsertSlotAsync(MumbaiClock.Today().AddDays(-1), new TimeOnly(7, 0), new TimeOnly(8, 0));
+        var pastId = await InsertSlotAsync(MumbaiClock.Today(DateTimeOffset.UtcNow).AddDays(-1), new TimeOnly(7, 0), new TimeOnly(8, 0));
         var past = await instructor.PutAsJsonAsync($"/api/providers/me/slots/{pastId}", new
         {
-            date = MumbaiClock.Today(),
+            date = MumbaiClock.Today(DateTimeOffset.UtcNow),
             start = "07:00",
             end = "08:00"
         });
@@ -271,7 +271,7 @@ public class ProviderSlotEditTests : IClassFixture<YogaApiFactory>
     public async Task Instructor_can_delete_an_unbooked_slot_and_cannot_delete_a_booked_slot()
     {
         var instructor = await InstructorClientAsync();
-        var day = MumbaiClock.Today().AddDays(3);
+        var day = MumbaiClock.Today(DateTimeOffset.UtcNow).AddDays(3);
         var created = await PostAsync<List<SlotBody>>(instructor, "/api/providers/me/slots", new
         {
             mode = "Home",

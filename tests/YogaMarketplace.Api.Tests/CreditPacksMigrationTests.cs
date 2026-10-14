@@ -21,7 +21,7 @@ public sealed class CreditPacksMigrationTests : IAsyncLifetime
         {
             await new DbSeeder(db, new ConfigurationBuilder()
                 .AddInMemoryCollection(new Dictionary<string, string?> { ["Seed:DemoData"] = "true" })
-                .Build()).SeedAsync();
+                .Build(), TimeProvider.System).SeedAsync();
             var customer = new User
             {
                 Id = Guid.NewGuid(),

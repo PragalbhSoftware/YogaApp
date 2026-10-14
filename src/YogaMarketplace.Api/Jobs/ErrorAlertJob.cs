@@ -23,25 +23,28 @@ public class ErrorAlertJob : IBackgroundJobHandler
     private readonly IAlertSender _sender;
     private readonly IHostEnvironment _environment;
     private readonly ILogger<ErrorAlertJob> _logger;
+    private readonly TimeProvider _time;
 
     public ErrorAlertJob(
         YogaDbContext db,
         IPlatformSettingsService settings,
         IAlertSender sender,
         IHostEnvironment environment,
-        ILogger<ErrorAlertJob> logger)
+        ILogger<ErrorAlertJob> logger,
+        TimeProvider time)
     {
         _db = db;
         _settings = settings;
         _sender = sender;
         _environment = environment;
         _logger = logger;
+        _time = time;
     }
 
     public string Type => JobType;
 
     public Task RunAsync(string? payload, CancellationToken cancellationToken) =>
-        RunAsync(DateTimeOffset.UtcNow, cancellationToken);
+        RunAsync(_time.GetUtcNow(), cancellationToken);
 
     /// <summary>Returns how many alerts were sent.</summary>
     public async Task<int> RunAsync(DateTimeOffset now, CancellationToken cancellationToken)

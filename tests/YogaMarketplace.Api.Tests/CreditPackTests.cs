@@ -419,7 +419,7 @@ public class CreditPackTests : IClassFixture<YogaApiFactory>
         var pack = await CreatePackAsync(admin, sessions: 3, price: 1800m);
         var (customer, _) = await SignUpAsync();
         var batch = (await BuyAsync(customer, pack.Id)).Batch!;
-        var midnight = MumbaiClock.SessionStart(MumbaiClock.Today().AddDays(3), TimeOnly.MinValue);
+        var midnight = MumbaiClock.SessionStart(MumbaiClock.Today(DateTimeOffset.UtcNow).AddDays(3), TimeOnly.MinValue);
         await SetExpiryAsync(batch.Id, midnight);
 
         await ExpireAsync(midnight.AddSeconds(-1));
@@ -459,7 +459,7 @@ public class CreditPackTests : IClassFixture<YogaApiFactory>
         {
             var (strict, _) = await SignUpAsync();
             var strictBatch = (await BuyAsync(strict, pack.Id)).Batch!;
-            await SetExpiryAsync(strictBatch.Id, MumbaiClock.SessionStart(MumbaiClock.Today().AddDays(4), TimeOnly.MinValue));
+            await SetExpiryAsync(strictBatch.Id, MumbaiClock.SessionStart(MumbaiClock.Today(DateTimeOffset.UtcNow).AddDays(4), TimeOnly.MinValue));
             var tooLate = await QuoteAsync(strict, await SlotAsync(instructor, "Studio", dayOffset: 5));
             Assert.False(tooLate.Credit.Available);
             Assert.Equal("ExpiresBeforeSession", tooLate.Credit.Reason);
@@ -853,7 +853,7 @@ public class CreditPackTests : IClassFixture<YogaApiFactory>
     private static async Task<Guid> SlotAsync(HttpClient instructor, string mode, int dayOffset = 1)
     {
         var n = Interlocked.Increment(ref _slotCounter);
-        var day = MumbaiClock.Today().AddDays(dayOffset + n / 46);
+        var day = MumbaiClock.Today(DateTimeOffset.UtcNow).AddDays(dayOffset + n / 46);
         var start = new TimeOnly(0, 5).AddMinutes(30 * (n % 46));
         var created = await PostAsync<List<SlotBody>>(instructor, "/api/providers/me/slots", new
         {

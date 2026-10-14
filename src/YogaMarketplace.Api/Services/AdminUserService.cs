@@ -22,17 +22,20 @@ public class AdminUserService : IAdminUserService
     private readonly ICurrentUser _current;
     private readonly ILogger<AdminUserService> _logger;
     private readonly RefreshTokenService _refreshTokens;
+    private readonly TimeProvider _time;
 
     public AdminUserService(
         YogaDbContext db,
         ICurrentUser current,
         ILogger<AdminUserService> logger,
-        RefreshTokenService refreshTokens)
+        RefreshTokenService refreshTokens,
+        TimeProvider time)
     {
         _db = db;
         _current = current;
         _logger = logger;
         _refreshTokens = refreshTokens;
+        _time = time;
     }
 
     public async Task<IReadOnlyList<AdminUserSummary>> ListAsync(
@@ -99,7 +102,7 @@ public class AdminUserService : IAdminUserService
             ?? throw new DomainException("User not found.", 404);
 
         var adminId = _current.UserId;
-        var entry = change(user, adminId, DateTimeOffset.UtcNow);
+        var entry = change(user, adminId, _time.GetUtcNow());
         _db.UserBlockEvents.Add(entry);
         if (entry.Action == UserBlockAction.Blocked)
             await _refreshTokens.RevokeAllForUserAsync(user.Id, RefreshTokenRevokeReason.Blocked, cancellationToken);

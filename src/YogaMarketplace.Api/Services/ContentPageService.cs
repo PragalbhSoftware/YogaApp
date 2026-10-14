@@ -10,12 +10,14 @@ public class ContentPageService
     private readonly YogaDbContext _db;
     private readonly ICurrentUser _current;
     private readonly ILogger<ContentPageService> _logger;
+    private readonly TimeProvider _time;
 
-    public ContentPageService(YogaDbContext db, ICurrentUser current, ILogger<ContentPageService> logger)
+    public ContentPageService(YogaDbContext db, ICurrentUser current, ILogger<ContentPageService> logger, TimeProvider time)
     {
         _db = db;
         _current = current;
         _logger = logger;
+        _time = time;
     }
 
     public async Task<ContentPageResponse> GetAsync(string slug, CancellationToken cancellationToken)
@@ -43,7 +45,7 @@ public class ContentPageService
             throw new DomainException(ContentPageRules.StaleMessage, 409);
 
         _db.Entry(page).Property(p => p.Version).OriginalValue = expected;
-        if (!ContentPageRules.Apply(page, request.Title, request.Body, _current.UserId, DateTimeOffset.UtcNow))
+        if (!ContentPageRules.Apply(page, request.Title, request.Body, _current.UserId, _time.GetUtcNow()))
             return ToResponse(page);
 
         try
