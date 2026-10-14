@@ -8,7 +8,8 @@ import { SettingsCard, SettingsIntro } from "@/features/admin/components/setting
 import { useAdminSettings, useSendTestAlert, useUpdateSettings } from "@/features/admin/hooks/use-admin";
 import { errorAlertSettingsSchema, type ErrorAlertSettingsValues } from "@/features/admin/schemas";
 import type { AdminSettings } from "@/features/admin/types";
-import { changedFields, settingsSaveError } from "@/features/admin/utils";
+import { changedFields } from "@/features/admin/utils";
+import { keepUnsavedEdits, settingsSaveHandlers } from "@/features/admin/settings-form";
 import { toUserMessage } from "@/services/http/api-error";
 import { toastError } from "@/services/http/toast-error";
 
@@ -39,6 +40,7 @@ function ErrorAlertForm({ settings }: { settings: AdminSettings }) {
   const form = useForm<ErrorAlertSettingsValues>({
     resolver: zodResolver(errorAlertSettingsSchema),
     values: toFormValues(settings),
+    resetOptions: keepUnsavedEdits,
   });
   const errors = form.formState.errors;
   const canSendTest = settings.emailAlertsEnabled && !form.formState.isDirty && !sendTest.isPending;
@@ -56,10 +58,7 @@ function ErrorAlertForm({ settings }: { settings: AdminSettings }) {
           onSubmit={form.handleSubmit((values) =>
             updateSettings.mutate(
               { version: settings.version, ...changedFields(values, form.formState.dirtyFields) },
-              {
-                onSuccess: () => toast.success("Error alerts saved."),
-                onError: (error) => toastError(error, settingsSaveError(error)),
-              },
+              settingsSaveHandlers(form, toFormValues, "Error alerts saved."),
             ),
           )}
         >

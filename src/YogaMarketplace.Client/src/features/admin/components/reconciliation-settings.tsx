@@ -1,16 +1,15 @@
 import { Button, TextField } from "@mui/material";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { toast } from "sonner";
 import { ErrorState } from "@/components/common/error-state";
 import { BookingListSkeleton } from "@/components/common/loading-skeleton";
 import { SettingsCard, SettingsIntro } from "@/features/admin/components/settings-card";
 import { useAdminSettings, useUpdateSettings } from "@/features/admin/hooks/use-admin";
 import { reconciliationSettingsSchema, type ReconciliationSettingsValues } from "@/features/admin/schemas";
 import type { AdminSettings } from "@/features/admin/types";
-import { changedFields, settingsSaveError } from "@/features/admin/utils";
+import { changedFields } from "@/features/admin/utils";
+import { keepUnsavedEdits, settingsSaveHandlers } from "@/features/admin/settings-form";
 import { toUserMessage } from "@/services/http/api-error";
-import { toastError } from "@/services/http/toast-error";
 
 function toFormValues(settings: AdminSettings): ReconciliationSettingsValues {
   return {
@@ -36,6 +35,7 @@ function ReconciliationForm({ settings }: { settings: AdminSettings }) {
   const form = useForm<ReconciliationSettingsValues>({
     resolver: zodResolver(reconciliationSettingsSchema),
     values: toFormValues(settings),
+    resetOptions: keepUnsavedEdits,
   });
   const errors = form.formState.errors;
 
@@ -52,10 +52,7 @@ function ReconciliationForm({ settings }: { settings: AdminSettings }) {
           onSubmit={form.handleSubmit((values) =>
             updateSettings.mutate(
               { version: settings.version, ...changedFields(values, form.formState.dirtyFields) },
-              {
-                onSuccess: () => toast.success("Saved. The next daily check uses these values."),
-                onError: (error) => toastError(error, settingsSaveError(error)),
-              },
+              settingsSaveHandlers(form, toFormValues, "Saved. The next daily check uses these values."),
             ),
           )}
         >
