@@ -22,7 +22,8 @@ public static class StructuredLogging
     /// </summary>
     public static WebApplicationBuilder AddStructuredLogging(this WebApplicationBuilder builder)
     {
-        var file = builder.Configuration.GetSection(LogFileOptions.Section).Get<LogFileOptions>() ?? new LogFileOptions();        builder.Logging.ClearProviders();
+        var file = builder.Configuration.GetSection(LogFileOptions.Section).Get<LogFileOptions>() ?? new LogFileOptions();
+        builder.Logging.ClearProviders();
         builder.Services.AddSingleton<ErrorEventQueue>();
         builder.Services.AddHostedService<ErrorEventWriter>();
         builder.Services.AddSerilog(

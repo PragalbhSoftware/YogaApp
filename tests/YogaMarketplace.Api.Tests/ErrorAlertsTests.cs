@@ -2,15 +2,23 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Net.Mail;
+using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using YogaMarketplace.Api.Jobs;
+using YogaMarketplace.Api.Logging;
 using YogaMarketplace.Api.Middleware;
+using YogaMarketplace.Api.Options;
 using YogaMarketplace.Api.Security;
 using YogaMarketplace.Api.Services;
 using YogaMarketplace.Domain;
@@ -18,7 +26,10 @@ using YogaMarketplace.Infrastructure.Persistence;
 
 namespace YogaMarketplace.Api.Tests;
 
-/// <summary>Alert tests get their own database: the alert job reads every open error in it.</summary>
+/// <summary>
+/// Alert tests get their own database: the alert job reads every open error in it. Hosts built here have no background
+/// error writer; tests drain the error queue themselves, so nothing waits on timing.
+/// </summary>
 public class ErrorAlertsTests
 {
     private const string AdminEmail = "ops@example.com";
@@ -77,25 +88,52 @@ public class ErrorAlertsTests
     }
 
     [Fact]
+    public async Task Error_endpoints_are_admin_only()
+    {
+        await using var factory = new YogaApiFactory();
+        var (host, sender, _) = NewHost(factory);
+        await using var _ = host;
+        await PatchSettingsAsync(await SignInAsync(host, SeedIds.AdminPhone), new { emailAlertsEnabled = true, errorAlertEmail = AdminEmail });
+        var id = await AddErrorAsync(host, "Type.A", DateTimeOffset.UtcNow);
+        var callers = new (HttpClient Client, HttpStatusCode Expected)[]
+        {
+            (host.CreateClient(), HttpStatusCode.Unauthorized),
+            (await SignUpAsync(host), HttpStatusCode.Forbidden),
+            (await SignInAsync(host, SeedIds.AnanyaPhone), HttpStatusCode.Forbidden)
+        };
+
+        foreach (var (client, expected) in callers)
+        {
+            Assert.Equal(expected, (await client.GetAsync("/api/admin/errors")).StatusCode);
+            Assert.Equal(expected, (await client.GetAsync("/api/admin/errors/summary")).StatusCode);
+            Assert.Equal(expected, (await client.PostAsync($"/api/admin/errors/{id}/acknowledge", null)).StatusCode);
+            Assert.Equal(expected, (await client.PostAsync("/api/admin/errors/test-alert", null)).StatusCode);
+        }
+
+        Assert.Empty(sender.Sent);
+        Assert.Null((await ErrorRowAsync(host, "Type.A"))!.AcknowledgedAt);
+    }
+
+    [Fact]
     public async Task Flag_off_sends_nothing_even_for_open_errors()
     {
         await using var factory = new YogaApiFactory();
-        var (host, sent) = WithRecordingSender(factory);
+        var (host, sender, _) = NewHost(factory);
         await using var _ = host;
         var now = DateTimeOffset.UtcNow;
         await AddErrorAsync(host, "Type.A", now);
 
         Assert.Equal(0, await RunAlertsAsync(host, now));
-        Assert.Empty(sent);
+        Assert.Empty(sender.Sent);
     }
 
     [Fact]
     public async Task Flag_on_sends_one_alert_per_error_type_per_throttle_window()
     {
         await using var factory = new YogaApiFactory();
-        var (host, sent) = WithRecordingSender(factory);
+        var (host, sender, _) = NewHost(factory);
         await using var _ = host;
-        await PatchSettingsAsync(await SignInAsync(host), new { emailAlertsEnabled = true, errorAlertEmail = AdminEmail, errorAlertThrottleMinutes = 30 });
+        await PatchSettingsAsync(await SignInAsync(host, SeedIds.AdminPhone), new { emailAlertsEnabled = true, errorAlertEmail = AdminEmail, errorAlertThrottleMinutes = 30 });
         var now = DateTimeOffset.UtcNow;
 
         await AddErrorAsync(host, "Type.A", now);
@@ -109,8 +147,50 @@ public class ErrorAlertsTests
         Assert.Equal(1, await RunAlertsAsync(host, now.AddMinutes(31)));
         Assert.Equal(0, await RunAlertsAsync(host, now.AddMinutes(70)));
 
-        Assert.Equal(["Type.A", "Type.B", "Type.A"], sent.Select(m => m.Subject.Split(": ", 2)[1]));
-        Assert.All(sent, m => Assert.Equal(AdminEmail, m.To));
+        Assert.Equal(["Type.A", "Type.B", "Type.A"], sender.Sent.Select(m => m.Subject.Split(": ", 2)[1]));
+        Assert.All(sender.Sent, m => Assert.Equal(AdminEmail, m.To));
+    }
+
+    [Fact]
+    public async Task An_smtp_error_is_caught_the_other_alerts_still_go_out_and_the_failed_one_is_retried()
+    {
+        await using var factory = new YogaApiFactory();
+        var (host, sender, logs) = NewHost(factory);
+        await using var _ = host;
+        await PatchSettingsAsync(await SignInAsync(host, SeedIds.AdminPhone), new { emailAlertsEnabled = true, errorAlertEmail = AdminEmail });
+        var now = DateTimeOffset.UtcNow;
+        await AddErrorAsync(host, "Type.A", now);
+        await AddErrorAsync(host, "Type.B", now.AddSeconds(1));
+        sender.FailFor = "Type.A";
+
+        Assert.Equal(1, await RunAlertsAsync(host, now.AddMinutes(1)));
+        Assert.EndsWith("Type.B", Assert.Single(sender.Sent).Subject);
+        Assert.Null((await ErrorRowAsync(host, "Type.A"))!.LastAlertedAt);
+        Assert.Contains(logs.Lines, l => l.StartsWith("Warning Could not send the error alert for \"Type.A\"", StringComparison.Ordinal));
+
+        sender.FailFor = null;
+        Assert.Equal(1, await RunAlertsAsync(host, now.AddMinutes(2)));
+        Assert.EndsWith("Type.A", sender.Sent.Last().Subject);
+    }
+
+    [Fact]
+    public async Task Clean_up_deletes_only_errors_last_seen_before_the_retention_period()
+    {
+        await using var factory = new YogaApiFactory();
+        var (host, _, _) = NewHost(factory);
+        await using var _ = host;
+        await PatchSettingsAsync(await SignInAsync(host, SeedIds.AdminPhone), new { errorEventRetentionDays = 7 });
+        var now = DateTimeOffset.UtcNow;
+        var cutoff = now.AddDays(-7);
+        await AddErrorAsync(host, "Old", cutoff.AddSeconds(-1));
+        await AddErrorAsync(host, "AtCutoff", cutoff);
+        await AddErrorAsync(host, "Recent", now.AddDays(-6));
+
+        await RunAlertsAsync(host, now);
+
+        Assert.Null(await ErrorRowAsync(host, "Old"));
+        Assert.NotNull(await ErrorRowAsync(host, "AtCutoff"));
+        Assert.NotNull(await ErrorRowAsync(host, "Recent"));
     }
 
     [Fact]
@@ -119,7 +199,7 @@ public class ErrorAlertsTests
         await using var factory = new YogaApiFactory();
         Assert.IsType<NoopAlertSender>(factory.Services.GetRequiredService<IAlertSender>());
 
-        var admin = await SignInAsync(factory);
+        var admin = await SignInAsync(factory, SeedIds.AdminPhone);
         await PatchSettingsAsync(admin, new { emailAlertsEnabled = true, errorAlertEmail = AdminEmail });
         var now = DateTimeOffset.UtcNow;
         await AddErrorAsync(factory, "Type.A", now);
@@ -149,23 +229,23 @@ public class ErrorAlertsTests
     public async Task Test_email_works_only_when_the_flag_is_on()
     {
         await using var factory = new YogaApiFactory();
-        var (host, sent) = WithRecordingSender(factory);
+        var (host, sender, _) = NewHost(factory);
         await using var _ = host;
-        var admin = await SignInAsync(host);
+        var admin = await SignInAsync(host, SeedIds.AdminPhone);
 
         Assert.Equal(HttpStatusCode.Conflict, (await admin.PostAsync("/api/admin/errors/test-alert", null)).StatusCode);
-        Assert.Empty(sent);
+        Assert.Empty(sender.Sent);
 
         await PatchSettingsAsync(admin, new { emailAlertsEnabled = true, errorAlertEmail = AdminEmail });
         Assert.Equal(HttpStatusCode.NoContent, (await admin.PostAsync("/api/admin/errors/test-alert", null)).StatusCode);
-        Assert.Equal(AdminEmail, Assert.Single(sent).To);
+        Assert.Equal(AdminEmail, Assert.Single(sender.Sent).To);
     }
 
     [Fact]
     public async Task Turning_alerts_on_needs_an_email_and_every_change_is_audited()
     {
         await using var factory = new YogaApiFactory();
-        var admin = await SignInAsync(factory);
+        var admin = await SignInAsync(factory, SeedIds.AdminPhone);
 
         var current = await admin.GetFromJsonAsync<VersionBody>("/api/admin/settings", Json);
         var refused = await admin.PatchAsJsonAsync("/api/admin/settings", new { version = current!.Version, emailAlertsEnabled = true });
@@ -194,9 +274,9 @@ public class ErrorAlertsTests
     public async Task A_critical_log_is_stored_masked_and_sends_exactly_one_alert_to_the_admin_email()
     {
         await using var factory = new YogaApiFactory();
-        var (host, sent) = WithRecordingSender(factory);
+        var (host, sender, _) = NewHost(factory);
         await using var _ = host;
-        var admin = await SignInAsync(host);
+        var admin = await SignInAsync(host, SeedIds.AdminPhone);
         await PatchSettingsAsync(admin, new { emailAlertsEnabled = true, errorAlertEmail = AdminEmail, errorAlertThrottleMinutes = 60 });
 
         var logger = host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Tests.Alerts");
@@ -205,7 +285,9 @@ public class ErrorAlertsTests
             logger.LogCritical("Payout export broke for {Phone}", "+919876543210");
             logger.LogCritical("Payout export broke for {Phone}", "+919876543210");
         }
-        var error = await WaitForErrorAsync(host, "Tests.Alerts: Payout export broke for {Phone}", count: 2);
+        await DrainErrorsAsync(host);
+        var error = (await ErrorRowAsync(host, "Tests.Alerts: Payout export broke for {Phone}"))!;
+        Assert.Equal(2, error.Count);
         Assert.Equal("Critical", error.Level);
         Assert.Equal("corr-critical-1", error.LastCorrelationId);
         Assert.DoesNotContain("9876543210", error.LastMessage);
@@ -213,17 +295,113 @@ public class ErrorAlertsTests
 
         Assert.Equal(1, await RunAlertsAsync(host, DateTimeOffset.UtcNow));
         Assert.Equal(0, await RunAlertsAsync(host, DateTimeOffset.UtcNow.AddMinutes(1)));
-        var alert = Assert.Single(sent);
+        var alert = Assert.Single(sender.Sent);
         Assert.Equal(AdminEmail, alert.To);
         Assert.Contains("Critical", alert.Subject);
         Assert.DoesNotContain("9876543210", alert.Body);
     }
 
     [Fact]
+    public async Task The_same_error_type_counts_on_one_row_and_a_different_type_gets_its_own()
+    {
+        await using var factory = new YogaApiFactory();
+        var (host, _, _) = NewHost(factory);
+        await using var _ = host;
+        var writer = NewWriter(host);
+        var first = DateTimeOffset.UtcNow;
+
+        await writer.WriteAsync(Occurrence("Type.A", "corr-a1", first), CancellationToken.None);
+        await writer.WriteAsync(Occurrence("Type.A", "corr-a2", first.AddMinutes(1)), CancellationToken.None);
+        await writer.WriteAsync(Occurrence("Type.B", "corr-b1", first.AddMinutes(2)), CancellationToken.None);
+
+        var a = (await ErrorRowAsync(host, "Type.A"))!;
+        var b = (await ErrorRowAsync(host, "Type.B"))!;
+        Assert.NotEqual(a.Id, b.Id);
+        Assert.Equal((2, "corr-a2", first), (a.Count, a.LastCorrelationId, a.FirstSeenAt));
+        Assert.Equal((1, "corr-b1"), (b.Count, b.LastCorrelationId));
+    }
+
+    [Fact]
+    public async Task A_5xx_is_recorded_a_4xx_is_not_and_a_failed_error_write_still_returns_500()
+    {
+        await using var factory = new YogaApiFactory();
+        var (host, _, logs) = NewHost(factory, brokenContentPages: true);
+        await using var _ = host;
+        var client = host.CreateClient();
+
+        Assert.Equal(HttpStatusCode.NotFound, (await SendAsync(client, HttpMethod.Get, "/api/no-such-endpoint", "corr-404")).StatusCode);
+        await DrainErrorsAsync(host);
+        Assert.False(await AnyErrorAsync(host, e => e.LastCorrelationId == "corr-404"));
+
+        Assert.Equal(HttpStatusCode.InternalServerError, (await SendAsync(client, HttpMethod.Get, "/api/pages/terms", "corr-500")).StatusCode);
+        await DrainErrorsAsync(host);
+        Assert.True(await AnyErrorAsync(host, e => e.LastCorrelationId == "corr-500"));
+
+        using (var scope = host.Services.CreateScope())
+            await scope.ServiceProvider.GetRequiredService<YogaDbContext>().Database.ExecuteSqlRawAsync("DROP TABLE ErrorEvents");
+
+        var failed = await SendAsync(client, HttpMethod.Get, "/api/pages/terms", "corr-500-no-table");
+        Assert.Equal(HttpStatusCode.InternalServerError, failed.StatusCode);
+        var body = await failed.Content.ReadFromJsonAsync<ErrorBody>(Json);
+        Assert.Equal((ApiErrorResponses.UnexpectedMessage, "corr-500-no-table"), (body!.Error, body.CorrelationId));
+        Assert.True(await DrainErrorsAsync(host) > 0);
+        Assert.Contains(logs.Lines, l => l.Contains("Could not record error event", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Logs_never_contain_otp_codes_phones_emails_tokens_secrets_passwords_headers_bodies_or_query_tokens()
+    {
+        await using var factory = new YogaApiFactory();
+        var (host, _, logs) = NewHost(factory, brokenContentPages: true);
+        await using var _ = host;
+        const string razorpaySecret = "rzp-live-secret-in-logs-test";
+        const string password = "body-password-secret";
+        const string queryToken = "query-token-secret";
+        const string cookie = "cookie-secret-value";
+
+        var anonymous = host.CreateClient();
+        var phone = "+9196" + Random.Shared.Next(10000000, 99999999);
+        var otp = await (await anonymous.PostAsJsonAsync("/api/auth/otp/request",
+            new { phone, name = "Log Check", gender = "Female", isNewUser = true, acceptedPolicies = true })).Content.ReadFromJsonAsync<OtpBody>(Json);
+        var wrongCode = otp!.DevCode == "000000" ? "111111" : "000000";
+        var refused = await anonymous.PostAsJsonAsync("/api/auth/otp/verify", new { phone, code = wrongCode, password });
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        var auth = await (await anonymous.PostAsJsonAsync("/api/auth/otp/verify", new { phone, code = otp.DevCode })).Content.ReadFromJsonAsync<AuthBody>(Json);
+
+        var admin = await SignInAsync(host, SeedIds.AdminPhone);
+        await PatchSettingsAsync(admin, new { errorAlertEmail = AdminEmail });
+
+        var request = new HttpRequestMessage(HttpMethod.Get, $"/api/pages/terms?token={queryToken}&access_token={queryToken}");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", auth!.Token);
+        request.Headers.Add("Cookie", $"refresh={cookie}");
+        request.Headers.Add(CorrelationIdMiddleware.HeaderName, "corr-logs");
+        Assert.Equal(HttpStatusCode.InternalServerError, (await anonymous.SendAsync(request)).StatusCode);
+
+        var basic = Convert.ToBase64String(Encoding.ASCII.GetBytes($"rzp_test_logs:{razorpaySecret}"));
+        var razorpay = new RazorpayHttpClient(
+            new HttpClient(new EchoingRazorpayError(razorpaySecret)) { BaseAddress = new Uri("https://api.razorpay.test/") },
+            Microsoft.Extensions.Options.Options.Create(new RazorpayOptions { KeyId = "rzp_test_logs", KeySecret = razorpaySecret }),
+            host.Services.GetRequiredService<ILogger<RazorpayHttpClient>>());
+        await Assert.ThrowsAsync<DomainException>(() => razorpay.RefundPaymentAsync("pay_logs", 100, "rcpt_logs", CancellationToken.None));
+
+        var all = string.Join('\n', logs.Lines);
+        Assert.Contains("corr-logs", all);
+        Assert.Contains("Razorpay \"refund payment\" failed with 400: \"BAD_REQUEST_ERROR\"", all);
+        Assert.DoesNotMatch($"(?<![0-9A-Za-z]){Regex.Escape(otp.DevCode)}(?![0-9A-Za-z])", all);
+        Assert.DoesNotMatch($"(?<![0-9A-Za-z]){Regex.Escape(wrongCode)}(?![0-9A-Za-z])", all);
+        foreach (var secret in new[]
+                 {
+                     phone[3..], SeedIds.AdminPhone[3..], AdminEmail, auth.Token, admin.DefaultRequestHeaders.Authorization!.Parameter!,
+                     razorpaySecret, basic, password, queryToken, cookie, "Bearer ", "Basic ", "refresh="
+                 })
+            Assert.DoesNotContain(secret, all, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Admin_lists_and_acknowledges_errors_and_the_open_count_drops()
     {
         await using var factory = new YogaApiFactory();
-        var admin = await SignInAsync(factory);
+        var admin = await SignInAsync(factory, SeedIds.AdminPhone);
         var now = DateTimeOffset.UtcNow;
         var id = await AddErrorAsync(factory, "Type.A", now);
         await AddErrorAsync(factory, "Type.B", now.AddMinutes(1));
@@ -241,13 +419,45 @@ public class ErrorAlertsTests
         Assert.Equal(HttpStatusCode.NotFound, (await admin.PostAsync($"/api/admin/errors/{Guid.NewGuid()}/acknowledge", null)).StatusCode);
     }
 
-    private static (WebApplicationFactory<Program> Host, ConcurrentQueue<SentAlert> Sent) WithRecordingSender(YogaApiFactory factory)
+    /// <summary>A host with a recording alert sender, captured logs and no background error writer.</summary>
+    private static (WebApplicationFactory<Program> Host, RecordingAlertSender Sender, LogCapture Logs) NewHost(
+        YogaApiFactory factory, bool brokenContentPages = false)
     {
-        var sent = new ConcurrentQueue<SentAlert>();
-        var host = factory.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
-            services.Replace(ServiceDescriptor.Singleton<IAlertSender>(new RecordingAlertSender(sent)))));
-        return (host, sent);
+        var sender = new RecordingAlertSender();
+        var logs = new LogCapture();
+        var host = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureLogging(logging => logging.AddProvider(logs));
+            builder.ConfigureTestServices(services =>
+            {
+                services.Replace(ServiceDescriptor.Singleton<IAlertSender>(sender));
+                services.Remove(services.Single(d => d.ServiceType == typeof(IHostedService) && d.ImplementationType == typeof(ErrorEventWriter)));
+                if (brokenContentPages)
+                    services.AddScoped<ContentPageService>(_ => throw new InvalidOperationException("Content store is down."));
+            });
+        });
+        return (host, sender, logs);
     }
+
+    private static ErrorEventWriter NewWriter(WebApplicationFactory<Program> host) =>
+        ActivatorUtilities.CreateInstance<ErrorEventWriter>(host.Services);
+
+    /// <summary>Writes every queued error the way the background writer would. Returns how many there were.</summary>
+    private static async Task<int> DrainErrorsAsync(WebApplicationFactory<Program> host)
+    {
+        var queue = host.Services.GetRequiredService<ErrorEventQueue>();
+        var writer = NewWriter(host);
+        var written = 0;
+        while (queue.Reader.TryRead(out var occurrence))
+        {
+            await writer.WriteAsync(occurrence, CancellationToken.None);
+            written++;
+        }
+        return written;
+    }
+
+    private static ErrorOccurrence Occurrence(string type, string correlationId, DateTimeOffset at) =>
+        new(type, "Error", "Tests", "Boom", correlationId, at);
 
     private static async Task<Guid> AddErrorAsync(WebApplicationFactory<Program> host, string type, DateTimeOffset at)
     {
@@ -265,18 +475,17 @@ public class ErrorAlertsTests
         return row.Id;
     }
 
-    private static async Task<ErrorEvent> WaitForErrorAsync(WebApplicationFactory<Program> host, string type, int count)
+    private static async Task<ErrorEvent?> ErrorRowAsync(WebApplicationFactory<Program> host, string type)
     {
-        for (var i = 0; i < 100; i++)
-        {
-            using var scope = host.Services.CreateScope();
-            var row = await scope.ServiceProvider.GetRequiredService<YogaDbContext>().ErrorEvents.AsNoTracking()
-                .SingleOrDefaultAsync(e => e.ErrorType == type);
-            if (row?.Count >= count)
-                return row;
-            await Task.Delay(100);
-        }
-        throw new TimeoutException($"Error type '{type}' was not recorded {count} times.");
+        using var scope = host.Services.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<YogaDbContext>().ErrorEvents.AsNoTracking()
+            .SingleOrDefaultAsync(e => e.ErrorType == type);
+    }
+
+    private static async Task<bool> AnyErrorAsync(WebApplicationFactory<Program> host, System.Linq.Expressions.Expression<Func<ErrorEvent, bool>> match)
+    {
+        using var scope = host.Services.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<YogaDbContext>().ErrorEvents.AnyAsync(match);
     }
 
     private static async Task<int> RunAlertsAsync(WebApplicationFactory<Program> host, DateTimeOffset now)
@@ -310,12 +519,26 @@ public class ErrorAlertsTests
         Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
     }
 
-    private static async Task<HttpClient> SignInAsync(WebApplicationFactory<Program> host)
+    private static async Task<HttpClient> SignInAsync(WebApplicationFactory<Program> host, string phone)
     {
         var client = host.CreateClient();
-        var otp = await (await client.PostAsJsonAsync("/api/auth/otp/request", new { phone = SeedIds.AdminPhone, isNewUser = false }))
+        var otp = await (await client.PostAsJsonAsync("/api/auth/otp/request", new { phone, isNewUser = false }))
             .Content.ReadFromJsonAsync<OtpBody>(Json);
-        var auth = await (await client.PostAsJsonAsync("/api/auth/otp/verify", new { phone = SeedIds.AdminPhone, code = otp!.DevCode }))
+        return await VerifyAsync(client, phone, otp!.DevCode);
+    }
+
+    private static async Task<HttpClient> SignUpAsync(WebApplicationFactory<Program> host)
+    {
+        var client = host.CreateClient();
+        var phone = "+9197" + Random.Shared.Next(10000000, 99999999);
+        var otp = await (await client.PostAsJsonAsync("/api/auth/otp/request",
+            new { phone, name = "Error Page Customer", gender = "Female", isNewUser = true, acceptedPolicies = true })).Content.ReadFromJsonAsync<OtpBody>(Json);
+        return await VerifyAsync(client, phone, otp!.DevCode);
+    }
+
+    private static async Task<HttpClient> VerifyAsync(HttpClient client, string phone, string code)
+    {
+        var auth = await (await client.PostAsJsonAsync("/api/auth/otp/verify", new { phone, code }))
             .Content.ReadFromJsonAsync<AuthBody>(Json);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth!.Token);
         return client;
@@ -323,12 +546,59 @@ public class ErrorAlertsTests
 
     private sealed record SentAlert(string To, string Subject, string Body);
 
-    private sealed class RecordingAlertSender(ConcurrentQueue<SentAlert> sent) : IAlertSender
+    /// <summary>Records alerts. <see cref="FailFor"/> makes alerts whose subject ends with that error type fail like an SMTP outage.</summary>
+    private sealed class RecordingAlertSender : IAlertSender
     {
+        public ConcurrentQueue<SentAlert> Sent { get; } = new();
+        public string? FailFor { get; set; }
+
         public Task SendAsync(string to, string subject, string body, CancellationToken cancellationToken)
         {
-            sent.Enqueue(new SentAlert(to, subject, body));
+            if (FailFor is not null && subject.EndsWith(FailFor, StringComparison.Ordinal))
+                throw new SmtpException(SmtpStatusCode.ServiceNotAvailable, "Mailbox unavailable.");
+            Sent.Enqueue(new SentAlert(to, subject, body));
             return Task.CompletedTask;
+        }
+    }
+
+    /// <summary>Every event Serilog lets through: level, message, every property (scope ones included) and the exception.</summary>
+    private sealed class LogCapture : ILoggerProvider
+    {
+        public ConcurrentQueue<string> Lines { get; } = new();
+
+        public ILogger CreateLogger(string categoryName) => new Logger(Lines);
+
+        public void Dispose()
+        {
+        }
+
+        private sealed class Logger(ConcurrentQueue<string> lines) : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+            public bool IsEnabled(LogLevel logLevel) => true;
+
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+            {
+                var properties = state is IEnumerable<KeyValuePair<string, object?>> values
+                    ? string.Join(" ", values.Select(p => $"{p.Key}={p.Value}"))
+                    : "";
+                lines.Enqueue($"{logLevel} {formatter(state, exception)} | {properties} | {exception}");
+            }
+        }
+    }
+
+    /// <summary>A Razorpay error whose body echoes the key secret and the Authorization header back.</summary>
+    private sealed class EchoingRazorpayError(string secret) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var echo = JsonSerializer.Serialize(new
+            {
+                error = new { code = "BAD_REQUEST_ERROR", description = "The payment id is invalid." },
+                debug = new { secret, authorization = request.Headers.Authorization?.ToString() }
+            });
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadRequest) { Content = new StringContent(echo, Encoding.UTF8, "application/json") });
         }
     }
 
