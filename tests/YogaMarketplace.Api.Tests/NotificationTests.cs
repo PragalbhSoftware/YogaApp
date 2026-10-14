@@ -3,6 +3,8 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Net.Mail;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -26,6 +28,8 @@ namespace YogaMarketplace.Api.Tests;
 public class NotificationTests
 {
     private const string InstructorEmail = "ananya@example.com";
+    private const string KeySecret = "dev-only-not-a-live-key-secret";
+    private const string WebhookSecret = "dev-only-not-a-live-webhook-secret";
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     [Fact]
@@ -55,15 +59,42 @@ public class NotificationTests
     }
 
     [Fact]
-    public void Default_templates_cover_every_event_without_naming_a_city()
+    public void Subject_values_lose_their_line_breaks_but_the_body_keeps_them()
     {
-        using var factory = new YogaApiFactory();
-        using var scope = factory.Services.CreateScope();
-        var templates = scope.ServiceProvider.GetRequiredService<YogaDbContext>().NotificationTemplates.AsNoTracking().ToList();
+        var data = new Dictionary<string, string> { ["name"] = "Asha\r\nBcc: victim@example.com\nX" };
+
+        var subject = NotificationTemplateRules.Render("Booked by {{name}}", data, singleLine: true);
+
+        Assert.Equal("Booked by Asha Bcc: victim@example.com X", subject);
+        Assert.DoesNotContain('\r', subject);
+        Assert.DoesNotContain('\n', subject);
+        Assert.Contains("\r\n", NotificationTemplateRules.Render("{{name}}", data), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(false, false, 899, "INR 899.00")]
+    [InlineData(true, true, 0, "1 credit back in your pack")]
+    [InlineData(true, true, 49, "INR 49.00, and 1 credit back in your pack")]
+    [InlineData(true, false, 0, "None. The credit for this session stays used")]
+    [InlineData(true, false, 49, "INR 49.00. The credit for this session stays used")]
+    public void Refund_text_names_the_credit_for_credit_paid_bookings(bool paidWithCredit, bool creditReturned, int refund, string expected)
+    {
+        Assert.Equal(expected, BookingNotifications.RefundText("INR", refund, paidWithCredit, creditReturned));
+    }
+
+    [Fact]
+    public async Task Default_templates_cover_every_event_without_naming_a_seeded_city_or_area()
+    {
+        await using var factory = new YogaApiFactory();
+        var templates = await QueryAsync(factory, db => db.NotificationTemplates.AsNoTracking().ToListAsync());
+        var areas = await QueryAsync(factory, db => db.Areas.AsNoTracking().ToListAsync());
+        var places = areas.Select(a => a.City).Concat(areas.Select(a => a.Name)).Distinct().ToList();
 
         var events = typeof(NotificationEvents).GetFields().Select(f => (string)f.GetValue(null)!).ToList();
         Assert.All(events, e => Assert.Single(templates, t => t.EventKey == e && t.CategoryId is null && t.IsActive));
-        Assert.All(templates, t => Assert.DoesNotContain("Mumbai", t.Subject + t.Body, StringComparison.OrdinalIgnoreCase));
+        Assert.NotEmpty(places);
+        Assert.All(templates, t => Assert.All(places, place =>
+            Assert.DoesNotContain(place, t.Subject + t.Body, StringComparison.OrdinalIgnoreCase)));
     }
 
     [Fact]
@@ -289,8 +320,8 @@ public class NotificationTests
         var admin = await SignInAsync(factory, SeedIds.AdminPhone);
 
         await PatchSettingsAsync(factory, new { emailNotificationsEnabled = true, notificationMaxAttempts = 3 });
-        var tooMany = await PatchAsync(admin, new { notificationMaxAttempts = PlatformSettingsRules.MaxNotificationMaxAttempts + 1 });
-        Assert.Equal(HttpStatusCode.BadRequest, tooMany.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await PatchAsync(admin, new { notificationMaxAttempts = 0 })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await PatchAsync(admin, new { notificationMaxAttempts = 11 })).StatusCode);
 
         var saved = await admin.GetFromJsonAsync<NotificationSettingsBody>("/api/admin/settings", Json);
         Assert.True(saved!.EmailNotificationsEnabled);
@@ -298,6 +329,198 @@ public class NotificationTests
         var audit = await admin.GetFromJsonAsync<List<AuditBody>>("/api/admin/settings/audit", Json);
         Assert.Contains(audit!, a => a is { Field: "EmailNotificationsEnabled", OldValue: "False", NewValue: "True" });
         Assert.Contains(audit!, a => a is { Field: "NotificationMaxAttempts", OldValue: "5", NewValue: "3" });
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(10)]
+    public async Task Notification_attempts_accept_the_range_ends(int attempts)
+    {
+        await using var factory = new YogaApiFactory();
+        var admin = await SignInAsync(factory, SeedIds.AdminPhone);
+
+        await PatchSettingsAsync(factory, new { notificationMaxAttempts = attempts });
+
+        Assert.Equal(attempts, (await admin.GetFromJsonAsync<NotificationSettingsBody>("/api/admin/settings", Json))!.NotificationMaxAttempts);
+    }
+
+    [Fact]
+    public async Task Saving_notification_settings_with_a_stale_version_is_a_conflict()
+    {
+        await using var factory = new YogaApiFactory();
+        var admin = await SignInAsync(factory, SeedIds.AdminPhone);
+        var stale = (await admin.GetFromJsonAsync<VersionBody>("/api/admin/settings", Json))!.Version;
+        await PatchSettingsAsync(factory, new { notificationMaxAttempts = 4 });
+
+        var response = await admin.PatchAsJsonAsync("/api/admin/settings", new { version = stale, notificationMaxAttempts = 7 }, Json);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal(4, (await admin.GetFromJsonAsync<NotificationSettingsBody>("/api/admin/settings", Json))!.NotificationMaxAttempts);
+    }
+
+    [Fact]
+    public async Task Error_outside_the_send_retries_and_then_fails_the_row_instead_of_leaving_it_pending()
+    {
+        await using var factory = new YogaApiFactory();
+        var (host, sender, _) = NewHost(factory);
+        await PatchSettingsAsync(host, new { emailNotificationsEnabled = true, notificationMaxAttempts = 2 });
+        var (customer, _) = await SignUpAsync(host);
+        await BookAsync(host, customer);
+        var rowId = (await InstructorRowAsync(host)).Id;
+        await QueryAsync(host, db => db.NotificationOutbox.Where(r => r.Id == rowId).ExecuteUpdateAsync(s => s.SetProperty(r => r.Data, "not json")));
+
+        await RunJobsAsync(host, DateTimeOffset.UtcNow.AddSeconds(1));
+        var row = await InstructorRowAsync(host);
+        Assert.Equal((NotificationStatus.Pending, 1), (row.Status, row.Attempts));
+        Assert.False(string.IsNullOrEmpty(row.LastError));
+        await RunJobsAsync(host, (await JobForAsync(host, rowId)).RunAt.AddSeconds(1));
+
+        row = await InstructorRowAsync(host);
+        Assert.Equal((NotificationStatus.Failed, 2), (row.Status, row.Attempts));
+        Assert.Equal(BackgroundJobStatus.Failed, (await JobForAsync(host, rowId)).Status);
+        Assert.Empty(sender.Sent);
+    }
+
+    [Fact]
+    public async Task Replayed_capture_webhook_and_the_client_callback_queue_one_confirmation_pair()
+    {
+        await using var factory = new YogaApiFactory();
+        var (customer, _) = await SignUpAsync(factory);
+        var order = await PostAsync<OrderBody>(customer, "/api/bookings/orders", new { slotId = await OpenSlotAsync(customer) });
+        var paymentId = "pay_replay_" + Guid.NewGuid().ToString("N");
+        var capture = "{\"event\":\"payment.captured\",\"payload\":{\"payment\":{\"entity\":{\"id\":\"" + paymentId
+            + "\",\"order_id\":\"" + order.OrderId + "\",\"status\":\"captured\",\"amount\":" + order.AmountPaise + ",\"currency\":\"INR\"}}}}";
+
+        var eventId = "evt_" + Guid.NewGuid().ToString("N");
+        Assert.Equal(HttpStatusCode.OK, (await PostWebhookAsync(factory, capture, eventId)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await PostWebhookAsync(factory, capture, eventId)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await PostWebhookAsync(factory, capture, "evt_" + Guid.NewGuid().ToString("N"))).StatusCode);
+        await PostAsync<BookingBody>(customer, "/api/bookings/confirm",
+            new { orderId = order.OrderId, paymentId, signature = Sign(KeySecret, $"{order.OrderId}|{paymentId}") });
+
+        Assert.Equal(1, await CountRowsAsync(factory, NotificationEvents.BookingConfirmedCustomer));
+        Assert.Equal(1, await CountRowsAsync(factory, NotificationEvents.BookingConfirmedInstructor));
+        Assert.Equal(2, await CountJobsAsync(factory));
+    }
+
+    [Fact]
+    public async Task Repeating_a_cancel_or_decline_queues_no_second_pair()
+    {
+        await using var factory = new YogaApiFactory();
+        var (customer, _) = await SignUpAsync(factory);
+        var instructor = await SignInAsync(factory, SeedIds.AnanyaPhone);
+        var admin = await SignInAsync(factory, SeedIds.AdminPhone);
+
+        var cancelled = await BookAsync(factory, customer);
+        await PostAsync<BookingBody>(customer, $"/api/bookings/{cancelled.Id}/cancel", new { });
+        Assert.False((await customer.PostAsJsonAsync($"/api/bookings/{cancelled.Id}/cancel", new { })).IsSuccessStatusCode);
+        Assert.False((await admin.PostAsJsonAsync($"/api/admin/bookings/{cancelled.Id}/cancel", new { reason = "Again" })).IsSuccessStatusCode);
+        var declined = await BookAsync(factory, customer);
+        await PostAsync<BookingBody>(instructor, $"/api/bookings/{declined.Id}/decline", new { });
+        Assert.False((await instructor.PostAsJsonAsync($"/api/bookings/{declined.Id}/decline", new { })).IsSuccessStatusCode);
+
+        foreach (var key in new[] { NotificationEvents.BookingCancelledCustomer, NotificationEvents.BookingCancelledInstructor,
+                     NotificationEvents.BookingRefundedCustomer, NotificationEvents.BookingRefundedInstructor })
+            Assert.Equal(1, await CountRowsAsync(factory, key));
+    }
+
+    [Fact]
+    public async Task Dashboard_refund_webhook_queues_one_refunded_pair_however_often_it_is_delivered()
+    {
+        await using var factory = new YogaApiFactory();
+        var (customer, _) = await SignUpAsync(factory);
+        var booking = await BookAsync(factory, customer);
+        var payment = await QueryAsync(factory, db => db.Payments.AsNoTracking().SingleAsync(p => p.BookingId == booking.Id));
+        var refund = RefundBody("rfnd_dash_" + Guid.NewGuid().ToString("N"), payment.GatewayPaymentId!, (long)(payment.Amount * 100));
+
+        var eventId = "evt_" + Guid.NewGuid().ToString("N");
+        Assert.Equal(HttpStatusCode.OK, (await PostWebhookAsync(factory, refund, eventId)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await PostWebhookAsync(factory, refund, eventId)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await PostWebhookAsync(factory, refund, "evt_" + Guid.NewGuid().ToString("N"))).StatusCode);
+
+        Assert.Equal(1, await CountRowsAsync(factory, NotificationEvents.BookingRefundedCustomer));
+        Assert.Equal(1, await CountRowsAsync(factory, NotificationEvents.BookingRefundedInstructor));
+        Assert.Equal(BookingStatus.Cancelled, await QueryAsync(factory, db => db.Bookings.Where(b => b.Id == booking.Id).Select(b => b.Status).SingleAsync()));
+    }
+
+    [Fact]
+    public async Task Refund_webhook_for_our_own_cancel_adds_no_refunded_emails()
+    {
+        await using var factory = new YogaApiFactory();
+        var (customer, _) = await SignUpAsync(factory);
+        var booking = await BookAsync(factory, customer);
+        await PostAsync<BookingBody>(customer, $"/api/bookings/{booking.Id}/cancel", new { });
+        var payment = await QueryAsync(factory, db => db.Payments.AsNoTracking().SingleAsync(p => p.BookingId == booking.Id));
+
+        var refund = RefundBody(payment.GatewayRefundId!, payment.GatewayPaymentId!, (long)(payment.RefundedAmount * 100));
+        Assert.Equal(HttpStatusCode.OK, (await PostWebhookAsync(factory, refund, "evt_" + Guid.NewGuid().ToString("N"))).StatusCode);
+
+        Assert.Equal(1, await CountRowsAsync(factory, NotificationEvents.BookingCancelledCustomer));
+        Assert.Equal(0, await CountRowsAsync(factory, NotificationEvents.BookingRefundedCustomer));
+    }
+
+    [Fact]
+    public async Task Nothing_is_queued_when_a_cancel_decline_or_admin_cancel_save_rolls_back()
+    {
+        await using var factory = new YogaApiFactory();
+        var failing = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.AddSingleton<IInterceptor, FailBookingOrPaymentUpdate>()));
+        var (customer, phone) = await SignUpAsync(factory);
+        var booking = await BookAsync(factory, customer);
+        var failingCustomer = await SignInAsync(failing, phone);
+
+        Assert.Equal(HttpStatusCode.Conflict, (await failingCustomer.PostAsJsonAsync($"/api/bookings/{booking.Id}/cancel", new { })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await (await SignInAsync(failing, SeedIds.AnanyaPhone))
+            .PostAsJsonAsync($"/api/bookings/{booking.Id}/decline", new { })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await (await SignInAsync(failing, SeedIds.AdminPhone))
+            .PostAsJsonAsync($"/api/admin/bookings/{booking.Id}/cancel", new { reason = "Instructor unwell" })).StatusCode);
+
+        var rows = await OutboxAsync(factory);
+        Assert.Equal(2, rows.Count);
+        Assert.All(rows, r => Assert.StartsWith("booking.confirmed.", r.EventKey, StringComparison.Ordinal));
+        Assert.Equal(2, await CountJobsAsync(factory));
+    }
+
+    [Fact]
+    public async Task A_dashboard_refund_that_rolls_back_queues_nothing_and_its_redelivery_queues_one_pair()
+    {
+        await using var factory = new YogaApiFactory();
+        var failing = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.AddSingleton<IInterceptor, FailBookingOrPaymentUpdate>()));
+        var (customer, _) = await SignUpAsync(factory);
+        var booking = await BookAsync(factory, customer);
+        var payment = await QueryAsync(factory, db => db.Payments.AsNoTracking().SingleAsync(p => p.BookingId == booking.Id));
+        var refund = RefundBody("rfnd_dash_" + Guid.NewGuid().ToString("N"), payment.GatewayPaymentId!, (long)(payment.Amount * 100));
+        var eventId = "evt_" + Guid.NewGuid().ToString("N");
+
+        Assert.False((await PostWebhookAsync(failing, refund, eventId)).IsSuccessStatusCode);
+        Assert.Equal(0, await CountRowsAsync(factory, NotificationEvents.BookingRefundedCustomer));
+
+        Assert.Equal(HttpStatusCode.OK, (await PostWebhookAsync(factory, refund, eventId)).StatusCode);
+        Assert.Equal(1, await CountRowsAsync(factory, NotificationEvents.BookingRefundedCustomer));
+        Assert.Equal(1, await CountRowsAsync(factory, NotificationEvents.BookingRefundedInstructor));
+    }
+
+    [Fact]
+    public async Task Credit_paid_cancel_and_decline_name_the_returned_credit()
+    {
+        await using var factory = new YogaApiFactory();
+        var admin = await SignInAsync(factory, SeedIds.AdminPhone);
+        var instructor = await SignInAsync(factory, SeedIds.AnanyaPhone);
+        var pack = await PostAsync<IdBody>(admin, "/api/admin/packs",
+            new { name = "Notify pack " + Guid.NewGuid().ToString("N")[..8], sessions = 2, price = 1600m, validityDays = 30, priceCap = 5000m });
+        var (customer, _) = await SignUpAsync(factory);
+        var packOrder = await PostAsync<OrderBody>(customer, $"/api/packs/{pack.Id}/orders", new { });
+        await PostAsync<JsonElement>(customer, "/api/packs/local-confirm", new { orderId = packOrder.OrderId });
+
+        var cancelled = await PostAsync<BookingBody>(customer, "/api/bookings/credit", new { slotId = await OpenSlotAsync(customer) });
+        await PostAsync<BookingBody>(customer, $"/api/bookings/{cancelled.Id}/cancel", new { });
+        var declined = await PostAsync<BookingBody>(customer, "/api/bookings/credit", new { slotId = await OpenSlotAsync(customer) });
+        await PostAsync<BookingBody>(instructor, $"/api/bookings/{declined.Id}/decline", new { });
+
+        var rows = await OutboxAsync(factory);
+        Assert.Equal("1 credit back in your pack", Data(rows.Single(r => r.EventKey == NotificationEvents.BookingCancelledCustomer))["refund"]);
+        Assert.Equal("1 credit back in your pack", Data(rows.Single(r => r.EventKey == NotificationEvents.BookingRefundedCustomer))["refund"]);
     }
 
     /// <summary>SQLite stores job times as binary and drops sub-millisecond ticks, so exact comparisons use whole seconds.</summary>
@@ -381,6 +604,30 @@ public class NotificationTests
     private static Task<BackgroundJob> JobForAsync(WebApplicationFactory<Program> host, Guid outboxId) =>
         QueryAsync(host, db => db.BackgroundJobs.AsNoTracking().SingleAsync(j => j.Payload == outboxId.ToString()));
 
+    private static Task<int> CountRowsAsync(WebApplicationFactory<Program> host, string eventKey) =>
+        QueryAsync(host, db => db.NotificationOutbox.CountAsync(r => r.EventKey == eventKey));
+
+    private static Task<HttpResponseMessage> PostWebhookAsync(WebApplicationFactory<Program> host, string body, string eventId)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/webhooks/razorpay")
+        {
+            Content = new StringContent(body, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), "application/json")
+        };
+        request.Headers.TryAddWithoutValidation("X-Razorpay-Signature", Sign(WebhookSecret, body));
+        request.Headers.TryAddWithoutValidation("X-Razorpay-Event-Id", eventId);
+        return host.CreateClient().SendAsync(request);
+    }
+
+    private static string RefundBody(string refundId, string paymentId, long paise) =>
+        "{\"event\":\"refund.processed\",\"payload\":{\"refund\":{\"entity\":{\"id\":\"" + refundId
+        + "\",\"payment_id\":\"" + paymentId + "\",\"amount\":" + paise + ",\"currency\":\"INR\"}}}}";
+
+    private static string Sign(string secret, string payload)
+    {
+        using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(secret));
+        return Convert.ToHexString(hmac.ComputeHash(Encoding.UTF8.GetBytes(payload))).ToLowerInvariant();
+    }
+
     private static Dictionary<string, string> Data(NotificationOutbox row) =>
         JsonSerializer.Deserialize<Dictionary<string, string>>(row.Data)!;
 
@@ -461,6 +708,20 @@ public class NotificationTests
         }
     }
 
+    /// <summary>Fails any save that changes a booking or payment, the way a lost concurrency race does.</summary>
+    private sealed class FailBookingOrPaymentUpdate : SaveChangesInterceptor
+    {
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            var tracker = eventData.Context!.ChangeTracker;
+            if (tracker.Entries<Booking>().Any(e => e.State == EntityState.Modified)
+                || tracker.Entries<Payment>().Any(e => e.State == EntityState.Modified))
+                throw new DbUpdateConcurrencyException("Forced booking update conflict.");
+            return base.SavingChangesAsync(eventData, result, cancellationToken);
+        }
+    }
+
     /// <summary>Every log line as "level message | properties | exception", scope properties included.</summary>
     private sealed class LogCapture : ILoggerProvider
     {
@@ -490,7 +751,8 @@ public class NotificationTests
 
     private sealed record SlotBody(Guid Id, DateOnly Date, string Start);
     private sealed record SlotListBody(List<SlotBody> Slots);
-    private sealed record OrderBody(string OrderId);
+    private sealed record OrderBody(string OrderId, long AmountPaise);
+    private sealed record IdBody(Guid Id);
     private sealed record BookingBody(Guid Id, decimal Amount);
     private sealed record OtpBody(string DevCode);
     private sealed record AuthBody(string Token);

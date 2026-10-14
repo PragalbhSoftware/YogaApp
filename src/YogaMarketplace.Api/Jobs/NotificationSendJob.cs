@@ -9,8 +9,8 @@ namespace YogaMarketplace.Api.Jobs;
 
 /// <summary>
 /// Sends one outbox row. Feature off, no SMTP, no address or no active template mark it Skipped. A placeholder with no
-/// value marks it Failed at once, since retrying cannot fix the template. A send error is rethrown so the runner retries
-/// with its backoff; the row turns Failed on its last attempt.
+/// value marks it Failed at once, since retrying cannot fix the template. Any other error (SMTP, database, bad data) is
+/// rethrown so the runner retries with its backoff; the row turns Failed on its last attempt, so it never stays Pending.
 /// </summary>
 public class NotificationSendJob : IBackgroundJobHandler
 {
@@ -46,6 +46,32 @@ public class NotificationSendJob : IBackgroundJobHandler
         if (row is null || row.Status != NotificationStatus.Pending)
             return;
 
+        var attempt = ++row.Attempts;
+        try
+        {
+            await ProcessAsync(row, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            // SMTP errors often echo the address back, so only the masked text goes to the row, the logs and the runner.
+            var error = Cut(LogMask.Text(ex.Message), NotificationOutbox.LastErrorMax);
+            var status = attempt >= row.MaxAttempts ? NotificationStatus.Failed : NotificationStatus.Pending;
+            await _db.NotificationOutbox
+                .Where(o => o.Id == id)
+                .ExecuteUpdateAsync(
+                    s => s.SetProperty(o => o.Status, status)
+                        .SetProperty(o => o.Attempts, attempt)
+                        .SetProperty(o => o.LastError, error),
+                    CancellationToken.None);
+            _logger.LogWarning(
+                "Notification {NotificationId} ({EventKey}) to {Recipient} failed on attempt {Attempt} of {MaxAttempts}: {Error}",
+                row.Id, row.EventKey, LogMask.Text(row.Recipient ?? ""), attempt, row.MaxAttempts, error);
+            throw new InvalidOperationException($"Notification failed: {error}");
+        }
+    }
+
+    private async Task ProcessAsync(NotificationOutbox row, CancellationToken cancellationToken)
+    {
         var enabled = (await _settings.GetAsync(cancellationToken)).Notifications.EmailEnabled;
         var template = await TemplateForAsync(row, cancellationToken);
         var skipReason = (enabled, _sender is NoopAlertSender, row.Recipient, template) switch
@@ -67,7 +93,7 @@ public class NotificationSendJob : IBackgroundJobHandler
         try
         {
             var data = JsonSerializer.Deserialize<Dictionary<string, string>>(row.Data) ?? [];
-            subject = NotificationTemplateRules.Render(template!.Subject, data);
+            subject = NotificationTemplateRules.Render(template!.Subject, data, singleLine: true);
             body = NotificationTemplateRules.Render(template.Body, data);
         }
         catch (KeyNotFoundException ex)
@@ -77,31 +103,10 @@ public class NotificationSendJob : IBackgroundJobHandler
             return;
         }
 
-        await SendAsync(row, subject, body, cancellationToken);
-    }
-
-    private async Task SendAsync(NotificationOutbox row, string subject, string body, CancellationToken cancellationToken)
-    {
-        var to = LogMask.Text(row.Recipient!);
-        row.Attempts++;
-        try
-        {
-            await _sender.SendAsync(row.Recipient!, subject, body, cancellationToken);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
-        {
-            // SMTP errors often echo the address back, so only the masked text goes to the row, the logs and the runner.
-            var error = Cut(LogMask.Text(ex.Message), NotificationOutbox.LastErrorMax);
-            await FinishAsync(row, row.Attempts >= row.MaxAttempts ? NotificationStatus.Failed : NotificationStatus.Pending, error);
-            _logger.LogWarning(
-                "Notification {NotificationId} ({EventKey}) to {Recipient} failed on attempt {Attempt} of {MaxAttempts}: {Error}",
-                row.Id, row.EventKey, to, row.Attempts, row.MaxAttempts, error);
-            throw new InvalidOperationException($"Notification send failed: {error}");
-        }
-
+        await _sender.SendAsync(row.Recipient!, subject, body, cancellationToken);
         row.SentAt = _time.GetUtcNow();
         await FinishAsync(row, NotificationStatus.Sent, null);
-        _logger.LogInformation("Sent notification {NotificationId} ({EventKey}) to {Recipient}.", row.Id, row.EventKey, to);
+        _logger.LogInformation("Sent notification {NotificationId} ({EventKey}) to {Recipient}.", row.Id, row.EventKey, LogMask.Text(row.Recipient!));
     }
 
     private async Task<NotificationTemplate?> TemplateForAsync(NotificationOutbox row, CancellationToken cancellationToken)

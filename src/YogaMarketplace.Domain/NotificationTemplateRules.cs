@@ -12,14 +12,17 @@ public static partial class NotificationTemplateRules
             ?? active.FirstOrDefault(t => t.CategoryId is null);
     }
 
-    /// <summary>Replaces each <c>{{key}}</c>. A key with no value throws, so a broken template never sends half-filled text.</summary>
-    public static string Render(string template, IReadOnlyDictionary<string, string> data) =>
+    /// <summary>
+    /// Replaces each <c>{{key}}</c>. A key with no value throws, so a broken template never sends half-filled text.
+    /// <paramref name="singleLine"/> turns line breaks in values into spaces: a subject must never carry CR/LF.
+    /// </summary>
+    public static string Render(string template, IReadOnlyDictionary<string, string> data, bool singleLine = false) =>
         Placeholder().Replace(template, match =>
         {
             var key = match.Groups[1].Value;
-            return data.TryGetValue(key, out var value)
-                ? value
-                : throw new KeyNotFoundException($"Template placeholder {{{{{key}}}}} has no value.");
+            if (!data.TryGetValue(key, out var value))
+                throw new KeyNotFoundException($"Template placeholder {{{{{key}}}}} has no value.");
+            return singleLine ? string.Join(' ', value.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)) : value;
         });
 
     [GeneratedRegex(@"\{\{\s*([A-Za-z0-9_]+)\s*\}\}")]

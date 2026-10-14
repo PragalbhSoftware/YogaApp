@@ -30,12 +30,12 @@ public class BookingNotifications
     /// <summary>Customer or admin cancel. <paramref name="refund"/> is the money going back; a returned credit is named too.</summary>
     public async Task CancelledAsync(Booking booking, decimal refund, bool creditReturned, CancellationToken cancellationToken) =>
         await QueueAsync(booking, NotificationEvents.BookingCancelledCustomer, NotificationEvents.BookingCancelledInstructor,
-            await RefundTextAsync(refund, creditReturned, cancellationToken), cancellationToken);
+            await RefundTextAsync(booking, refund, creditReturned, cancellationToken), cancellationToken);
 
     /// <summary>Instructor decline, or a refund made in the Razorpay dashboard.</summary>
     public async Task RefundedAsync(Booking booking, decimal refund, bool creditReturned, CancellationToken cancellationToken) =>
         await QueueAsync(booking, NotificationEvents.BookingRefundedCustomer, NotificationEvents.BookingRefundedInstructor,
-            await RefundTextAsync(refund, creditReturned, cancellationToken), cancellationToken);
+            await RefundTextAsync(booking, refund, creditReturned, cancellationToken), cancellationToken);
 
     private async Task QueueAsync(Booking booking, string customerEvent, string instructorEvent, string? refund, CancellationToken cancellationToken)
     {
@@ -65,14 +65,21 @@ public class BookingNotifications
         await _notifications.EnqueueAsync(instructorEvent, new NotificationRecipient(instructor.Id, instructor.Email, instructor.Phone), data, service.CategoryId, cancellationToken);
     }
 
-    private async Task<string> RefundTextAsync(decimal refund, bool creditReturned, CancellationToken cancellationToken)
+    private async Task<string> RefundTextAsync(Booking booking, decimal refund, bool creditReturned, CancellationToken cancellationToken) =>
+        RefundText((await _settings.GetAsync(cancellationToken)).Currency, refund, booking.CreditBatchId is not null, creditReturned);
+
+    /// <summary>The value after "Refund:". A credit booking always says what happened to the credit, even with no money back.</summary>
+    public static string RefundText(string currency, decimal refund, bool paidWithCredit, bool creditReturned)
     {
-        var money = $"{(await _settings.GetAsync(cancellationToken)).Currency} {refund.ToString("0.00", CultureInfo.InvariantCulture)}";
+        var money = $"{currency} {refund.ToString("0.00", CultureInfo.InvariantCulture)}";
+        if (!paidWithCredit)
+            return money;
         return (creditReturned, refund > 0) switch
         {
-            (true, true) => $"{money} and your credit",
-            (true, false) => "your credit",
-            _ => money
+            (true, true) => $"{money}, and 1 credit back in your pack",
+            (true, false) => "1 credit back in your pack",
+            (false, true) => $"{money}. The credit for this session stays used",
+            (false, false) => "None. The credit for this session stays used"
         };
     }
 }
