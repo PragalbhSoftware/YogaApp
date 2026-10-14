@@ -475,11 +475,11 @@ public class NotificationTests
 
         var cancelled = await BookAsync(factory, customer);
         await PostAsync<BookingBody>(customer, $"/api/bookings/{cancelled.Id}/cancel", new { });
-        Assert.False((await customer.PostAsJsonAsync($"/api/bookings/{cancelled.Id}/cancel", new { })).IsSuccessStatusCode);
-        Assert.False((await admin.PostAsJsonAsync($"/api/admin/bookings/{cancelled.Id}/cancel", new { reason = "Again" })).IsSuccessStatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await customer.PostAsJsonAsync($"/api/bookings/{cancelled.Id}/cancel", new { })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await admin.PostAsJsonAsync($"/api/admin/bookings/{cancelled.Id}/cancel", new { reason = "Again" })).StatusCode);
         var declined = await BookAsync(factory, customer);
         await PostAsync<BookingBody>(instructor, $"/api/bookings/{declined.Id}/decline", new { });
-        Assert.False((await instructor.PostAsJsonAsync($"/api/bookings/{declined.Id}/decline", new { })).IsSuccessStatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await instructor.PostAsJsonAsync($"/api/bookings/{declined.Id}/decline", new { })).StatusCode);
 
         foreach (var key in new[] { NotificationEvents.BookingCancelledCustomer, NotificationEvents.BookingCancelledInstructor,
                      NotificationEvents.BookingRefundedCustomer, NotificationEvents.BookingRefundedInstructor })
@@ -555,7 +555,7 @@ public class NotificationTests
         var refund = RefundBody("rfnd_dash_" + Guid.NewGuid().ToString("N"), payment.GatewayPaymentId!, (long)(payment.Amount * 100));
         var eventId = "evt_" + Guid.NewGuid().ToString("N");
 
-        Assert.False((await PostWebhookAsync(failing, refund, eventId)).IsSuccessStatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await PostWebhookAsync(failing, refund, eventId)).StatusCode);
         Assert.Equal(0, await CountRowsAsync(factory, NotificationEvents.BookingRefundedCustomer));
 
         Assert.Equal(HttpStatusCode.OK, (await PostWebhookAsync(factory, refund, eventId)).StatusCode);
