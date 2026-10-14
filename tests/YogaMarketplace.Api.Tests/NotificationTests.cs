@@ -216,6 +216,36 @@ public class NotificationTests
         var instructorRow = Assert.Single(await OutboxAsync(factory), r => r.Recipient == InstructorEmail);
         Assert.Equal(NotificationStatus.Skipped, instructorRow.Status);
         Assert.Equal("SMTP is not configured.", instructorRow.LastError);
+        var job = await JobForAsync(factory, instructorRow.Id);
+        Assert.Equal(BackgroundJobStatus.Succeeded, job.Status);
+        Assert.Null(job.LastError);
+    }
+
+    [Fact]
+    public async Task Tokens_in_a_sender_error_are_masked_in_the_stored_error_text()
+    {
+        const string jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMifQ.c2lnbmF0dXJl";
+        const string bearer = "Bearer sk_live_relay_7f3a9c";
+        await using var factory = new YogaApiFactory();
+        var (host, sender, _) = NewHost(factory);
+        await PatchSettingsAsync(host, new { emailNotificationsEnabled = true });
+        var (customer, _) = await SignUpAsync(host);
+        await BookAsync(host, customer);
+        sender.FailuresLeft = 1;
+        sender.FailureText = $"Relay rejected {bearer} and session {jwt}.";
+
+        await RunJobsAsync(host, DateTimeOffset.UtcNow.AddSeconds(1));
+
+        var row = await InstructorRowAsync(host);
+        var job = await JobForAsync(host, row.Id);
+        foreach (var stored in new[] { row.LastError, job.LastError })
+        {
+            Assert.NotNull(stored);
+            Assert.Contains("Bearer [token]", stored, StringComparison.Ordinal);
+            Assert.Contains("[jwt]", stored, StringComparison.Ordinal);
+            Assert.DoesNotContain("sk_live_relay_7f3a9c", stored, StringComparison.Ordinal);
+            Assert.DoesNotContain(jwt, stored, StringComparison.Ordinal);
+        }
     }
 
     [Fact]
@@ -715,13 +745,14 @@ public class NotificationTests
     {
         public ConcurrentQueue<SentEmail> Sent { get; } = new();
         public int FailuresLeft { get; set; }
+        public string? FailureText { get; set; }
 
         public Task SendAsync(string to, string subject, string body, CancellationToken cancellationToken)
         {
             if (FailuresLeft > 0)
             {
                 FailuresLeft--;
-                throw new SmtpException(SmtpStatusCode.MailboxBusy, $"Mailbox busy for <{to}>.");
+                throw new SmtpException(SmtpStatusCode.MailboxBusy, FailureText ?? $"Mailbox busy for <{to}>.");
             }
             Sent.Enqueue(new SentEmail(to, subject, body));
             return Task.CompletedTask;
