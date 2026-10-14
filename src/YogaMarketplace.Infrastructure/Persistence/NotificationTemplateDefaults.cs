@@ -22,11 +22,33 @@ internal static class NotificationTemplateDefaults
             You can see the details and cancel from My bookings.
             """),
         Email("8f0c2a51-3b7e-4c1d-9a20-000000000002", NotificationEvents.BookingConfirmedInstructor,
-            "New booking: {{serviceTitle}} on {{sessionDate}}",
+            "Booking confirmed: {{serviceTitle}} on {{sessionDate}}",
             """
             Hi {{instructorName}},
 
-            {{customerName}} booked {{serviceTitle}} on {{sessionDate}} at {{sessionTime}}.
+            You accepted the booking by {{customerName}} for {{serviceTitle}} on {{sessionDate}} at {{sessionTime}}.
+            Booking reference: {{bookingRef}}
+            """),
+        Email("8f0c2a51-3b7e-4c1d-9a20-000000000008", NotificationEvents.BookingRequestedCustomer,
+            "Request received: {{serviceTitle}} with {{instructorName}} on {{sessionDate}}",
+            """
+            Hi {{customerName}},
+
+            We received your booking request. It is waiting for the instructor to accept it.
+
+            Instructor: {{instructorName}}
+            Session: {{serviceTitle}}
+            When: {{sessionDate}} at {{sessionTime}}
+            Booking reference: {{bookingRef}}
+
+            We'll email you when the instructor accepts. If they decline, you get your payment or credit back.
+            """),
+        Email("8f0c2a51-3b7e-4c1d-9a20-000000000009", NotificationEvents.BookingRequestedInstructor,
+            "New booking request: {{serviceTitle}} on {{sessionDate}}",
+            """
+            Hi {{instructorName}},
+
+            {{customerName}} asked to book {{serviceTitle}} on {{sessionDate}} at {{sessionTime}}.
             Booking reference: {{bookingRef}}
 
             Open your bookings to accept or decline the request.

@@ -274,6 +274,7 @@ public partial class BookingService : IBookingService, IBookingHandshake, IRazor
     {
         var (booking, currency) = await LoadForInstructorAsync(bookingId, cancellationToken);
         BookingRules.Accept(booking, _time.GetUtcNow());
+        await _notifications.BookedAsync(booking, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
         _logger.LogInformation("Instructor {ProviderId} accepted booking {BookingId}.", booking.ProviderId, booking.Id);
         return ToResponse(booking, booking.Payment, currency);
@@ -590,7 +591,7 @@ public partial class BookingService : IBookingService, IBookingHandshake, IRazor
             booking.Payment = payment;
 
             _db.Bookings.Add(booking);
-            await _notifications.ConfirmedAsync(booking, cancellationToken);
+            await _notifications.BookedAsync(booking, cancellationToken);
             await _db.SaveChangesAsync(cancellationToken);
             await tx.CommitAsync(cancellationToken);
             await ApplyPendingRefundsAsync(paymentId, cancellationToken);

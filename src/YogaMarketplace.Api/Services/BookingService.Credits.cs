@@ -63,7 +63,7 @@ public partial class BookingService
         booking.Slot = slot;
         booking.Payment = payment;
         _db.Bookings.Add(booking);
-        await _notifications.ConfirmedAsync(booking, cancellationToken);
+        await _notifications.BookedAsync(booking, cancellationToken);
 
         try
         {

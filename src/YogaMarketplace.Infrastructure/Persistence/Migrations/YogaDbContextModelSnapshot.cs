@@ -956,11 +956,29 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                         new
                         {
                             Id = new Guid("8f0c2a51-3b7e-4c1d-9a20-000000000002"),
-                            Body = "Hi {{instructorName}},\n\n{{customerName}} booked {{serviceTitle}} on {{sessionDate}} at {{sessionTime}}.\nBooking reference: {{bookingRef}}\n\nOpen your bookings to accept or decline the request.",
+                            Body = "Hi {{instructorName}},\n\nYou accepted the booking by {{customerName}} for {{serviceTitle}} on {{sessionDate}} at {{sessionTime}}.\nBooking reference: {{bookingRef}}",
                             Channel = "Email",
                             EventKey = "booking.confirmed.instructor",
                             IsActive = true,
-                            Subject = "New booking: {{serviceTitle}} on {{sessionDate}}"
+                            Subject = "Booking confirmed: {{serviceTitle}} on {{sessionDate}}"
+                        },
+                        new
+                        {
+                            Id = new Guid("8f0c2a51-3b7e-4c1d-9a20-000000000008"),
+                            Body = "Hi {{customerName}},\n\nWe received your booking request. It is waiting for the instructor to accept it.\n\nInstructor: {{instructorName}}\nSession: {{serviceTitle}}\nWhen: {{sessionDate}} at {{sessionTime}}\nBooking reference: {{bookingRef}}\n\nWe'll email you when the instructor accepts. If they decline, you get your payment or credit back.",
+                            Channel = "Email",
+                            EventKey = "booking.requested.customer",
+                            IsActive = true,
+                            Subject = "Request received: {{serviceTitle}} with {{instructorName}} on {{sessionDate}}"
+                        },
+                        new
+                        {
+                            Id = new Guid("8f0c2a51-3b7e-4c1d-9a20-000000000009"),
+                            Body = "Hi {{instructorName}},\n\n{{customerName}} asked to book {{serviceTitle}} on {{sessionDate}} at {{sessionTime}}.\nBooking reference: {{bookingRef}}\n\nOpen your bookings to accept or decline the request.",
+                            Channel = "Email",
+                            EventKey = "booking.requested.instructor",
+                            IsActive = true,
+                            Subject = "New booking request: {{serviceTitle}} on {{sessionDate}}"
                         },
                         new
                         {

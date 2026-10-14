@@ -42,7 +42,7 @@ function NotificationForm({ settings }: { settings: AdminSettings }) {
     <div className="space-y-5">
       <SettingsIntro
         title="Booking emails"
-        lead="Emails to customers and instructors when a booking is confirmed, cancelled or refunded. Customers without an email on file are skipped."
+        lead="Emails to customers and instructors when a booking is requested, confirmed, cancelled or refunded. Customers without an email on file are skipped."
       />
       <SettingsCard>
         <form
