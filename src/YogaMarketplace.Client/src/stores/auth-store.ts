@@ -3,6 +3,26 @@ import type { User } from "@/features/auth/types";
 
 /** Where older builds persisted the session, token included. */
 const LEGACY_STORAGE_KEY = "ym.auth";
+/** Not a secret: only says this browser signed in, so a guest's page load can skip the refresh call. */
+const SIGNED_IN_KEY = "ym.signedIn";
+
+function rememberSignedIn(signedIn: boolean) {
+  try {
+    if (signedIn) localStorage.setItem(SIGNED_IN_KEY, "1");
+    else localStorage.removeItem(SIGNED_IN_KEY);
+  } catch {
+    // Storage blocked: wasSignedIn() then always tries the refresh.
+  }
+}
+
+/** True when this browser may hold a refresh cookie. Blocked storage counts as yes, so nobody is signed out by it. */
+export function wasSignedIn() {
+  try {
+    return localStorage.getItem(SIGNED_IN_KEY) === "1";
+  } catch {
+    return true;
+  }
+}
 
 type AuthState = {
   token: string | null;
@@ -18,8 +38,14 @@ type AuthState = {
 export const useAuthStore = create<AuthState>()((set) => ({
   token: null,
   user: null,
-  signIn: (token, user) => set({ token, user }),
-  signOut: () => set({ token: null, user: null }),
+  signIn: (token, user) => {
+    rememberSignedIn(true);
+    set({ token, user });
+  },
+  signOut: () => {
+    rememberSignedIn(false);
+    set({ token: null, user: null });
+  },
 }));
 
 /** Drops a session an older build left in localStorage. */
