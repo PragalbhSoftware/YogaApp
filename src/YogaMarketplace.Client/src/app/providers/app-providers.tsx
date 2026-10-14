@@ -2,8 +2,9 @@ import { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { CssBaseline, ThemeProvider } from "@mui/material";
 import { Toaster } from "sonner";
-import { AppRouter } from "@/app/router/app-router";
+import { AppRouter, RouteFallback } from "@/app/router/app-router";
 import { theme } from "@/app/theme/theme";
+import { useRestoredSession } from "@/features/auth/hooks/use-restored-session";
 import { useAuthStore } from "@/stores/auth-store";
 
 const queryClient = new QueryClient({
@@ -24,11 +25,12 @@ function useClearCacheOnSignOut() {
 
 export function AppProviders() {
   useClearCacheOnSignOut();
+  const restored = useRestoredSession();
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <QueryClientProvider client={queryClient}>
-        <AppRouter />
+        {restored ? <AppRouter /> : <RouteFallback />}
         <Toaster position="top-center" richColors />
       </QueryClientProvider>
     </ThemeProvider>

@@ -34,7 +34,7 @@ export function OtpStep({
       <header className="space-y-2">
         <h2 className="font-heading text-2xl font-medium sm:text-3xl">Enter the code</h2>
         <p className="text-sm leading-relaxed text-brand-muted">
-          We sent a code to <PhoneText className="font-medium text-brand-text" value={phone} />.
+          If <PhoneText className="font-medium text-brand-text" value={phone} /> can sign in, you'll get a code.
         </p>
         {expiresAt ? (
           <p className="text-xs text-brand-muted">Expires at {formatIstExpiry(expiresAt)} IST.</p>

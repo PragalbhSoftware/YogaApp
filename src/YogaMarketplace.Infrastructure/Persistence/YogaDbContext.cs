@@ -33,6 +33,7 @@ public class YogaDbContext : DbContext
     public DbSet<ContentPage> ContentPages => Set<ContentPage>();
     public DbSet<BackgroundJob> BackgroundJobs => Set<BackgroundJob>();
     public DbSet<OtpChallenge> OtpChallenges => Set<OtpChallenge>();
+    public DbSet<OtpPhoneLock> OtpPhoneLocks => Set<OtpPhoneLock>();
     public DbSet<CreditPack> CreditPacks => Set<CreditPack>();
     public DbSet<CreditBatch> CreditBatches => Set<CreditBatch>();
     public DbSet<CreditLedgerEntry> CreditLedger => Set<CreditLedgerEntry>();

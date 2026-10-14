@@ -178,6 +178,18 @@ export const notificationSettingsSchema = z.object({
   notificationMaxAttempts: wholeBetween("tries", maxNotificationAttempts),
 });
 
+export const signInLimits = {
+  maxSendsPerPhone: 20,
+  maxWrongCodesPerPhone: 50,
+  maxLockMinutes: 24 * 60,
+} as const;
+
+export const signInLimitSettingsSchema = z.object({
+  otpMaxSendsPerPhone: wholeBetween("codes", signInLimits.maxSendsPerPhone),
+  otpMaxWrongCodesPerPhone: wholeBetween("tries", signInLimits.maxWrongCodesPerPhone),
+  otpLockMinutes: wholeBetween("minutes", signInLimits.maxLockMinutes),
+});
+
 export const maxWebhookPayloadRetentionDays = 3650;
 
 /** The policy version may only go up, so the current value is the floor. */
@@ -261,5 +273,6 @@ export type ReconciliationSettingsValues = z.infer<typeof reconciliationSettings
 export type JobScheduleSettingsValues = z.infer<typeof jobScheduleSettingsSchema>;
 export type ErrorAlertSettingsValues = z.infer<typeof errorAlertSettingsSchema>;
 export type NotificationSettingsValues = z.infer<typeof notificationSettingsSchema>;
+export type SignInLimitSettingsValues = z.infer<typeof signInLimitSettingsSchema>;
 export type ResolveItemValues = z.infer<typeof resolveItemSchema>;
 export type PrivacySettingsValues = z.infer<ReturnType<typeof privacySettingsSchema>>;

@@ -1065,6 +1065,20 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                     b.ToTable("OtpChallenges");
                 });
 
+            modelBuilder.Entity("YogaMarketplace.Domain.OtpPhoneLock", b =>
+                {
+                    b.Property<string>("Phone")
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<DateTimeOffset>("LockedUntil")
+                        .HasColumnType("datetimeoffset");
+
+                    b.HasKey("Phone");
+
+                    b.ToTable("OtpPhoneLocks");
+                });
+
             modelBuilder.Entity("YogaMarketplace.Domain.Payment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1287,6 +1301,21 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int")
                         .HasDefaultValue(5);
+
+                    b.Property<int>("OtpLockMinutes")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(30);
+
+                    b.Property<int>("OtpMaxSendsPerPhone")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(5);
+
+                    b.Property<int>("OtpMaxWrongCodesPerPhone")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(10);
 
                     b.Property<decimal>("PackReferenceSessionPrice")
                         .ValueGeneratedOnAdd()

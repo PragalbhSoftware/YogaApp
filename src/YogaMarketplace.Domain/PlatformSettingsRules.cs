@@ -46,7 +46,10 @@ public sealed record PlatformSettingsChanges(
     int? ErrorAlertCheckMinutes = null,
     int? ErrorEventRetentionDays = null,
     bool? EmailNotificationsEnabled = null,
-    int? NotificationMaxAttempts = null);
+    int? NotificationMaxAttempts = null,
+    int? OtpMaxSendsPerPhone = null,
+    int? OtpMaxWrongCodesPerPhone = null,
+    int? OtpLockMinutes = null);
 
 /// <summary>When the daily reconciliation runs and how long a webhook or refund may wait before it is reported.</summary>
 public sealed record ReconciliationTerms(TimeOnly RunAt, int WebhookStuckMinutes, int RefundPendingHours);
@@ -85,10 +88,21 @@ public static class PlatformSettingsRules
     public const int ErrorAlertEmailMax = 254;
     public const int DefaultNotificationMaxAttempts = 5;
     public const int MaxNotificationMaxAttempts = 10;
+    public const int DefaultOtpMaxSendsPerPhone = 5;
+    public const int MaxOtpMaxSendsPerPhone = 20;
+    public const int DefaultOtpMaxWrongCodesPerPhone = 10;
+    public const int MaxOtpMaxWrongCodesPerPhone = 50;
+    public const int DefaultOtpLockMinutes = 30;
+    public const int MaxOtpLockMinutes = 24 * 60;
 
     public static NotificationTerms NotificationTermsFor(PlatformSettings settings) => new(
         settings.EmailNotificationsEnabled,
         settings.NotificationMaxAttempts);
+
+    public static OtpLimitTerms OtpLimitTermsFor(PlatformSettings settings) => new(
+        settings.OtpMaxSendsPerPhone,
+        settings.OtpMaxWrongCodesPerPhone,
+        settings.OtpLockMinutes);
 
     public static ErrorAlertTerms ErrorAlertTermsFor(PlatformSettings settings) => new(
         settings.EmailAlertsEnabled,
@@ -176,6 +190,9 @@ public static class PlatformSettingsRules
         var errorRetentionDays = changes.ErrorEventRetentionDays is int ed ? Between(ed, MaxErrorEventRetentionDays, "Error retention", "days") : settings.ErrorEventRetentionDays;
         var notificationsOn = changes.EmailNotificationsEnabled ?? settings.EmailNotificationsEnabled;
         var notificationAttempts = changes.NotificationMaxAttempts is int na ? Between(na, MaxNotificationMaxAttempts, "Notification attempts", "tries") : settings.NotificationMaxAttempts;
+        var otpSends = changes.OtpMaxSendsPerPhone is int os ? Between(os, MaxOtpMaxSendsPerPhone, "Codes per phone", "codes") : settings.OtpMaxSendsPerPhone;
+        var otpWrong = changes.OtpMaxWrongCodesPerPhone is int ow ? Between(ow, MaxOtpMaxWrongCodesPerPhone, "Wrong codes per phone", "tries") : settings.OtpMaxWrongCodesPerPhone;
+        var otpLock = changes.OtpLockMinutes is int ol ? Between(ol, MaxOtpLockMinutes, "Phone lock", "minutes") : settings.OtpLockMinutes;
 
         var log = new List<SettingChange>();
         Set(log, nameof(settings.CommissionPercent), settings.CommissionPercent, commission, v => settings.CommissionPercent = v);
@@ -213,6 +230,9 @@ public static class PlatformSettingsRules
         Set(log, nameof(settings.ErrorEventRetentionDays), settings.ErrorEventRetentionDays, errorRetentionDays, v => settings.ErrorEventRetentionDays = v);
         Set(log, nameof(settings.EmailNotificationsEnabled), settings.EmailNotificationsEnabled, notificationsOn, v => settings.EmailNotificationsEnabled = v);
         Set(log, nameof(settings.NotificationMaxAttempts), settings.NotificationMaxAttempts, notificationAttempts, v => settings.NotificationMaxAttempts = v);
+        Set(log, nameof(settings.OtpMaxSendsPerPhone), settings.OtpMaxSendsPerPhone, otpSends, v => settings.OtpMaxSendsPerPhone = v);
+        Set(log, nameof(settings.OtpMaxWrongCodesPerPhone), settings.OtpMaxWrongCodesPerPhone, otpWrong, v => settings.OtpMaxWrongCodesPerPhone = v);
+        Set(log, nameof(settings.OtpLockMinutes), settings.OtpLockMinutes, otpLock, v => settings.OtpLockMinutes = v);
         return log;
     }
 

@@ -117,7 +117,7 @@ const PrivacyPage = lazy(() =>
   import("@/features/content/pages/content-page").then((module) => ({ default: module.PrivacyPage })),
 );
 
-function RouteFallback() {
+export function RouteFallback() {
   return (
     <div className="flex min-h-svh items-center justify-center bg-brand-background">
       <CircularProgress />

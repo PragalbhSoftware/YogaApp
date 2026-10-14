@@ -244,7 +244,15 @@ export type NotificationSettings = {
   notificationMaxAttempts: number;
 };
 
+/** Per-phone sign-in code limits. Sends and wrong codes count over the lock length; reaching either locks the phone. */
+export type SignInLimitSettings = {
+  otpMaxSendsPerPhone: number;
+  otpMaxWrongCodesPerPhone: number;
+  otpLockMinutes: number;
+};
+
 export type AdminSettings = CreditSettings &
+  SignInLimitSettings &
   ReconciliationSettings &
   PrivacySettings &
   JobScheduleSettings &
@@ -284,6 +292,7 @@ export type UpdateSettingsInput = Partial<
     | keyof JobScheduleSettings
     | Exclude<keyof ErrorAlertSettings, "errorAlertEmail">
     | keyof NotificationSettings
+    | keyof SignInLimitSettings
   >
 > & {
   version: number;

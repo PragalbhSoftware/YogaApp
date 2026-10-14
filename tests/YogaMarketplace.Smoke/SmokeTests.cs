@@ -91,11 +91,8 @@ public class SmokeTests
 
     private static async Task<string> SignInAsync(HttpClient client, string phone, string code)
     {
-        var existing = await client.PostAsJsonAsync("api/auth/otp/request", new { phone, isNewUser = false });
-        if (existing.StatusCode == HttpStatusCode.NotFound)
-            await PostAsync<JsonElement>(client, "api/auth/otp/request", new { phone, name = "Smoke Test", gender = "Other", isNewUser = true, acceptedPolicies = true });
-        else
-            await EnsureSuccessAsync(existing);
+        // The new-account request also sends a registered phone a normal sign-in code, so it covers both cases.
+        await PostAsync<JsonElement>(client, "api/auth/otp/request", new { phone, name = "Smoke Test", gender = "Other", isNewUser = true, acceptedPolicies = true });
 
         var auth = await PostAsync<AuthBody>(client, "api/auth/otp/verify", new { phone, code });
         return auth.Token;

@@ -24,6 +24,7 @@ public sealed record CurrentSettings(
     RecurringJobTerms Jobs,
     ErrorAlertTerms ErrorAlerts,
     NotificationTerms Notifications,
+    OtpLimitTerms OtpLimits,
     int Version,
     DateTimeOffset? UpdatedAt)
 {
@@ -43,6 +44,7 @@ public sealed record CurrentSettings(
         PlatformSettingsRules.RecurringJobTermsFor(settings),
         PlatformSettingsRules.ErrorAlertTermsFor(settings),
         PlatformSettingsRules.NotificationTermsFor(settings),
+        PlatformSettingsRules.OtpLimitTermsFor(settings),
         settings.Version,
         settings.UpdatedAt);
 }
@@ -203,7 +205,10 @@ public class PlatformSettingsService : IPlatformSettingsService
         request.ErrorAlertCheckMinutes,
         request.ErrorEventRetentionDays,
         request.EmailNotificationsEnabled,
-        request.NotificationMaxAttempts);
+        request.NotificationMaxAttempts,
+        request.OtpMaxSendsPerPhone,
+        request.OtpMaxWrongCodesPerPhone,
+        request.OtpLockMinutes);
 
     private static TimeOnly? ParseTime(string? value, string label)
     {
@@ -255,5 +260,8 @@ public class PlatformSettingsService : IPlatformSettingsService
         settings.ErrorAlertCheckMinutes,
         settings.ErrorEventRetentionDays,
         settings.EmailNotificationsEnabled,
-        settings.NotificationMaxAttempts);
+        settings.NotificationMaxAttempts,
+        settings.OtpMaxSendsPerPhone,
+        settings.OtpMaxWrongCodesPerPhone,
+        settings.OtpLockMinutes);
 }

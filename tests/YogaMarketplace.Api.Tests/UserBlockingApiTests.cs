@@ -71,10 +71,11 @@ public class UserBlockingApiTests : IClassFixture<YogaApiFactory>
 
         var anonymous = _factory.CreateClient();
         var request = await anonymous.PostAsJsonAsync("/api/auth/otp/request", new { phone, isNewUser = false });
-        Assert.Equal(HttpStatusCode.Forbidden, request.StatusCode);
-        Assert.Contains("suspended", (await request.Content.ReadFromJsonAsync<ErrorBody>(Json))!.Error, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(HttpStatusCode.OK, request.StatusCode);
+        Assert.Null((await request.Content.ReadFromJsonAsync<OtpBody>(Json))!.DevCode);
         var verify = await anonymous.PostAsJsonAsync("/api/auth/otp/verify", new { phone, code = "123456" });
-        Assert.Equal(HttpStatusCode.Forbidden, verify.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, verify.StatusCode);
+        Assert.Contains("incorrect", (await verify.Content.ReadFromJsonAsync<ErrorBody>(Json))!.Error, StringComparison.OrdinalIgnoreCase);
 
         var listed = await admin.GetFromJsonAsync<List<UserBody>>($"/api/admin/users?q={phone[3..]}", Json);
         Assert.Contains(listed!, user => user.Id == me.Id && user.IsBlocked);

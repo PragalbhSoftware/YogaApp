@@ -351,6 +351,11 @@ public class PlatformSettings
     /// <summary>Customer and instructor notification emails: the feature flag and how many times one send is tried.</summary>
     public bool EmailNotificationsEnabled { get; set; }
     public int NotificationMaxAttempts { get; set; } = PlatformSettingsRules.DefaultNotificationMaxAttempts;
+
+    /// <summary>Per-phone sign-in code limits, see <see cref="OtpLimitTerms"/>.</summary>
+    public int OtpMaxSendsPerPhone { get; set; } = PlatformSettingsRules.DefaultOtpMaxSendsPerPhone;
+    public int OtpMaxWrongCodesPerPhone { get; set; } = PlatformSettingsRules.DefaultOtpMaxWrongCodesPerPhone;
+    public int OtpLockMinutes { get; set; } = PlatformSettingsRules.DefaultOtpLockMinutes;
     public int Version { get; set; } = 1;
     public DateTimeOffset? UpdatedAt { get; set; }
 }
