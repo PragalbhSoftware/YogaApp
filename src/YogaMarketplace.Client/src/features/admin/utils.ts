@@ -18,6 +18,7 @@ const jobLabels: Record<string, string> = {
   "credits.expire": "Expire unused credits",
   "payments.reconcile": "Payment reconciliation",
   "webhooks.clear-payloads": "Clear old webhook payloads",
+  "errors.alert": "Error alerts and clean-up",
 };
 
 /** Readable name of a background job type; an unknown type shows as it is. */

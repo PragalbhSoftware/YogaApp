@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Options;
 using YogaMarketplace.Api.Options;
+using YogaMarketplace.Api.Security;
 using YogaMarketplace.Domain;
 
 namespace YogaMarketplace.Api.Services;
@@ -443,12 +444,28 @@ public sealed class RazorpayHttpClient : IRazorpayClient
             throw new DomainException("Razorpay is not configured.", 503);
     }
 
+    /// <summary>Logs only Razorpay's error code and description: the raw body can echo customer contact details.</summary>
     private async Task LogFailureAsync(string action, HttpResponseMessage response, CancellationToken cancellationToken)
     {
-        var body = await response.Content.ReadAsStringAsync(cancellationToken);
-        if (body.Length > 500)
-            body = body[..500];
-        _logger.LogWarning("Razorpay {Action} failed with {Status}. {Body}", action, (int)response.StatusCode, body);
+        string? code = null, description = null;
+        try
+        {
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
+            if (body.RootElement.TryGetProperty("error", out var error) && error.ValueKind == JsonValueKind.Object)
+            {
+                code = error.TryGetProperty("code", out var c) ? c.GetString() : null;
+                description = error.TryGetProperty("description", out var d) ? d.GetString() : null;
+            }
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException)
+        {
+        }
+        _logger.LogWarning(
+            "Razorpay {Action} failed with {Status}: {ErrorCode} {ErrorDescription}",
+            action,
+            (int)response.StatusCode,
+            code,
+            description is null ? null : LogMask.Text(description));
     }
 
     private sealed record OrderWire(

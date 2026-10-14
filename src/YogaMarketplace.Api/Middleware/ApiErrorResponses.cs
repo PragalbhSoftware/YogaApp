@@ -6,7 +6,7 @@ namespace YogaMarketplace.Api.Middleware;
 
 /// <summary>
 /// JSON bodies for failures that never reach a controller: unhandled exceptions and empty error statuses.
-/// The client shows <c>error</c>; <c>traceId</c> lets support find the matching log line.
+/// The client shows <c>error</c>; <c>correlationId</c> (and <c>traceId</c>) let support find the matching log lines.
 /// </summary>
 public static class ApiErrorResponses
 {
@@ -26,7 +26,7 @@ public static class ApiErrorResponses
             return Task.CompletedTask;
 
         context.Response.StatusCode = StatusCodes.Status500InternalServerError;
-        return context.Response.WriteAsJsonAsync(new { error = UnexpectedMessage, traceId = TraceId(context) });
+        return context.Response.WriteAsJsonAsync(new { error = UnexpectedMessage, traceId = TraceId(context), correlationId = context.TraceIdentifier });
     }
 
     private static Task WriteStatusAsync(HttpContext context)
@@ -40,7 +40,7 @@ public static class ApiErrorResponses
             StatusCodes.Status429TooManyRequests => "Too many requests. Wait a moment and try again.",
             _ => ReasonPhrases.GetReasonPhrase(status)
         };
-        return context.Response.WriteAsJsonAsync(new { error = message, traceId = TraceId(context) });
+        return context.Response.WriteAsJsonAsync(new { error = message, traceId = TraceId(context), correlationId = context.TraceIdentifier });
     }
 
     private static string TraceId(HttpContext context) => Activity.Current?.Id ?? context.TraceIdentifier;

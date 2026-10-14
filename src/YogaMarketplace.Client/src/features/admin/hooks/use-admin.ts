@@ -224,6 +224,39 @@ export function useRetryJob() {
   });
 }
 
+const errorSummaryRefreshMs = 60_000;
+
+export function useAdminErrors(acknowledged: boolean, page = 1) {
+  return useQuery({
+    queryKey: ["admin-errors", acknowledged, page],
+    queryFn: () => adminApi.errors(acknowledged, page),
+  });
+}
+
+/** Open error count for the admin menu badge. */
+export function useAdminErrorSummary() {
+  return useQuery({
+    queryKey: ["admin-error-summary"],
+    queryFn: adminApi.errorSummary,
+    refetchInterval: errorSummaryRefreshMs,
+  });
+}
+
+export function useAcknowledgeError() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => adminApi.acknowledgeError(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin-errors"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-error-summary"] });
+    },
+  });
+}
+
+export function useSendTestAlert() {
+  return useMutation({ mutationFn: adminApi.sendTestAlert });
+}
+
 export function useAdminAreas() {
   return useQuery({
     queryKey: ["admin-areas"],

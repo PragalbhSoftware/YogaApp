@@ -1,9 +1,11 @@
 import type { AxiosResponse } from "axios";
 import { http } from "@/services/http/http-client";
 import {
+  errorsPageSize,
   jobsPageSize,
   reconciliationPageSize,
   type AdminArea,
+  type AdminErrorEvent,
   type AdminCertificate,
   type AdminBooking,
   type AdminCategory,
@@ -187,6 +189,24 @@ export const adminApi = {
 
   retryJob(id: string) {
     return http.post<AdminJob>(`/api/admin/jobs/${id}/retry`, {}).then((res) => res.data);
+  },
+
+  errors(acknowledged: boolean, page = 1) {
+    return http
+      .get<PagedList<AdminErrorEvent>>("/api/admin/errors", { params: { acknowledged, page, pageSize: errorsPageSize } })
+      .then((res) => res.data);
+  },
+
+  errorSummary() {
+    return http.get<{ unacknowledged: number }>("/api/admin/errors/summary").then((res) => res.data);
+  },
+
+  acknowledgeError(id: string) {
+    return http.post<AdminErrorEvent>(`/api/admin/errors/${id}/acknowledge`, {}).then((res) => res.data);
+  },
+
+  sendTestAlert() {
+    return http.post<void>("/api/admin/errors/test-alert", {}).then(() => undefined);
   },
 
   areas() {

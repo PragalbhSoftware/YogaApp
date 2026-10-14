@@ -5,13 +5,14 @@ import { AreaSettings } from "@/features/admin/components/area-settings";
 import { BannerSettings } from "@/features/admin/components/banner-settings";
 import { CategorySettings } from "@/features/admin/components/category-settings";
 import { CreditRulesSettings } from "@/features/admin/components/credit-rules-settings";
+import { ErrorAlertSettings } from "@/features/admin/components/error-alert-settings";
 import { FeeSettings } from "@/features/admin/components/fee-settings";
 import { PackSettings } from "@/features/admin/components/pack-settings";
 import { PageSettings } from "@/features/admin/components/page-settings";
 import { PrivacySettings } from "@/features/admin/components/privacy-settings";
 import { ReconciliationSettings } from "@/features/admin/components/reconciliation-settings";
 
-const tabs = ["earnings", "packs", "areas", "banner", "catalog", "pages"] as const;
+const tabs = ["earnings", "packs", "areas", "banner", "catalog", "pages", "alerts"] as const;
 type SettingsTab = (typeof tabs)[number];
 
 function readTab(value: string | null): SettingsTab {
@@ -26,7 +27,7 @@ export function SettingsPage() {
     <AdminPage
       kicker="Owner"
       title="Settings"
-      lead="Fees and payouts, session packs and credit rules, the neighbourhoods customers can pick, the home banner, the yoga label on browse, and the policy pages."
+      lead="Fees and payouts, session packs and credit rules, the neighbourhoods customers can pick, the home banner, the yoga label on browse, the policy pages, and error alerts."
     >
       <Tabs
         value={tab}
@@ -49,6 +50,7 @@ export function SettingsPage() {
         <Tab value="banner" label="Banner" />
         <Tab value="catalog" label="Catalog" />
         <Tab value="pages" label="Pages" />
+        <Tab value="alerts" label="Alerts" />
       </Tabs>
 
       {tab === "earnings" ? (
@@ -72,6 +74,7 @@ export function SettingsPage() {
           <PrivacySettings />
         </div>
       ) : null}
+      {tab === "alerts" ? <ErrorAlertSettings /> : null}
     </AdminPage>
   );
 }

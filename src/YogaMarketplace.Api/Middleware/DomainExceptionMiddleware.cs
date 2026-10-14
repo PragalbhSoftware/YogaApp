@@ -24,7 +24,7 @@ public class DomainExceptionMiddleware
                 throw;
 
             context.Response.StatusCode = ex.StatusCode;
-            await context.Response.WriteAsJsonAsync(new { error = ex.Message });
+            await context.Response.WriteAsJsonAsync(new { error = ex.Message, correlationId = context.TraceIdentifier });
         }
         catch (DbUpdateConcurrencyException)
         {
@@ -32,7 +32,7 @@ public class DomainExceptionMiddleware
                 throw;
 
             context.Response.StatusCode = StatusCodes.Status409Conflict;
-            await context.Response.WriteAsJsonAsync(new { error = "This was just changed by someone else. Refresh and try again." });
+            await context.Response.WriteAsJsonAsync(new { error = "This was just changed by someone else. Refresh and try again.", correlationId = context.TraceIdentifier });
         }
     }
 }

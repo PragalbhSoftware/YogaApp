@@ -22,6 +22,7 @@ public sealed record CurrentSettings(
     int PolicyVersion,
     int WebhookPayloadRetentionDays,
     RecurringJobTerms Jobs,
+    ErrorAlertTerms ErrorAlerts,
     int Version,
     DateTimeOffset? UpdatedAt)
 {
@@ -39,6 +40,7 @@ public sealed record CurrentSettings(
         settings.PolicyVersion,
         settings.WebhookPayloadRetentionDays,
         PlatformSettingsRules.RecurringJobTermsFor(settings),
+        PlatformSettingsRules.ErrorAlertTermsFor(settings),
         settings.Version,
         settings.UpdatedAt);
 }
@@ -192,7 +194,12 @@ public class PlatformSettingsService : IPlatformSettingsService
         request.CreditExpiryEnabled,
         ParseTime(request.CreditExpiryTime, "Credit expiry time"),
         request.WebhookCleanupEnabled,
-        ParseTime(request.WebhookCleanupTime, "Webhook cleanup time"));
+        ParseTime(request.WebhookCleanupTime, "Webhook cleanup time"),
+        request.EmailAlertsEnabled,
+        request.ErrorAlertEmail,
+        request.ErrorAlertThrottleMinutes,
+        request.ErrorAlertCheckMinutes,
+        request.ErrorEventRetentionDays);
 
     private static TimeOnly? ParseTime(string? value, string label)
     {
@@ -237,5 +244,10 @@ public class PlatformSettingsService : IPlatformSettingsService
         settings.CreditExpiryEnabled,
         Time(settings.CreditExpiryTime),
         settings.WebhookCleanupEnabled,
-        Time(settings.WebhookCleanupTime));
+        Time(settings.WebhookCleanupTime),
+        settings.EmailAlertsEnabled,
+        settings.ErrorAlertEmail,
+        settings.ErrorAlertThrottleMinutes,
+        settings.ErrorAlertCheckMinutes,
+        settings.ErrorEventRetentionDays);
 }

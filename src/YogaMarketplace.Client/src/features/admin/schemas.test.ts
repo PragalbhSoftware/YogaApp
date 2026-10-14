@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   bannerSchema,
   creditSettingsSchema,
+  errorAlertSettingsSchema,
   feeSettingsSchema,
   jobScheduleSettingsSchema,
   packSchema,
@@ -130,6 +131,36 @@ describe("job schedules form", () => {
   it("rejects times that are not HH:mm", () => {
     expect(scheduleErrors({ creditExpiryTime: "2:00" })).toEqual(["creditExpiryTime"]);
     expect(scheduleErrors({ webhookCleanupTime: "24:00" })).toEqual(["webhookCleanupTime"]);
+  });
+});
+
+describe("error alerts form", () => {
+  const alerts = {
+    emailAlertsEnabled: false,
+    errorAlertEmail: "",
+    errorAlertThrottleMinutes: 30,
+    errorAlertCheckMinutes: 5,
+    errorEventRetentionDays: 30,
+  };
+  const alertErrors = (input: Record<string, unknown>) => {
+    const result = errorAlertSettingsSchema.safeParse({ ...alerts, ...input });
+    return result.success ? [] : result.error.issues.map((issue) => issue.path.join("."));
+  };
+
+  it("keeps alerts off without an email and turns them on with one", () => {
+    expect(alertErrors({})).toEqual([]);
+    expect(alertErrors({ emailAlertsEnabled: true, errorAlertEmail: " ops@example.com " })).toEqual([]);
+  });
+
+  it("needs a valid email before alerts can be turned on", () => {
+    expect(alertErrors({ emailAlertsEnabled: true })).toEqual(["errorAlertEmail"]);
+    expect(alertErrors({ errorAlertEmail: "not an email" })).toEqual(["errorAlertEmail"]);
+  });
+
+  it("rejects limits out of range", () => {
+    expect(alertErrors({ errorAlertThrottleMinutes: 0 })).toEqual(["errorAlertThrottleMinutes"]);
+    expect(alertErrors({ errorAlertCheckMinutes: 1441 })).toEqual(["errorAlertCheckMinutes"]);
+    expect(alertErrors({ errorEventRetentionDays: 2.5 })).toEqual(["errorEventRetentionDays"]);
   });
 });
 
