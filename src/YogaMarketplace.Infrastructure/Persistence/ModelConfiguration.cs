@@ -37,6 +37,7 @@ internal static class ModelConfiguration
         ConfigureReconciliationRun(modelBuilder.Entity<ReconciliationRun>(), sqlite);
         ConfigureReconciliationItem(modelBuilder.Entity<ReconciliationItem>(), sqlite);
         ConfigureConsent(modelBuilder.Entity<ConsentRecord>());
+        ConfigureErrorEvent(modelBuilder.Entity<ErrorEvent>(), sqlite);
     }
 
     private static void ConfigureConsent(EntityTypeBuilder<ConsentRecord> entity)
@@ -437,6 +438,28 @@ internal static class ModelConfiguration
         entity.Property(s => s.WebhookPayloadRetentionDays).HasDefaultValue(PlatformSettingsRules.DefaultWebhookPayloadRetentionDays);
         entity.Property(s => s.CreditExpiryTime).HasDefaultValue(PlatformSettingsRules.DefaultDailyJobTime);
         entity.Property(s => s.WebhookCleanupTime).HasDefaultValue(PlatformSettingsRules.DefaultDailyJobTime);
+        entity.Property(s => s.EmailAlertsEnabled).HasDefaultValue(false);
+        entity.Property(s => s.ErrorAlertEmail).HasMaxLength(PlatformSettingsRules.ErrorAlertEmailMax);
+        entity.Property(s => s.ErrorAlertThrottleMinutes).HasDefaultValue(PlatformSettingsRules.DefaultErrorAlertThrottleMinutes);
+        entity.Property(s => s.ErrorAlertCheckMinutes).HasDefaultValue(PlatformSettingsRules.DefaultErrorAlertCheckMinutes);
+        entity.Property(s => s.ErrorEventRetentionDays).HasDefaultValue(PlatformSettingsRules.DefaultErrorEventRetentionDays);
+    }
+
+    private static void ConfigureErrorEvent(EntityTypeBuilder<ErrorEvent> entity, bool sqlite)
+    {
+        entity.Property(e => e.ErrorType).HasMaxLength(ErrorEvent.ErrorTypeMax);
+        entity.Property(e => e.Level).HasMaxLength(ErrorEvent.LevelMax);
+        entity.Property(e => e.Source).HasMaxLength(ErrorEvent.SourceMax);
+        entity.Property(e => e.LastMessage).HasMaxLength(ErrorEvent.MessageMax);
+        entity.Property(e => e.LastCorrelationId).HasMaxLength(ErrorEvent.CorrelationIdMax);
+        entity.HasIndex(e => e.ErrorType).IsUnique();
+        entity.HasIndex(e => e.LastSeenAt);
+        if (sqlite)
+        {
+            // SQLite cannot compare DateTimeOffset text; the alert job and admin list filter and sort on these in SQL.
+            entity.Property(e => e.LastSeenAt).HasConversion<DateTimeOffsetToBinaryConverter>();
+            entity.Property(e => e.LastAlertedAt).HasConversion<DateTimeOffsetToBinaryConverter>();
+        }
     }
 
     private static void ConfigureSettingsAudit(EntityTypeBuilder<SettingsAudit> entity)

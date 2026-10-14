@@ -44,6 +44,11 @@ const JobsPage = lazy(() =>
     default: module.JobsPage,
   })),
 );
+const ErrorsPage = lazy(() =>
+  import("@/features/admin/pages/errors-page").then((module) => ({
+    default: module.ErrorsPage,
+  })),
+);
 const SettingsPage = lazy(() =>
   import("@/features/admin/pages/settings-page").then((module) => ({ default: module.SettingsPage })),
 );
@@ -171,6 +176,7 @@ export function AppRouter() {
                   <Route path={routes.adminBooking} element={<AdminBookingDetailPage />} />
                   <Route path={routes.adminTransactions} element={<TransactionsPage />} />
                   <Route path={routes.adminJobs} element={<JobsPage />} />
+                  <Route path={routes.adminErrors} element={<ErrorsPage />} />
                   <Route path={routes.adminMasters} element={<SettingsPage />} />
                 </Route>
               </Route>

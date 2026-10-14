@@ -140,6 +140,37 @@ export const jobScheduleSettingsSchema = z.object({
   webhookCleanupTime: marketTime,
 });
 
+export const errorAlertLimits = {
+  maxThrottleMinutes: 7 * 24 * 60,
+  maxCheckMinutes: 24 * 60,
+  maxRetentionDays: 3650,
+  emailMax: 254,
+} as const;
+
+const wholeBetween = (unit: string, max: number) =>
+  z.coerce
+    .number({ invalid_type_error: `Enter a number of ${unit}.` })
+    .int(`Enter a whole number of ${unit}.`)
+    .min(1, `Must be between 1 and ${max} ${unit}.`)
+    .max(max, `Must be between 1 and ${max} ${unit}.`);
+
+export const errorAlertSettingsSchema = z
+  .object({
+    emailAlertsEnabled: z.boolean(),
+    errorAlertEmail: z
+      .string()
+      .trim()
+      .max(errorAlertLimits.emailMax, "That email is too long.")
+      .refine((value) => value === "" || z.string().email().safeParse(value).success, "Enter a valid email address."),
+    errorAlertThrottleMinutes: wholeBetween("minutes", errorAlertLimits.maxThrottleMinutes),
+    errorAlertCheckMinutes: wholeBetween("minutes", errorAlertLimits.maxCheckMinutes),
+    errorEventRetentionDays: wholeBetween("days", errorAlertLimits.maxRetentionDays),
+  })
+  .refine((values) => !values.emailAlertsEnabled || values.errorAlertEmail !== "", {
+    path: ["errorAlertEmail"],
+    message: "Add the email that gets alerts before turning them on.",
+  });
+
 export const maxWebhookPayloadRetentionDays = 3650;
 
 /** The policy version may only go up, so the current value is the floor. */
@@ -221,5 +252,6 @@ export type CreditSettingsValues = z.infer<typeof creditSettingsSchema>;
 export type PackFormValues = z.infer<typeof packSchema>;
 export type ReconciliationSettingsValues = z.infer<typeof reconciliationSettingsSchema>;
 export type JobScheduleSettingsValues = z.infer<typeof jobScheduleSettingsSchema>;
+export type ErrorAlertSettingsValues = z.infer<typeof errorAlertSettingsSchema>;
 export type ResolveItemValues = z.infer<typeof resolveItemSchema>;
 export type PrivacySettingsValues = z.infer<ReturnType<typeof privacySettingsSchema>>;

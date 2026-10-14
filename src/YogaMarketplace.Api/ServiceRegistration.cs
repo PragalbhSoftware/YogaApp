@@ -49,6 +49,11 @@ public static class ServiceRegistration
         services.AddScoped<WebhookPayloadCleanupJob>();
         services.AddScoped<IBackgroundJobHandler>(sp => sp.GetRequiredService<WebhookPayloadCleanupJob>());
         services.AddSingleton(WebhookPayloadCleanupJob.Recurring);
+        services.AddAlertSender(configuration);
+        services.AddScoped<ErrorAlertJob>();
+        services.AddScoped<IBackgroundJobHandler>(sp => sp.GetRequiredService<ErrorAlertJob>());
+        services.AddSingleton(ErrorAlertJob.Recurring);
+        services.AddScoped<AdminErrorService>();
         services.AddScoped<AdminJobService>();
         services.AddScoped<IAdminProviderService, AdminProviderService>();
         services.AddScoped<IAdminCertificateService, AdminCertificateService>();

@@ -238,6 +238,13 @@ public class UpdateSettingsRequest
 
     /// <summary>Market-clock time as HH:mm.</summary>
     public string? WebhookCleanupTime { get; set; }
+    public bool? EmailAlertsEnabled { get; set; }
+
+    /// <summary>An empty text clears it.</summary>
+    public string? ErrorAlertEmail { get; set; }
+    public int? ErrorAlertThrottleMinutes { get; set; }
+    public int? ErrorAlertCheckMinutes { get; set; }
+    public int? ErrorEventRetentionDays { get; set; }
 }
 
 public record AdminSettingsResponse(
@@ -272,7 +279,27 @@ public record AdminSettingsResponse(
     bool CreditExpiryEnabled,
     string CreditExpiryTime,
     bool WebhookCleanupEnabled,
-    string WebhookCleanupTime);
+    string WebhookCleanupTime,
+    bool EmailAlertsEnabled,
+    string? ErrorAlertEmail,
+    int ErrorAlertThrottleMinutes,
+    int ErrorAlertCheckMinutes,
+    int ErrorEventRetentionDays);
+
+public record AdminErrorEventResponse(
+    Guid Id,
+    string ErrorType,
+    string Level,
+    string? Source,
+    string LastMessage,
+    string? LastCorrelationId,
+    int Count,
+    DateTimeOffset FirstSeenAt,
+    DateTimeOffset LastSeenAt,
+    DateTimeOffset? AcknowledgedAt,
+    DateTimeOffset? LastAlertedAt);
+
+public record AdminErrorSummaryResponse(int Unacknowledged);
 
 public record AdminJobResponse(
     Guid Id,

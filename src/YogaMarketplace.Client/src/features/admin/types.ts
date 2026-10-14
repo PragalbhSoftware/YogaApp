@@ -229,7 +229,20 @@ export type JobScheduleSettings = {
   webhookCleanupTime: string;
 };
 
-export type AdminSettings = CreditSettings & ReconciliationSettings & PrivacySettings & JobScheduleSettings & {
+/** Error alert emails: feature flag, recipient, at most one email per error type per throttle window, and retention. */
+export type ErrorAlertSettings = {
+  emailAlertsEnabled: boolean;
+  errorAlertEmail: string | null;
+  errorAlertThrottleMinutes: number;
+  errorAlertCheckMinutes: number;
+  errorEventRetentionDays: number;
+};
+
+export type AdminSettings = CreditSettings &
+  ReconciliationSettings &
+  PrivacySettings &
+  JobScheduleSettings &
+  ErrorAlertSettings & {
   version: number;
   currency: string;
   commissionPercent: number;
@@ -262,9 +275,12 @@ export type UpdateSettingsInput = Partial<
     | keyof ReconciliationSettings
     | keyof PrivacySettings
     | keyof JobScheduleSettings
+    | Exclude<keyof ErrorAlertSettings, "errorAlertEmail">
   >
 > & {
   version: number;
+  /** An empty text clears it. */
+  errorAlertEmail?: string;
   bannerTitle?: string;
   bannerSubtitle?: string;
   bannerOffer?: string;
@@ -430,6 +446,23 @@ export type AdminJob = {
 };
 
 export const jobsPageSize = 20;
+
+/** One kind of logged error. Acknowledging closes it; the next occurrence opens it again with the count from 1. */
+export type AdminErrorEvent = {
+  id: string;
+  errorType: string;
+  level: string;
+  source: string | null;
+  lastMessage: string;
+  lastCorrelationId: string | null;
+  count: number;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  acknowledgedAt: string | null;
+  lastAlertedAt: string | null;
+};
+
+export const errorsPageSize = 20;
 
 export type BookingListQuery = {
   status?: string;

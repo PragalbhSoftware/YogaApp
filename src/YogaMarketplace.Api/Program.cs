@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using YogaMarketplace.Api;
 using YogaMarketplace.Api.Hosting;
+using YogaMarketplace.Api.Logging;
 using YogaMarketplace.Api.Middleware;
 using YogaMarketplace.Api.Options;
 using YogaMarketplace.Api.Security;
@@ -13,6 +14,7 @@ using YogaMarketplace.Infrastructure;
 using YogaMarketplace.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.AddStructuredLogging();
 
 builder.Services.AddControllers()
     .ConfigureApiBehaviorOptions(options =>
@@ -98,6 +100,7 @@ var otpDemo = OtpDemoMode.From(builder.Configuration.GetSection(OtpOptions.Secti
 if (otpDemo.StartupWarning() is string demoWarning)
     app.Logger.LogWarning("{OtpDemoWarning}", demoWarning);
 
+app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseForwardedHeaders();
 app.UseSecurityHeaders();
 if (productionLike)
@@ -166,6 +169,12 @@ public static class DatabaseStartup
             }
 
             await scope.ServiceProvider.GetRequiredService<DbSeeder>().SeedAsync();
+
+            var emailAlerts = await db.Settings.AsNoTracking().Select(s => (bool?)s.EmailAlertsEnabled).SingleOrDefaultAsync() ?? false;
+            var smtpConfigured = scope.ServiceProvider.GetRequiredService<YogaMarketplace.Api.Services.IAlertSender>()
+                is not YogaMarketplace.Api.Services.NoopAlertSender;
+            if (YogaMarketplace.Api.Services.AlertSenders.StartupWarning(smtpConfigured, emailAlerts) is string alertWarning)
+                logger.LogWarning("{AlertWarning}", alertWarning);
         }
         catch (Exception ex)
         {

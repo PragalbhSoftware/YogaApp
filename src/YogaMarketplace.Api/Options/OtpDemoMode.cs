@@ -1,3 +1,4 @@
+using YogaMarketplace.Api.Security;
 using YogaMarketplace.Api.Services;
 using YogaMarketplace.Domain;
 
@@ -44,7 +45,7 @@ public sealed class OtpDemoMode
     public string? CodeFor(string normalizedPhone) => IsOn && _phones.Contains(normalizedPhone) ? Code : null;
 
     public string? StartupWarning() => IsOn
-        ? $"OTP demo mode is on for {string.Join(", ", _phones.Select(LoggingOtpSender.MaskPhone))}. These phones sign in with the demo code."
+        ? $"OTP demo mode is on for {string.Join(", ", _phones.Select(LogMask.Phone))}. These phones sign in with the demo code."
         : null;
 
     public IEnumerable<string> ProductionProblems()

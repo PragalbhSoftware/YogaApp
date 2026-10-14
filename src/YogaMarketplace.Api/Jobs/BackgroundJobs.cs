@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using YogaMarketplace.Api.Middleware;
 using YogaMarketplace.Domain;
 using YogaMarketplace.Infrastructure.Persistence;
 
@@ -147,6 +148,7 @@ public class BackgroundJobRunner
 
     private async Task ExecuteAsync(BackgroundJob job, DateTimeOffset now, CancellationToken cancellationToken)
     {
+        using var logScope = _logger.BeginScope(new Dictionary<string, object> { [CorrelationIdMiddleware.LogProperty] = job.Id.ToString("N") });
         try
         {
             using var scope = _scopes.CreateScope();

@@ -1,11 +1,21 @@
-import { Suspense } from "react";
+import { Suspense, type ComponentType } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { Button } from "@mui/material";
-import { BookOpen, CalendarClock, LayoutDashboard, Receipt, Settings, ShieldCheck, Users } from "lucide-react";
+import { Badge, Button } from "@mui/material";
+import {
+  BookOpen,
+  CalendarClock,
+  LayoutDashboard,
+  Receipt,
+  Settings,
+  ShieldCheck,
+  TriangleAlert,
+  Users,
+} from "lucide-react";
 import { PageLoader } from "@/components/common/page-loader";
 import { routes } from "@/constants/routes";
 import { useAuth } from "@/features/auth/hooks/use-auth";
 import { useSignOut } from "@/features/auth/hooks/use-sign-out";
+import { useAdminErrorSummary } from "@/features/admin/hooks/use-admin";
 import { displayName } from "@/features/admin/utils";
 import { cn } from "@/utils/cn";
 
@@ -16,12 +26,27 @@ const navItems = [
   { to: routes.adminBookings, label: "Bookings", icon: BookOpen, end: false },
   { to: routes.adminTransactions, label: "Money", icon: Receipt, end: false },
   { to: routes.adminJobs, label: "Jobs", icon: CalendarClock, end: false },
+  { to: routes.adminErrors, label: "Errors", icon: TriangleAlert, end: false },
   { to: routes.adminMasters, label: "Settings", icon: Settings, end: false },
 ];
+
+const badgeMax = 99;
 
 function isNavActive(pathname: string, to: string, end: boolean) {
   if (end) return pathname === to;
   return pathname === to || pathname.startsWith(`${to}/`);
+}
+
+/** The nav icon, with the open error count on the Errors item. */
+function NavIcon({ icon: Icon, count, className }: { icon: ComponentType<{ className?: string }>; count: number; className: string }) {
+  return (
+    <>
+      <Badge badgeContent={count} color="error" max={badgeMax}>
+        <Icon className={className} aria-hidden="true" />
+      </Badge>
+      {count > 0 ? <span className="sr-only">{`${count} open`}</span> : null}
+    </>
+  );
 }
 
 export function AdminLayout() {
@@ -29,6 +54,8 @@ export function AdminLayout() {
   const { user } = useAuth();
   const onSignOut = useSignOut();
   const ownerName = displayName(user?.name, user?.phone ?? "");
+  const openErrors = useAdminErrorSummary().data?.unacknowledged ?? 0;
+  const countFor = (to: string) => (to === routes.adminErrors ? openErrors : 0);
 
   return (
     <div className="min-h-svh bg-brand-background lg:flex">
@@ -39,7 +66,6 @@ export function AdminLayout() {
         </div>
         <nav aria-label="Owner" className="flex-1 space-y-1 px-3">
           {navItems.map((item) => {
-            const Icon = item.icon;
             const active = isNavActive(pathname, item.to, item.end);
             return (
               <NavLink
@@ -52,7 +78,7 @@ export function AdminLayout() {
                   active ? "bg-brand-background text-brand-primary" : "text-brand-muted",
                 )}
               >
-                <Icon className="size-4 shrink-0" aria-hidden="true" />
+                <NavIcon icon={item.icon} count={countFor(item.to)} className="size-4 shrink-0" />
                 {item.label}
               </NavLink>
             );
@@ -79,7 +105,6 @@ export function AdminLayout() {
           </div>
           <nav aria-label="Owner" className="flex gap-1 overflow-x-auto px-4 pb-3">
             {navItems.map((item) => {
-              const Icon = item.icon;
               const active = isNavActive(pathname, item.to, item.end);
               return (
                 <NavLink
@@ -92,7 +117,7 @@ export function AdminLayout() {
                     active ? "bg-brand-surface text-brand-primary" : "text-brand-muted",
                   )}
                 >
-                  <Icon className="size-4" aria-hidden="true" />
+                  <NavIcon icon={item.icon} count={countFor(item.to)} className="size-4" />
                   {item.label}
                 </NavLink>
               );

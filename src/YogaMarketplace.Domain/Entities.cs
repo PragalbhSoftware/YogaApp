@@ -340,6 +340,13 @@ public class PlatformSettings
     public TimeOnly CreditExpiryTime { get; set; } = PlatformSettingsRules.DefaultDailyJobTime;
     public bool WebhookCleanupEnabled { get; set; } = true;
     public TimeOnly WebhookCleanupTime { get; set; } = PlatformSettingsRules.DefaultDailyJobTime;
+
+    /// <summary>Error alerts: the email feature flag, who gets them, how often per error type, and how long errors are kept.</summary>
+    public bool EmailAlertsEnabled { get; set; }
+    public string? ErrorAlertEmail { get; set; }
+    public int ErrorAlertThrottleMinutes { get; set; } = PlatformSettingsRules.DefaultErrorAlertThrottleMinutes;
+    public int ErrorAlertCheckMinutes { get; set; } = PlatformSettingsRules.DefaultErrorAlertCheckMinutes;
+    public int ErrorEventRetentionDays { get; set; } = PlatformSettingsRules.DefaultErrorEventRetentionDays;
     public int Version { get; set; } = 1;
     public DateTimeOffset? UpdatedAt { get; set; }
 }
@@ -353,6 +360,32 @@ public class SettingsAudit
     public string Field { get; set; } = "";
     public string? OldValue { get; set; }
     public string? NewValue { get; set; }
+}
+
+/// <summary>
+/// One row per kind of logged Error or Critical, keyed by <see cref="ErrorType"/>. A new occurrence bumps the count;
+/// after an admin acknowledges it, the next occurrence reopens the row with the count starting again at 1.
+/// </summary>
+public class ErrorEvent
+{
+    public const int ErrorTypeMax = 200;
+    public const int LevelMax = 16;
+    public const int SourceMax = 200;
+    public const int MessageMax = 2000;
+    public const int CorrelationIdMax = 64;
+
+    public Guid Id { get; set; }
+    public string ErrorType { get; set; } = "";
+    public string Level { get; set; } = "";
+    public string? Source { get; set; }
+    public string LastMessage { get; set; } = "";
+    public string? LastCorrelationId { get; set; }
+    public int Count { get; set; }
+    public DateTimeOffset FirstSeenAt { get; set; }
+    public DateTimeOffset LastSeenAt { get; set; }
+    public DateTimeOffset? AcknowledgedAt { get; set; }
+    public Guid? AcknowledgedByUserId { get; set; }
+    public DateTimeOffset? LastAlertedAt { get; set; }
 }
 
 /// <summary>A unit of work for the background runner. Handlers are looked up by <see cref="Type"/>.</summary>

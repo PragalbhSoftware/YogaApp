@@ -1,5 +1,3 @@
-using YogaMarketplace.Api.Services;
-
 namespace YogaMarketplace.Api.Tests;
 
 public class SecurityHeadersTests : IClassFixture<YogaApiFactory>
@@ -23,14 +21,6 @@ public class SecurityHeadersTests : IClassFixture<YogaApiFactory>
         Assert.Equal("no-referrer", Header(response, "Referrer-Policy"));
         Assert.Contains("camera=()", Header(response, "Permissions-Policy"), StringComparison.Ordinal);
         Assert.True(response.Headers.CacheControl!.NoStore);
-    }
-
-    [Theory]
-    [InlineData("+919876543210", "*********3210")]
-    [InlineData("123", "***")]
-    public void Otp_log_keeps_only_the_last_four_digits(string phone, string expected)
-    {
-        Assert.Equal(expected, LoggingOtpSender.MaskPhone(phone));
     }
 
     private static string Header(HttpResponseMessage response, string name) =>

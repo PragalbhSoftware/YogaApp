@@ -39,13 +39,21 @@ public sealed record PlatformSettingsChanges(
     bool? CreditExpiryEnabled = null,
     TimeOnly? CreditExpiryTime = null,
     bool? WebhookCleanupEnabled = null,
-    TimeOnly? WebhookCleanupTime = null);
+    TimeOnly? WebhookCleanupTime = null,
+    bool? EmailAlertsEnabled = null,
+    string? ErrorAlertEmail = null,
+    int? ErrorAlertThrottleMinutes = null,
+    int? ErrorAlertCheckMinutes = null,
+    int? ErrorEventRetentionDays = null);
 
 /// <summary>When the daily reconciliation runs and how long a webhook or refund may wait before it is reported.</summary>
 public sealed record ReconciliationTerms(TimeOnly RunAt, int WebhookStuckMinutes, int RefundPendingHours);
 
+/// <summary>Whether error emails go out, to whom, at most how often per error type, and how long errors are kept.</summary>
+public sealed record ErrorAlertTerms(bool EmailEnabled, string? Email, int ThrottleMinutes, int RetentionDays);
+
 /// <summary>Schedules of the recurring jobs.</summary>
-public sealed record RecurringJobTerms(JobSchedule Reconciliation, JobSchedule CreditExpiry, JobSchedule WebhookCleanup);
+public sealed record RecurringJobTerms(JobSchedule Reconciliation, JobSchedule CreditExpiry, JobSchedule WebhookCleanup, JobSchedule ErrorAlerts);
 
 public sealed record SettingChange(string Field, string? OldValue, string? NewValue);
 
@@ -66,6 +74,19 @@ public static class PlatformSettingsRules
     public const int DefaultWebhookPayloadRetentionDays = 90;
     public const int MaxWebhookPayloadRetentionDays = 3650;
     public static readonly TimeOnly DefaultDailyJobTime = TimeOnly.MinValue;
+    public const int DefaultErrorAlertThrottleMinutes = 30;
+    public const int MaxErrorAlertThrottleMinutes = 7 * 24 * 60;
+    public const int DefaultErrorAlertCheckMinutes = 5;
+    public const int MaxErrorAlertCheckMinutes = 24 * 60;
+    public const int DefaultErrorEventRetentionDays = 30;
+    public const int MaxErrorEventRetentionDays = 3650;
+    public const int ErrorAlertEmailMax = 254;
+
+    public static ErrorAlertTerms ErrorAlertTermsFor(PlatformSettings settings) => new(
+        settings.EmailAlertsEnabled,
+        settings.ErrorAlertEmail,
+        settings.ErrorAlertThrottleMinutes,
+        settings.ErrorEventRetentionDays);
 
     public static ReconciliationTerms ReconciliationTermsFor(PlatformSettings settings) => new(
         settings.ReconciliationTime,
@@ -75,7 +96,8 @@ public static class PlatformSettingsRules
     public static RecurringJobTerms RecurringJobTermsFor(PlatformSettings settings) => new(
         DailyIf(settings.ReconciliationEnabled, settings.ReconciliationTime),
         DailyIf(settings.CreditExpiryEnabled, settings.CreditExpiryTime),
-        DailyIf(settings.WebhookCleanupEnabled, settings.WebhookCleanupTime));
+        DailyIf(settings.WebhookCleanupEnabled, settings.WebhookCleanupTime),
+        JobSchedule.Every(settings.ErrorAlertCheckMinutes));
 
     private static JobSchedule DailyIf(bool enabled, TimeOnly at) => enabled ? JobSchedule.Daily(at) : JobSchedule.Off;
 
@@ -137,6 +159,13 @@ public static class PlatformSettingsRules
         var pendingHours = changes.RefundPendingHours is int ph ? Between(ph, MaxRefundPendingHours, "Pending refund threshold", "hours") : settings.RefundPendingHours;
         var policyVersion = changes.PolicyVersion is int pv ? NotLower(pv, settings.PolicyVersion) : settings.PolicyVersion;
         var retentionDays = changes.WebhookPayloadRetentionDays is int rd ? Between(rd, MaxWebhookPayloadRetentionDays, "Webhook payload retention", "days") : settings.WebhookPayloadRetentionDays;
+        var alertsOn = changes.EmailAlertsEnabled ?? settings.EmailAlertsEnabled;
+        var alertEmail = changes.ErrorAlertEmail is null ? settings.ErrorAlertEmail : Email(changes.ErrorAlertEmail);
+        if (alertsOn && alertEmail is null)
+            throw new DomainException("Add the admin alert email before turning email alerts on.");
+        var throttleMinutes = changes.ErrorAlertThrottleMinutes is int tm ? Between(tm, MaxErrorAlertThrottleMinutes, "Alert throttle", "minutes") : settings.ErrorAlertThrottleMinutes;
+        var checkMinutes = changes.ErrorAlertCheckMinutes is int cm ? Between(cm, MaxErrorAlertCheckMinutes, "Error check interval", "minutes") : settings.ErrorAlertCheckMinutes;
+        var errorRetentionDays = changes.ErrorEventRetentionDays is int ed ? Between(ed, MaxErrorEventRetentionDays, "Error retention", "days") : settings.ErrorEventRetentionDays;
 
         var log = new List<SettingChange>();
         Set(log, nameof(settings.CommissionPercent), settings.CommissionPercent, commission, v => settings.CommissionPercent = v);
@@ -167,7 +196,23 @@ public static class PlatformSettingsRules
         Set(log, nameof(settings.CreditExpiryTime), settings.CreditExpiryTime, expiryAt, v => settings.CreditExpiryTime = v);
         Set(log, nameof(settings.WebhookCleanupEnabled), settings.WebhookCleanupEnabled, cleanupOn, v => settings.WebhookCleanupEnabled = v);
         Set(log, nameof(settings.WebhookCleanupTime), settings.WebhookCleanupTime, cleanupAt, v => settings.WebhookCleanupTime = v);
+        Set(log, nameof(settings.EmailAlertsEnabled), settings.EmailAlertsEnabled, alertsOn, v => settings.EmailAlertsEnabled = v);
+        Set(log, nameof(settings.ErrorAlertEmail), settings.ErrorAlertEmail, alertEmail, v => settings.ErrorAlertEmail = v);
+        Set(log, nameof(settings.ErrorAlertThrottleMinutes), settings.ErrorAlertThrottleMinutes, throttleMinutes, v => settings.ErrorAlertThrottleMinutes = v);
+        Set(log, nameof(settings.ErrorAlertCheckMinutes), settings.ErrorAlertCheckMinutes, checkMinutes, v => settings.ErrorAlertCheckMinutes = v);
+        Set(log, nameof(settings.ErrorEventRetentionDays), settings.ErrorEventRetentionDays, errorRetentionDays, v => settings.ErrorEventRetentionDays = v);
         return log;
+    }
+
+    /// <summary>An empty text clears the address. Otherwise one bare address, without a display name.</summary>
+    private static string? Email(string value)
+    {
+        var email = Text(value, ErrorAlertEmailMax, "Admin alert email");
+        if (email is null)
+            return null;
+        if (!System.Net.Mail.MailAddress.TryCreate(email, out var parsed) || parsed.Address != email)
+            throw new DomainException("Admin alert email must be a valid email address.");
+        return email;
     }
 
     private static int NotLower(int value, int current)
