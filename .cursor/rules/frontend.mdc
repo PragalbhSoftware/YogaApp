@@ -1,0 +1,102 @@
+---
+description: React client architecture, UI and coding rules
+globs: src/YogaMarketplace.Client/**
+alwaysApply: false
+---
+
+# Frontend (React client)
+
+A production-quality SPA on top of the existing ASP.NET Core API. The API is the source of truth for business data and rules. Don't create mock APIs or duplicate backend business logic.
+
+Build features only for endpoints that exist today: auth (phone OTP, no passwords), marketplace browse, bookings and checkout (Razorpay), credits and packs, profile, content pages, instructor workspace and admin. Don't invent cart, wishlist, merch or class-catalog screens until the API supports them.
+
+## Stack
+
+React + TypeScript (strict) + Vite, React Router, MUI (primary controls), Tailwind (layout), Lucide icons, TanStack Query, Zustand, Axios, React Hook Form + Zod, Sonner, Vitest + React Testing Library.
+
+- Don't add another UI library (no Bootstrap, Ant Design, Chakra, shadcn).
+- Before adding a dependency, check whether the existing stack already does it. Prefer a few lines of code over a new package.
+
+## Tooling (see `package.json`)
+
+| Script | Runs |
+| --- | --- |
+| `npm run typecheck` | `tsc -b` |
+| `npm run lint` | `oxlint src` |
+| `npm run test` | `vitest run` |
+| `npm run build` | `tsc -b && vite build` |
+
+There is no ESLint, Prettier or Playwright in this project.
+
+## Structure
+
+```
+src/
+  app/          layouts, providers, router (guards, lazy routes), theme
+  features/     admin, auth, bookings, content, credits, instructor, marketplace, profile
+                each with api/, hooks/, components/, pages/, types, schemas, tests
+  components/   common/ (EmptyState, ErrorState, LoadingSkeleton, PageLoader, PriceText, ...)
+  services/http http-client (Axios), api-error (ApiError, toUserMessage), retry
+  stores/       Zustand stores
+  constants/    routes.ts and other shared constants
+  hooks/ utils/ assets/ test/
+```
+
+- Keep a feature's components, hooks, API calls, types, schemas and tests inside that feature.
+- `constants/routes.ts` is the single list of routes. Add new routes there and lazy-load page sections in `app/router`.
+- Customer, instructor and admin keep separate layouts. Authenticated areas go through the route guards.
+
+## Data and state
+
+- Data flow: component → feature hook (`features/*/hooks`) → TanStack Query → feature API (`features/*/api`) → shared Axios client → API. Never call Axios from a component.
+- Zustand holds auth and the customer's chosen city/area only. All server data goes through TanStack Query.
+- Mutations invalidate the queries they change.
+
+## API client
+
+- Keep `VITE_API_BASE_URL` empty (same origin: the Vite dev proxy locally, the API serving `wwwroot` in production). Never hardcode API URLs.
+- Only public values go in `VITE_` variables; they ship in the bundle. Env files: `.env.development` and `.env.example`.
+- Never hardcode a city.
+- From 3.5.10 (client part pending): the API client sends `X-Correlation-Id`, and error toasts show `Ref: <id>` from the error response. Apply this to new and changed code.
+
+## Forms, errors and notifications
+
+- Forms use React Hook Form + Zod: field messages, disabled submit while pending, no duplicate submits, success feedback.
+- API errors go through `toUserMessage` and Sonner toasts. Never show raw backend exception text.
+- Every API-driven page has loading (skeleton), empty and error-with-retry states. Never leave a page blank.
+
+## Admin lists
+
+- New or touched admin lists use the shared `ListPagination` and keep page and filter in the URL query.
+
+## UI and design
+
+- A premium, calm, wellness feel: spacious, image-led, rounded cards, soft shadows, clear type. Not a generic SaaS dashboard; avoid heavy gradients, borders and animation.
+- Colours, fonts and radii come from the MUI theme in `app/theme/theme.ts`. Don't hardcode colours.
+
+  | Token | Value |
+  | --- | --- |
+  | Primary | `#657A5B` |
+  | Secondary | `#C9A27E` |
+  | Background | `#F8F6F0` |
+  | Surface | `#FFFFFF` |
+  | Text | `#253127` |
+  | Text secondary | `#6F776F` |
+  | Accent | `#D68B65` |
+  | Border | `#E8E4DB` |
+
+- MUI for controls (Button, TextField, Select, Dialog, Drawer, Tabs, Menu, Chip, Tooltip, Skeleton, Switch, ...). Tailwind for layout, spacing, sizing and responsive behaviour. Don't mix styling approaches at random.
+- Reuse established patterns and components (cards, chips, settings cards) instead of making visually different copies.
+- Mobile first: top navigation on desktop, bottom navigation on mobile, and primary actions (Book, Pay) easy to reach with a thumb.
+
+## Accessibility
+
+- Semantic HTML, labelled inputs, keyboard navigation, visible focus and enough contrast.
+- Icon-only buttons need an accessible label.
+
+## Code
+
+- Strict TypeScript; avoid `any`. Typed API responses, hooks and form schemas.
+- Small components and functions: page → section → feature component → UI component. No 500-line components.
+- No `dangerouslySetInnerHTML`.
+- Keep business rules in the backend. The client validates for UX only.

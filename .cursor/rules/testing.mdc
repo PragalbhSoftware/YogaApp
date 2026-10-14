@@ -1,0 +1,39 @@
+---
+description: Testing rules for backend xUnit tests and client Vitest tests
+globs: tests/**/*.cs,src/YogaMarketplace.Client/src/**/*.test.{ts,tsx}
+alwaysApply: false
+---
+
+# Testing
+
+## What to test
+
+- Every new behaviour has at least one test that fails before the change.
+- Test behaviour (API responses, database state, what the user sees), not private calls.
+- Money, time and limit rules: test exactly at the boundary and one step either side (paise rounding, cancel window, expiry moment, IST/UTC day line).
+- Webhooks and jobs get a replay / idempotency test: the same event twice, the same job run twice.
+
+## Auth
+
+- New admin endpoints: a 401 test for anonymous, and 403 tests for customer and instructor.
+- New user-data endpoints: a wrong-user test.
+
+## Logging
+
+- When logging is touched, a captured-log test proves nothing sensitive leaks (OTP, full phone, email, tokens, card data).
+
+## Reliability
+
+- No real sleeps. Use fake timers on the client, an injected `TimeProvider` on the backend, and barriers for concurrency.
+- A flaky test is a bug to fix, not something to rerun.
+
+## SQLite vs SQL Server
+
+- The test database is SQLite, which can't prove SQL Server-only behaviour (locking, collation, migration SQL, `DateTimeOffset` translation). List those under **Staging SQL Server checks** in the PR.
+
+## Before finishing
+
+- Never claim tests you didn't run.
+- These must pass:
+  - `dotnet test`
+  - in `src/YogaMarketplace.Client`: `npm run typecheck`, `npm run lint`, `npm run test`, `npm run build`

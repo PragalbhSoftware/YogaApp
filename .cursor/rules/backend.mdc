@@ -1,0 +1,59 @@
+---
+description: Backend rules for the ASP.NET Core API, Domain and Infrastructure projects
+globs: src/YogaMarketplace.Api/**,src/YogaMarketplace.Domain/**,src/YogaMarketplace.Infrastructure/**
+alwaysApply: false
+---
+
+# Backend
+
+## Files
+
+- One class / interface / record / enum per file, named after the type.
+- Interface and implementation live in separate files.
+- Partial classes are fine for splitting a large type (e.g. `BookingService.Credits.cs`).
+- Small request/response DTOs used by a single endpoint may share a file.
+- Split existing multi-type files only when a slice already touches them.
+
+## Migrations
+
+- Every schema change gets an EF migration.
+- New columns are nullable or have a default. `Down()` must work.
+- SQL is idempotent and safe on SQL Server.
+- Never edit a migration that is already merged; add a new one.
+- Clean up duplicate rows before adding a unique index.
+- Data-only updates use `WHERE` on the old value so they are safe to re-run.
+
+## Money
+
+- Amounts are paise as `long` or `decimal`, never `double`.
+- Webhooks and jobs are safe to run twice (idempotent).
+- Reconciliation only reports differences. It never fixes money itself.
+
+## Time
+
+- Store UTC. Inject `TimeProvider`; never call `DateTime.Now`/`UtcNow` in business code.
+- Convert to IST only for business-day rules and display.
+
+## EF Core
+
+- Async calls with a `CancellationToken`. `AsNoTracking()` for reads.
+- Admin lists page and filter in SQL, never in memory.
+
+## Jobs
+
+- Recurring work runs on `RecurringJobScheduler`, with its schedule in `PlatformSettings`.
+
+## Logging (from 3.5.10)
+
+- Use `ILogger` (Serilog underneath). No `Console.Write`.
+- The correlation id is in the log scope, the `X-Correlation-Id` response header, `ApiErrorResponses` bodies and `ErrorEvent`.
+- Never log OTP codes, full phone numbers, email addresses, JWTs, passwords, Razorpay secrets or card data. Use the shared `LogMask` helper.
+- Never log request/response bodies or `Authorization` / `Cookie` headers.
+- Masking also applies to data stored in `ErrorEvent` and to stored webhook payloads.
+- Global error handler: no stack traces in responses. 5xx writes an `ErrorEvent`; 4xx does not.
+- `ErrorEvent` rows are deleted by the clean-up job after the retention days in `PlatformSettings`.
+
+## Security
+
+- Every new admin endpoint is admin-only.
+- Every read or change of user data checks that the caller owns it (or is admin).
