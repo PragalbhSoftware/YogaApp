@@ -487,6 +487,8 @@ Create two folders **outside** the document root, so deploys never overwrite the
 
 In File Manager, give the site's application pool user **Modify** rights on both. Use the full Windows path (for example `C:\Inetpub\vhosts\psoftcs.com\private\yogademo\keys`); Plesk shows the real root under Hosting Settings. Never put either folder under `wwwroot`. Certificates must only be reachable through the API.
 
+**Logs.** Staging and Production write JSON logs to `logs/` in the site folder. A new file starts each day, or sooner when a file reaches 100 MB, and files are kept for 30 days. The application pool user needs **Modify** rights on `logs/`; create the folder if it is missing. To keep logs outside the site instead, create `...\private\yogademo\logs`, give the pool user the same rights, and set `Logging__File__Path` to its full path plus a file name, for example `C:\Inetpub\vhosts\psoftcs.com\private\yogademo\logs\yoga-marketplace-.json`.
+
 ### 4. Application pool
 
 Under **Dedicated IIS Application Pool** (or ask the host):
@@ -517,6 +519,7 @@ Set these in Plesk, if your plan shows environment variables for the site. Other
 | `Razorpay__WebhookSecret` | Yes | The secret set on the Razorpay webhook (below) |
 | `DataProtection__KeysPath` | Yes | Full path of the `keys` folder from step 3. The app refuses to start without it. |
 | `Storage__RootPath` | Yes, for this deploy | Full path of the `uploads` folder from step 3. The default (`App_Data/uploads`) lives in the site folder and is lost on redeploy. |
+| `Logging__File__Path` | No | Full path of the log file, if logs live outside the site folder (see step 3). Defaults to `logs/yoga-marketplace-.json` in the site folder. `Logging__File__RetainedDays` (default 30) and `Logging__File__FileSizeLimitBytes` (default 100 MB) are optional too. |
 | `Otp__DemoPhones` | No (Staging only; Production refuses it) | Comma-separated phones that sign in with the demo code, e.g. `+919000000001,+919000000002`. Every other phone gets a normal OTP. Empty or missing turns demo mode off. |
 | `Otp__DemoCode` | No (Staging only; Production refuses it) | The 6-digit code for `Otp__DemoPhones`. Startup fails if it is set without `Otp__DemoPhones`. Attempt lockout and rate limits still apply, and the log shows a warning (with masked phones) while demo mode is on. |
 

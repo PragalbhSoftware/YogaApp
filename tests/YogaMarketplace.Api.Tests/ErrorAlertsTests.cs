@@ -87,6 +87,25 @@ public class ErrorAlertsTests
         Assert.Equal(expected, LogMask.Text(text));
     }
 
+    [Theory]
+    [InlineData("alert to ops.team+errors@example.co.in failed", "alert to ***@example.co.in failed")]
+    [InlineData("From: Meera_Rao99@mail.example.com.", "From: ***@mail.example.com.")]
+    [InlineData("no address @ here or user@localhost", "no address @ here or user@localhost")]
+    public void Text_mask_keeps_only_the_domain_of_an_email(string text, string expected)
+    {
+        Assert.Equal(expected, LogMask.Text(text));
+    }
+
+    [Theory]
+    [InlineData("Authorization: Bearer abc.DEF-123_x~+/=", "Authorization: Bearer [token]")]
+    [InlineData("header bearer opaque-refresh-token-42 rejected", "header Bearer [token] rejected")]
+    [InlineData("token eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMifQ.sig-Part_1 expired", "token [jwt] expired")]
+    [InlineData("unsigned eyJhbGciOiJub25lIn0.eyJzdWIiOiIxIn0. used", "unsigned [jwt] used")]
+    public void Text_mask_replaces_bearer_tokens_and_jwts(string text, string expected)
+    {
+        Assert.Equal(expected, LogMask.Text(text));
+    }
+
     [Fact]
     public async Task Error_endpoints_are_admin_only()
     {
@@ -319,6 +338,31 @@ public class ErrorAlertsTests
         Assert.NotEqual(a.Id, b.Id);
         Assert.Equal((2, "corr-a2", first), (a.Count, a.LastCorrelationId, a.FirstSeenAt));
         Assert.Equal((1, "corr-b1"), (b.Count, b.LastCorrelationId));
+    }
+
+    [Fact]
+    public async Task An_acknowledged_error_seen_again_reopens_the_same_row_with_a_fresh_count()
+    {
+        await using var factory = new YogaApiFactory();
+        var (host, _, _) = NewHost(factory);
+        await using var _ = host;
+        var writer = NewWriter(host);
+        var again = new DateTimeOffset(2026, 10, 14, 9, 30, 0, TimeSpan.Zero);
+        var first = again.AddHours(-2);
+        await writer.WriteAsync(Occurrence("Type.A", "corr-old-1", first), CancellationToken.None);
+        await writer.WriteAsync(Occurrence("Type.A", "corr-old-2", first.AddMinutes(1)), CancellationToken.None);
+        var before = (await ErrorRowAsync(host, "Type.A"))!;
+        var admin = await SignInAsync(host, SeedIds.AdminPhone);
+        Assert.Equal(HttpStatusCode.OK, (await admin.PostAsync($"/api/admin/errors/{before.Id}/acknowledge", null)).StatusCode);
+        Assert.NotNull((await ErrorRowAsync(host, "Type.A"))!.AcknowledgedAt);
+
+        await writer.WriteAsync(Occurrence("Type.A", "corr-new", again), CancellationToken.None);
+
+        var after = (await ErrorRowAsync(host, "Type.A"))!;
+        Assert.Equal(before.Id, after.Id);
+        Assert.Null(after.AcknowledgedAt);
+        Assert.Null(after.AcknowledgedByUserId);
+        Assert.Equal((1, again, again, "corr-new"), (after.Count, after.FirstSeenAt, after.LastSeenAt, after.LastCorrelationId));
     }
 
     [Fact]

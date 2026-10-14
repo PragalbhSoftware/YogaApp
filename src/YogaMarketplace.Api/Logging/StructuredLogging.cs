@@ -4,13 +4,17 @@ using Serilog.Formatting.Compact;
 
 namespace YogaMarketplace.Api.Logging;
 
-/// <summary>Where the JSON log file goes and how many days of files are kept. An empty path writes no file.</summary>
+/// <summary>
+/// Where the JSON log file goes, how many days of files are kept and how big one file may grow before a new one
+/// starts. An empty path writes no file.
+/// </summary>
 public class LogFileOptions
 {
     public const string Section = "Logging:File";
 
     public string? Path { get; set; }
     public int RetainedDays { get; set; } = 14;
+    public long FileSizeLimitBytes { get; set; } = 100L * 1024 * 1024;
 }
 
 public static class StructuredLogging
@@ -39,6 +43,7 @@ public static class StructuredLogging
                         new RenderedCompactJsonFormatter(),
                         file.Path,
                         rollingInterval: RollingInterval.Day,
+                        fileSizeLimitBytes: file.FileSizeLimitBytes,
                         rollOnFileSizeLimit: true,
                         retainedFileCountLimit: null,
                         retainedFileTimeLimit: TimeSpan.FromDays(Math.Max(1, file.RetainedDays)),
