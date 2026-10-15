@@ -300,6 +300,7 @@ export function BookPage() {
 
           {mode === "Home" ? (
             <HomeCheckout
+              key={draftKey}
               profileLoading={profile.isLoading}
               profileError={profile.isError}
               profileMessage={profile.error ? toUserMessage(profile.error) : ""}

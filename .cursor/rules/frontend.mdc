@@ -50,6 +50,7 @@ src/
 
 - Data flow: component → feature hook (`features/*/hooks`) → TanStack Query → feature API (`features/*/api`) → shared Axios client → API. Never call Axios from a component.
 - Zustand holds auth and the customer's chosen city/area only. All server data goes through TanStack Query.
+- Zustand also holds the memory-only booking draft, keyed by slot. Never persist it, because it holds the visit address.
 - Mutations invalidate the queries they change.
 
 ## API client

@@ -1,8 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { bookPath, routes } from "@/constants/routes";
+import { bookPath, routes, teacherPath } from "@/constants/routes";
 import { BookPage } from "@/features/bookings/pages/book-page";
 import type { BookingQuote, BookingRecord } from "@/features/bookings/types";
 import { TermsPage } from "@/features/content/pages/content-page";
@@ -50,7 +50,12 @@ vi.mock("@/features/marketplace/hooks/use-instructors", () => ({
     isSuccess: true,
   }),
   useInstructorOpenSlots: () => ({
-    data: { slots: [{ id: "slot-1", date: "2099-01-05", start: "07:00", end: "08:00" }] },
+    data: {
+      slots: [
+        { id: "slot-1", date: "2099-01-05", start: "07:00", end: "08:00" },
+        { id: "slot-2", date: "2099-01-06", start: "07:00", end: "08:00" },
+      ],
+    },
     isLoading: false,
   }),
 }));
@@ -75,18 +80,27 @@ vi.mock("@/features/content/api/content-api", () => ({ contentApi: { page } }));
 
 const bookUrl = bookPath("provider-1", "slot-1", "Home");
 
-function renderCheckout() {
+function renderCheckout(initialEntries = [bookUrl]) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  const router = createMemoryRouter(
+    [
+      { path: routes.home, element: <p>Home page</p> },
+      { path: routes.teacher, element: <p>Instructor page</p> },
+      { path: routes.book, element: <BookPage /> },
+      { path: routes.terms, element: <TermsPage /> },
+    ],
+    { initialEntries, initialIndex: initialEntries.length - 1 },
+  );
+  render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[bookUrl]}>
-        <Routes>
-          <Route path={routes.book} element={<BookPage />} />
-          <Route path={routes.terms} element={<TermsPage />} />
-        </Routes>
-      </MemoryRouter>
+      <RouterProvider router={router} />
     </QueryClientProvider>,
   );
+  return router;
+}
+
+function houseField() {
+  return screen.getByRole("textbox", { name: "House and street" });
 }
 
 describe("BookPage policy links", () => {
@@ -143,5 +157,59 @@ describe("BookPage policy links", () => {
     act(() => useAuthStore.getState().signOut());
 
     expect(useBookingDraftStore.getState().drafts).toEqual({});
+  });
+
+  it("falls back to the default choices when the URL has unknown trial and pay values", () => {
+    renderCheckout([`${bookUrl}&trial=x&pay=bogus`]);
+
+    expect(screen.getByRole("radio", { name: /^Trial class/ })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "Use 1 credit" })).toBeChecked();
+  });
+
+  it("replaces the history entry when the trial or pay choice changes", async () => {
+    const router = renderCheckout([routes.home, bookUrl]);
+
+    fireEvent.click(screen.getByRole("radio", { name: "Regular session" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Pay ₹950" }));
+    expect(router.state.location.search).toContain("trial=0");
+    expect(router.state.location.search).toContain("pay=pay");
+    expect(router.state.historyAction).toBe("REPLACE");
+
+    await act(() => router.navigate(-1));
+    expect(screen.getByText("Home page")).toBeInTheDocument();
+  });
+
+  it("keeps the typed address out of localStorage and sessionStorage", () => {
+    localStorage.clear();
+    sessionStorage.clear();
+    renderCheckout();
+
+    fireEvent.change(houseField(), { target: { value: "12 Lake Road" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Landmark" }), { target: { value: "Blue gate" } });
+
+    expect(useBookingDraftStore.getState().drafts["slot-1"]?.address?.line1).toBe("12 Lake Road");
+    expect(localStorage.length).toBe(0);
+    expect(sessionStorage.length).toBe(0);
+  });
+
+  it("does not show the address typed on one slot on another slot's book page", async () => {
+    const router = renderCheckout();
+    fireEvent.change(houseField(), { target: { value: "12 Lake Road" } });
+
+    await act(() => router.navigate(teacherPath("provider-1")));
+    await act(() => router.navigate(bookPath("provider-1", "slot-2", "Home")));
+    expect(houseField()).toHaveValue("");
+
+    await act(() => router.navigate(bookUrl));
+    expect(houseField()).toHaveValue("12 Lake Road");
+  });
+
+  it("does not carry the typed address over when moving straight from one slot to another", async () => {
+    const router = renderCheckout();
+    fireEvent.change(houseField(), { target: { value: "12 Lake Road" } });
+
+    await act(() => router.navigate(bookPath("provider-1", "slot-2", "Home")));
+
+    expect(houseField()).toHaveValue("");
   });
 });
