@@ -55,7 +55,7 @@ public class BookingCustomerChangeTests : IClassFixture<YogaApiFactory>
         Assert.Contains(listed!.Slots, s => s.Id == slot.Id);
 
         var again = await customer.PostAsync($"/api/bookings/{booked.Id}/cancel", null);
-        Assert.Equal(HttpStatusCode.BadRequest, again.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, again.StatusCode);
         Assert.Contains("pending", (await again.Content.ReadFromJsonAsync<ErrorBody>(Json))!.Error, StringComparison.OrdinalIgnoreCase);
         Assert.Single(RefundsFor(booked.GatewayPaymentId!));
 
@@ -203,7 +203,7 @@ public class BookingCustomerChangeTests : IClassFixture<YogaApiFactory>
 
         await PostAsync<BookingBody>(instructor, $"/api/bookings/{pending.Id}/complete", new { });
         var cancelCompleted = await customer.PostAsync($"/api/bookings/{pending.Id}/cancel", null);
-        Assert.Equal(HttpStatusCode.BadRequest, cancelCompleted.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, cancelCompleted.StatusCode);
         Assert.Contains("pending or upcoming", (await cancelCompleted.Content.ReadFromJsonAsync<ErrorBody>(Json))!.Error, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(BookingStatus.Completed, await BookingStatusAsync(pending.Id));
         Assert.Equal(PaymentStatus.Paid, await PaymentStatusAsync(pending.Id));
@@ -214,7 +214,7 @@ public class BookingCustomerChangeTests : IClassFixture<YogaApiFactory>
         var declined = await BookAsync(customer, declinedSlot.Id, "pay_change_declined", homeAddress: null, landmark: null);
         await PostAsync<BookingBody>(instructor, $"/api/bookings/{declined.Id}/decline", new { });
         var cancelDeclined = await customer.PostAsync($"/api/bookings/{declined.Id}/cancel", null);
-        Assert.Equal(HttpStatusCode.BadRequest, cancelDeclined.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, cancelDeclined.StatusCode);
         Assert.Equal(BookingStatus.Declined, await BookingStatusAsync(declined.Id));
         Assert.Single(RefundsFor(declined.GatewayPaymentId!));
 

@@ -87,7 +87,7 @@ public static class BookingRules
     public static void Accept(Booking booking, DateTimeOffset now)
     {
         if (booking.Status != BookingStatus.PendingAccept)
-            throw new DomainException("Only a pending booking can be accepted.");
+            throw new DomainException("Only a pending booking can be accepted.", 409);
         booking.Status = BookingStatus.Upcoming;
         TrialRules.Sync(booking);
         booking.UpdatedAt = now;
@@ -96,7 +96,7 @@ public static class BookingRules
     public static void Decline(Booking booking, DateTimeOffset now)
     {
         if (booking.Status != BookingStatus.PendingAccept)
-            throw new DomainException("Only a pending booking can be declined.");
+            throw new DomainException("Only a pending booking can be declined.", 409);
         booking.Status = BookingStatus.Declined;
         TrialRules.Sync(booking);
         booking.UpdatedAt = now;
@@ -105,7 +105,7 @@ public static class BookingRules
     public static void Cancel(Booking booking, DateTimeOffset sessionStart, DateTimeOffset now)
     {
         if (booking.Status is not (BookingStatus.PendingAccept or BookingStatus.Upcoming))
-            throw new DomainException("Only a pending or upcoming booking can be cancelled.");
+            throw new DomainException("Only a pending or upcoming booking can be cancelled.", 409);
         if (now >= sessionStart)
             throw new DomainException("This session has already started.");
 
@@ -121,7 +121,7 @@ public static class BookingRules
     public static void AdminCancel(Booking booking, string? reason, DateTimeOffset now)
     {
         if (booking.Status is not (BookingStatus.PendingAccept or BookingStatus.Upcoming))
-            throw new DomainException("Only a pending or upcoming booking can be cancelled.");
+            throw new DomainException("Only a pending or upcoming booking can be cancelled.", 409);
         var trimmed = (reason ?? "").Trim();
         if (trimmed.Length is < CancelReasonMin or > CancelReasonMax)
             throw new DomainException($"Give a reason of {CancelReasonMin} to {CancelReasonMax} characters.");

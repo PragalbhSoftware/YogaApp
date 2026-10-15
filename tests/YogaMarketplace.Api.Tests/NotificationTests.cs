@@ -155,7 +155,7 @@ public class NotificationTests
         Assert.Equal(0, await CountRowsAsync(host, NotificationEvents.BookingConfirmedCustomer));
 
         await PostAsync<BookingBody>(instructor, $"/api/bookings/{booking.Id}/accept", new { });
-        Assert.Equal(HttpStatusCode.BadRequest, (await instructor.PostAsJsonAsync($"/api/bookings/{booking.Id}/accept", new { })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await instructor.PostAsJsonAsync($"/api/bookings/{booking.Id}/accept", new { })).StatusCode);
         await RunJobsAsync(host, DateTimeOffset.UtcNow.AddSeconds(1));
 
         Assert.Equal(1, await CountRowsAsync(host, NotificationEvents.BookingConfirmedCustomer));
@@ -475,11 +475,11 @@ public class NotificationTests
 
         var cancelled = await BookAsync(factory, customer);
         await PostAsync<BookingBody>(customer, $"/api/bookings/{cancelled.Id}/cancel", new { });
-        Assert.Equal(HttpStatusCode.BadRequest, (await customer.PostAsJsonAsync($"/api/bookings/{cancelled.Id}/cancel", new { })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await customer.PostAsJsonAsync($"/api/bookings/{cancelled.Id}/cancel", new { })).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await admin.PostAsJsonAsync($"/api/admin/bookings/{cancelled.Id}/cancel", new { reason = "Again" })).StatusCode);
         var declined = await BookAsync(factory, customer);
         await PostAsync<BookingBody>(instructor, $"/api/bookings/{declined.Id}/decline", new { });
-        Assert.Equal(HttpStatusCode.BadRequest, (await instructor.PostAsJsonAsync($"/api/bookings/{declined.Id}/decline", new { })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await instructor.PostAsJsonAsync($"/api/bookings/{declined.Id}/decline", new { })).StatusCode);
 
         foreach (var key in new[] { NotificationEvents.BookingCancelledCustomer, NotificationEvents.BookingCancelledInstructor,
                      NotificationEvents.BookingRefundedCustomer, NotificationEvents.BookingRefundedInstructor })
