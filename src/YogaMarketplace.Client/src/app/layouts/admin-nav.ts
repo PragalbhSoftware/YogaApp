@@ -4,17 +4,23 @@ import {
   BookOpen,
   Building2,
   CalendarClock,
+  ClipboardList,
   Coins,
   FileText,
+  Files,
   Image,
   IndianRupee,
   KeyRound,
+  Landmark,
   LayoutDashboard,
+  LayoutGrid,
   Map,
   MapPin,
+  MapPinned,
   Package,
   Receipt,
   Scale,
+  Settings,
   Settings2,
   Shield,
   ShieldCheck,
@@ -61,6 +67,15 @@ export const adminNav: AdminNavItem[] = [
   { group: "Settings", label: "Sign-in limits", to: routes.adminSignIn, icon: KeyRound },
   { group: "Settings", label: "Alerts", to: routes.adminAlerts, icon: Bell },
 ];
+
+export const adminGroupIcon: Record<string, LucideIcon> = {
+  Operations: ClipboardList,
+  Finance: Landmark,
+  Locations: MapPinned,
+  Catalog: LayoutGrid,
+  Content: Files,
+  Settings: Settings,
+};
 
 export function adminNavGroups(items: AdminNavItem[]) {
   const groups: { name: string; items: AdminNavItem[] }[] = [];

@@ -219,7 +219,7 @@ describe("admin page titles", () => {
 
     expect(await screen.findByRole("heading", { level: 1, name: title })).toBeInTheDocument();
     await waitFor(() => expect(client.isFetching()).toBe(0));
-    expect(screen.getAllByRole("heading", { name: title, exact: true })).toHaveLength(1);
+    expect(screen.getAllByRole("heading", { name: title })).toHaveLength(1);
     expect(screen.getAllByText(lead)).toHaveLength(1);
   });
 });

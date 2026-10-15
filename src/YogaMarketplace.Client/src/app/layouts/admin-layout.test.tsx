@@ -38,13 +38,19 @@ describe("AdminLayout", () => {
     renderAt(routes.admin);
     const groups = [...new Set(adminNav.map((item) => item.group))].filter((group) => group !== "Dashboard");
     for (const group of groups) {
-      fireEvent.click(screen.getByRole("button", { name: group }));
+      fireEvent.click(screen.getByRole("button", { name: new RegExp(group) }));
       for (const item of adminNav.filter((entry) => entry.group === group)) {
         const link = screen.getAllByRole("link").find((element) => element.getAttribute("href") === item.to);
         expect(link).toBeTruthy();
       }
     }
     expect(screen.getByRole("link", { name: "Dashboard" })).toHaveAttribute("href", routes.admin);
+  });
+
+  it("shows a child badge on the group while it is collapsed", () => {
+    renderAt(routes.admin);
+    expect(screen.getByRole("button", { name: /Operations/ })).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByRole("button", { name: /Operations/ })).toHaveTextContent("4 open");
   });
 
   it("opens the same menu from the header button", () => {
