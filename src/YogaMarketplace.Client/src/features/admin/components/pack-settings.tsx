@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { EmptyState } from "@/components/common/empty-state";
 import { ErrorState } from "@/components/common/error-state";
 import { BookingListSkeleton } from "@/components/common/loading-skeleton";
-import { SettingsCard, SettingsIntro } from "@/features/admin/components/settings-card";
+import { SettingsCard } from "@/features/admin/components/settings-card";
 import { useAdminPacks, useCreatePack, useUpdatePack } from "@/features/admin/hooks/use-admin-credits";
 import { packSchema, type PackFormValues } from "@/features/admin/schemas";
 import type { AdminPack } from "@/features/admin/types";
@@ -27,10 +27,6 @@ export function PackSettings() {
 
   return (
     <div className="flex flex-col gap-5">
-      <SettingsIntro
-        title="Session packs"
-        lead="Customers buy a pack once and book with credits. Changes apply to new purchases only. Packs can be turned off but never deleted, so past purchases keep their history."
-      />
       <SettingsCard>
         <CreatePackForm />
       </SettingsCard>

@@ -10,6 +10,8 @@ internal static class ModelConfiguration
     public static void Configure(ModelBuilder modelBuilder, bool sqlite = false)
     {
         ConfigureCategory(modelBuilder.Entity<Category>());
+        ConfigureState(modelBuilder.Entity<State>());
+        ConfigureCity(modelBuilder.Entity<City>());
         ConfigureArea(modelBuilder.Entity<Area>());
         ConfigureUser(modelBuilder.Entity<User>());
         ConfigureUserBlockEvent(modelBuilder.Entity<UserBlockEvent>());
@@ -175,6 +177,23 @@ internal static class ModelConfiguration
         entity.Property(c => c.Name).HasMaxLength(80);
         entity.Property(c => c.Slug).HasMaxLength(40);
         entity.HasIndex(c => c.Slug).IsUnique();
+    }
+
+    private static void ConfigureState(EntityTypeBuilder<State> entity)
+    {
+        entity.Property(s => s.Name).HasMaxLength(CatalogRules.StateNameMax);
+        entity.Property(s => s.Code).HasMaxLength(CatalogRules.StateCodeMax);
+        entity.HasIndex(s => s.Name).IsUnique();
+        entity.HasIndex(s => s.Code).IsUnique();
+    }
+
+    private static void ConfigureCity(EntityTypeBuilder<City> entity)
+    {
+        entity.Property(c => c.Name).HasMaxLength(CatalogRules.CityNameMax);
+        entity.Property(c => c.Slug).HasMaxLength(CatalogRules.SlugMax);
+        entity.HasIndex(c => c.Slug).IsUnique();
+        entity.HasIndex(c => new { c.StateId, c.Name }).IsUnique();
+        entity.HasOne(c => c.State).WithMany().HasForeignKey(c => c.StateId).OnDelete(DeleteBehavior.Restrict);
     }
 
     private static void ConfigureArea(EntityTypeBuilder<Area> entity)

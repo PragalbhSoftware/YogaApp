@@ -39,13 +39,38 @@ export function userBlockSchema(reasonRequired: boolean) {
 
 export const areaSchema = z.object({
   name: nameSchema,
-  city: z
+  stateId: z.string().min(1, "Pick a state."),
+  city: z.string().min(1, "Pick a city."),
+});
+
+const displayOrder = z.coerce
+  .number({ invalid_type_error: "Enter a whole number." })
+  .int("Enter a whole number.");
+
+export const stateSchema = z.object({
+  name: z
     .string()
     .trim()
-    .min(1, "Pick a city.")
-    .min(2, "City must be 2 to 40 characters.")
-    .max(40, "City must be 2 to 40 characters.")
-    .regex(/^[A-Za-z .-]+$/, "Use letters, spaces, hyphens or dots only."),
+    .min(2, "Name must be 2 to 80 characters.")
+    .max(80, "Name must be 2 to 80 characters."),
+  code: z
+    .string()
+    .trim()
+    .min(2, "Code must be 2 to 10 letters.")
+    .max(10, "Code must be 2 to 10 letters.")
+    .regex(/^[A-Za-z]+$/, "Use letters only."),
+  displayOrder,
+});
+
+export const citySchema = z.object({
+  stateId: z.string().min(1, "Pick a state."),
+  name: z
+    .string()
+    .trim()
+    .min(2, "City must be 2 to 80 characters.")
+    .max(80, "City must be 2 to 80 characters.")
+    .regex(/^[A-Za-z0-9(][A-Za-z0-9 .()-]*$/, "Use letters, digits, spaces, hyphens, dots, or parentheses."),
+  displayOrder,
 });
 
 export const renameSchema = z.object({
@@ -53,6 +78,14 @@ export const renameSchema = z.object({
 });
 
 export const areaEditSchema = renameSchema.extend({
+  isActive: z.boolean(),
+});
+
+export const stateEditSchema = stateSchema.extend({
+  isActive: z.boolean(),
+});
+
+export const cityEditSchema = citySchema.omit({ stateId: true }).extend({
   isActive: z.boolean(),
 });
 
@@ -263,6 +296,10 @@ export type CertificateRejectValues = z.infer<typeof certificateRejectSchema>;
 export type AdminCancelValues = z.infer<typeof adminCancelSchema>;
 export type UserBlockValues = z.infer<ReturnType<typeof userBlockSchema>>;
 export type AreaFormValues = z.infer<typeof areaSchema>;
+export type StateFormValues = z.infer<typeof stateSchema>;
+export type StateEditValues = z.infer<typeof stateEditSchema>;
+export type CityFormValues = z.infer<typeof citySchema>;
+export type CityEditValues = z.infer<typeof cityEditSchema>;
 export type AreaEditValues = z.infer<typeof areaEditSchema>;
 export type RenameFormValues = z.infer<typeof renameSchema>;
 export type FeeSettingsValues = z.infer<typeof feeSettingsSchema>;

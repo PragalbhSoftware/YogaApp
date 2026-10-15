@@ -171,6 +171,29 @@ public class AdminRulesTests
     }
 
     [Fact]
+    public void State_and_city_names_normalise_and_the_slug_follows_the_city()
+    {
+        var state = CatalogRules.CreateState("  region   alpha ", "ra", 3);
+        Assert.Equal("Region Alpha", state.Name);
+        Assert.Equal("RA", state.Code);
+        Assert.Equal(3, state.DisplayOrder);
+        Assert.True(state.IsActive);
+
+        var city = CatalogRules.CreateCity("  new   DELHI ", state.Id, state.Code, 1);
+        Assert.Equal("New Delhi", city.Name);
+        Assert.Equal(state.Id, city.StateId);
+        Assert.Equal("ra-new-delhi", city.Slug);
+        Assert.Equal("ra-st-louis", CatalogRules.CitySlug(state.Code, CatalogRules.NormalizeCity("st. louis")));
+        Assert.Equal("Ab Area 24 (East)", CatalogRules.NormalizeCityName(" ab  area 24 (east) "));
+        Assert.Equal("ab-area-24-east", CatalogRules.CitySlug("AB", CatalogRules.NormalizeCityName("area 24 (east)")));
+        Assert.Throws<DomainException>(() => CatalogRules.NormalizeCity("Area 24"));
+
+        Assert.Throws<DomainException>(() => CatalogRules.CreateState("A", "RA", 0));
+        Assert.Throws<DomainException>(() => CatalogRules.CreateState("Region", "R1", 0));
+        Assert.Throws<DomainException>(() => CatalogRules.CreateCity("Pune/", state.Id, state.Code, 0));
+    }
+
+    [Fact]
     public void City_length_matches_the_column()
     {
         Assert.Equal(40, CatalogRules.CityMax);

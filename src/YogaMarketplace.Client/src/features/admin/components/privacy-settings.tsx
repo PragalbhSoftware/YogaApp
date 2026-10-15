@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { ErrorState } from "@/components/common/error-state";
 import { BookingListSkeleton } from "@/components/common/loading-skeleton";
-import { SettingsCard, SettingsIntro } from "@/features/admin/components/settings-card";
+import { SettingsCard } from "@/features/admin/components/settings-card";
 import { useAdminSettings, useUpdateSettings } from "@/features/admin/hooks/use-admin";
 import { privacySettingsSchema, type PrivacySettingsValues } from "@/features/admin/schemas";
 import type { AdminSettings } from "@/features/admin/types";
@@ -36,10 +36,6 @@ function PrivacyForm({ settings }: { settings: AdminSettings }) {
 
   return (
     <div className="space-y-5">
-      <SettingsIntro
-        title="Consent and data"
-        lead="Raise the policy version after an important change to Terms or Privacy, and every user is asked once to accept again when they next sign in or their session renews."
-      />
       <SettingsCard>
         <form
           noValidate

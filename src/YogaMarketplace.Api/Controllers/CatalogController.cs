@@ -21,6 +21,16 @@ public class CatalogController : ControllerBase
     public async Task<ActionResult<IReadOnlyList<AreaResponse>>> Areas(CancellationToken cancellationToken) =>
         Ok(await _catalog.AreasAsync(cancellationToken));
 
+    [HttpGet("catalog/states")]
+    public async Task<ActionResult<IReadOnlyList<StateResponse>>> States(CancellationToken cancellationToken) =>
+        Ok(await _catalog.StatesAsync(cancellationToken));
+
+    [HttpGet("catalog/cities")]
+    public async Task<ActionResult<IReadOnlyList<CityResponse>>> Cities(
+        [FromQuery] Guid? stateId,
+        CancellationToken cancellationToken) =>
+        Ok(await _catalog.CitiesAsync(stateId, cancellationToken));
+
     [HttpGet("categories")]
     public async Task<ActionResult<IReadOnlyList<CategoryResponse>>> Categories(CancellationToken cancellationToken) =>
         Ok(await _catalog.CategoriesAsync(cancellationToken));

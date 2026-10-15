@@ -5,7 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { ErrorState } from "@/components/common/error-state";
 import { BookingListSkeleton } from "@/components/common/loading-skeleton";
-import { SettingsCard, SettingsIntro } from "@/features/admin/components/settings-card";
+import { SettingsCard } from "@/features/admin/components/settings-card";
 import { PageBody } from "@/features/content/components/page-body";
 import { useAdminContentPages, useUpdateContentPage } from "@/features/content/hooks/use-content-pages";
 import { contentPageSchema, type ContentPageValues } from "@/features/content/schemas";
@@ -29,10 +29,6 @@ export function PageSettings() {
 
   return (
     <div className="space-y-5">
-      <SettingsIntro
-        title="Policy pages"
-        lead="Refund policy, Terms and Privacy are linked in the site footer. Changes go live as soon as you save."
-      />
       <TextField
         select
         label="Page"

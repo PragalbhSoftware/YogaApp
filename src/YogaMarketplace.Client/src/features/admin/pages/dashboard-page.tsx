@@ -79,7 +79,7 @@ export function DashboardPage() {
                 hint="Accepted and still ahead"
               />
               <QueueCard
-                to={`${routes.adminTransactions}?tab=payouts`}
+                to={routes.adminPayouts}
                 label="Payouts to send"
                 value={home.payoutsToSend}
                 hint="Net amount still pending"

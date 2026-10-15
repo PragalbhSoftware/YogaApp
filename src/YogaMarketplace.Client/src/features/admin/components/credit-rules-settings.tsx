@@ -3,7 +3,7 @@ import { Controller, useForm, useWatch, type Control } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ErrorState } from "@/components/common/error-state";
 import { BookingListSkeleton } from "@/components/common/loading-skeleton";
-import { SettingsCard, SettingsIntro } from "@/features/admin/components/settings-card";
+import { SettingsCard } from "@/features/admin/components/settings-card";
 import { useAdminSettings, useUpdateSettings } from "@/features/admin/hooks/use-admin";
 import { creditSettingsSchema, type CreditSettingsValues } from "@/features/admin/schemas";
 import { lateCancelOptions, payBasisHint, payBasisOptions } from "@/features/admin/credit-labels";
@@ -52,10 +52,6 @@ function CreditRulesForm({ settings }: { settings: AdminSettings }) {
 
   return (
     <div className="space-y-5">
-      <SettingsIntro
-        title="Credit rules"
-        lead="Applies to new purchases only. Each purchase keeps the rules in force when it was bought."
-      />
       <SettingsCard>
         <form
           noValidate

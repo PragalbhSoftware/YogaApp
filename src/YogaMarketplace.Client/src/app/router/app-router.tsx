@@ -1,10 +1,11 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, type ComponentType } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { CircularProgress } from "@mui/material";
 import { AppErrorBoundary } from "@/app/router/app-error-boundary";
 import { NotFoundPage } from "@/app/router/not-found-page";
 import { ScrollToTop } from "@/app/router/scroll-to-top";
 import { AdminLayout } from "@/app/layouts/admin-layout";
+import { LegacyAdminRedirect } from "@/app/layouts/admin-redirect";
 import { AuthLayout } from "@/app/layouts/auth-layout";
 import { CustomerLayout } from "@/app/layouts/customer-layout";
 import { InstructorLayout } from "@/app/layouts/instructor-layout";
@@ -35,11 +36,10 @@ const AdminBookingDetailPage = lazy(() =>
     default: module.BookingDetailPage,
   })),
 );
-const TransactionsPage = lazy(() =>
-  import("@/features/admin/pages/transactions-page").then((module) => ({
-    default: module.TransactionsPage,
-  })),
-);
+const loadTransactions = () => import("@/features/admin/pages/transactions-page");
+const TransactionsPage = lazyPage(loadTransactions, "TransactionsPage");
+const PayoutsPage = lazyPage(loadTransactions, "PayoutsPage");
+const ReconciliationPage = lazyPage(loadTransactions, "ReconciliationPage");
 const JobsPage = lazy(() =>
   import("@/features/admin/pages/jobs-page").then((module) => ({
     default: module.JobsPage,
@@ -50,9 +50,20 @@ const ErrorsPage = lazy(() =>
     default: module.ErrorsPage,
   })),
 );
-const SettingsPage = lazy(() =>
-  import("@/features/admin/pages/settings-page").then((module) => ({ default: module.SettingsPage })),
-);
+const loadSections = () => import("@/features/admin/pages/settings-page");
+const StatesPage = lazyPage(loadSections, "StatesPage");
+const CitiesPage = lazyPage(loadSections, "CitiesPage");
+const AreasPage = lazyPage(loadSections, "AreasPage");
+const CategoriesPage = lazyPage(loadSections, "CategoriesPage");
+const SessionPacksPage = lazyPage(loadSections, "PacksPage");
+const CreditRulesPage = lazyPage(loadSections, "CreditRulesPage");
+const PolicyPagesPage = lazyPage(loadSections, "PolicyPagesPage");
+const BannerPage = lazyPage(loadSections, "BannerPage");
+const ConsentPage = lazyPage(loadSections, "ConsentPage");
+const FeesPage = lazyPage(loadSections, "FeesPage");
+const ReconciliationSettingsPage = lazyPage(loadSections, "ReconciliationSettingsPage");
+const SignInLimitsPage = lazyPage(loadSections, "SignInPage");
+const AlertsPage = lazyPage(loadSections, "AlertsPage");
 const HomePage = lazy(() =>
   import("@/features/marketplace/pages/home-page").then((module) => ({ default: module.HomePage })),
 );
@@ -118,6 +129,10 @@ const PrivacyPage = lazy(() =>
   import("@/features/content/pages/content-page").then((module) => ({ default: module.PrivacyPage })),
 );
 
+function lazyPage<M extends Record<string, ComponentType>>(load: () => Promise<M>, name: keyof M & string) {
+  return lazy(() => load().then((module) => ({ default: module[name] })));
+}
+
 export function RouteFallback() {
   return (
     <div className="flex min-h-svh items-center justify-center bg-brand-background">
@@ -176,10 +191,33 @@ export function AppRouter() {
                   <Route path={routes.adminUser} element={<UserDetailPage />} />
                   <Route path={routes.adminBookings} element={<AdminBookingsPage />} />
                   <Route path={routes.adminBooking} element={<AdminBookingDetailPage />} />
-                  <Route path={routes.adminTransactions} element={<TransactionsPage />} />
                   <Route path={routes.adminJobs} element={<JobsPage />} />
                   <Route path={routes.adminErrors} element={<ErrorsPage />} />
-                  <Route path={routes.adminMasters} element={<SettingsPage />} />
+                  <Route path={routes.adminTransactions} element={<TransactionsPage />} />
+                  <Route path={routes.adminPayouts} element={<PayoutsPage />} />
+                  <Route path={routes.adminReconciliation} element={<ReconciliationPage />} />
+                  <Route path={routes.adminFinanceFees} element={<FeesPage />} />
+                  <Route path={routes.adminReconciliationSettings} element={<ReconciliationSettingsPage />} />
+                  <Route path={routes.adminStates} element={<StatesPage />} />
+                  <Route path={routes.adminCities} element={<CitiesPage />} />
+                  <Route path={routes.adminAreas} element={<AreasPage />} />
+                  <Route path={routes.adminCategories} element={<CategoriesPage />} />
+                  <Route path={routes.adminPacks} element={<SessionPacksPage />} />
+                  <Route path={routes.adminCreditRules} element={<CreditRulesPage />} />
+                  <Route path={routes.adminContentPages} element={<PolicyPagesPage />} />
+                  <Route path={routes.adminBanner} element={<BannerPage />} />
+                  <Route path={routes.adminConsent} element={<ConsentPage />} />
+                  <Route path={routes.adminSignIn} element={<SignInLimitsPage />} />
+                  <Route path={routes.adminAlerts} element={<AlertsPage />} />
+                  <Route path="/admin/approvals" element={<LegacyAdminRedirect />} />
+                  <Route path="/admin/users" element={<LegacyAdminRedirect />} />
+                  <Route path="/admin/users/:id" element={<LegacyAdminRedirect />} />
+                  <Route path="/admin/bookings" element={<LegacyAdminRedirect />} />
+                  <Route path="/admin/bookings/:id" element={<LegacyAdminRedirect />} />
+                  <Route path="/admin/jobs" element={<LegacyAdminRedirect />} />
+                  <Route path="/admin/errors" element={<LegacyAdminRedirect />} />
+                  <Route path="/admin/transactions" element={<LegacyAdminRedirect />} />
+                  <Route path="/admin/masters" element={<LegacyAdminRedirect />} />
                 </Route>
               </Route>
             </Route>

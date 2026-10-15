@@ -1,12 +1,12 @@
-import { Autocomplete, Button, FormControlLabel, Switch, TextField } from "@mui/material";
+import { Button, FormControlLabel, MenuItem, Switch, TextField } from "@mui/material";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/common/empty-state";
 import { ErrorState } from "@/components/common/error-state";
 import { BookingListSkeleton } from "@/components/common/loading-skeleton";
-import { SettingsCard, SettingsIntro } from "@/features/admin/components/settings-card";
-import { useAdminAreas, useCreateArea, useUpdateArea } from "@/features/admin/hooks/use-admin";
+import { SettingsCard } from "@/features/admin/components/settings-card";
+import { useActiveCities, useActiveStates, useAdminAreas, useCreateArea, useUpdateArea } from "@/features/admin/hooks/use-admin";
 import { areaEditSchema, areaSchema, type AreaEditValues, type AreaFormValues } from "@/features/admin/schemas";
 import type { AdminArea } from "@/features/admin/types";
 import { toUserMessage } from "@/services/http/api-error";
@@ -25,19 +25,12 @@ function groupByCity(areas: AdminArea[]) {
 
 export function AreaSettings() {
   const areas = useAdminAreas();
-  const cities = [...new Set((areas.data ?? []).map((area) => area.city))].sort((a, b) =>
-    a.localeCompare(b, "en"),
-  );
 
   return (
     <div className="flex flex-col gap-5">
-      <SettingsIntro
-        title="Cities and neighbourhoods"
-        lead="Customers pick a city, then a neighbourhood. Add neighbourhoods to an open city, or hide one to take it out of browse. Existing bookings there carry on."
-      />
       <SettingsCard className="space-y-0 p-0 sm:p-0">
         <div className="border-b border-brand-border p-5 sm:p-6">
-          <CreateAreaRow cities={cities} />
+          <CreateAreaRow />
         </div>
         {areas.isLoading ? (
           <div className="p-5 sm:p-6">
@@ -75,12 +68,15 @@ export function AreaSettings() {
   );
 }
 
-function CreateAreaRow({ cities }: { cities: string[] }) {
+function CreateAreaRow() {
   const createArea = useCreateArea();
+  const states = useActiveStates();
   const form = useForm<AreaFormValues>({
     resolver: zodResolver(areaSchema),
-    defaultValues: { name: "", city: "" },
+    defaultValues: { name: "", stateId: "", city: "" },
   });
+  const stateId = form.watch("stateId");
+  const cities = useActiveCities(stateId);
 
   return (
     <form
@@ -88,11 +84,11 @@ function CreateAreaRow({ cities }: { cities: string[] }) {
       className="flex flex-col gap-3"
       onSubmit={form.handleSubmit((values) => {
         createArea.mutate(
-          { name: values.name, city: values.city },
+          { name: values.name, city: values.city, stateId: values.stateId },
           {
             onSuccess: (saved) => {
               toast.success(`${saved.name} added in ${saved.city}.`);
-              form.reset({ name: "", city: saved.city });
+              form.reset({ name: "", stateId: values.stateId, city: "" });
             },
             onError: (error) => toastError(error),
           },
@@ -101,25 +97,61 @@ function CreateAreaRow({ cities }: { cities: string[] }) {
     >
       <div className="grid gap-3 sm:grid-cols-2">
         <Controller
+          name="stateId"
+          control={form.control}
+          render={({ field, fieldState }) => (
+            <TextField
+              select
+              label="State"
+              fullWidth
+              value={field.value}
+              onChange={(event) => {
+                field.onChange(event.target.value);
+                form.setValue("city", "");
+              }}
+              onBlur={field.onBlur}
+              inputRef={field.ref}
+              error={Boolean(fieldState.error)}
+              helperText={
+                fieldState.error?.message ??
+                (states.isSuccess && states.data.length === 0
+                  ? "Turn on a state under Locations > States first"
+                  : "Required.")
+              }
+              disabled={states.isLoading || (states.data?.length ?? 0) === 0}
+            >
+              <MenuItem value="">Select</MenuItem>
+              {(states.data ?? []).map((state) => (
+                <MenuItem key={state.id} value={state.id}>
+                  {state.name}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
+        />
+        <Controller
           name="city"
           control={form.control}
           render={({ field, fieldState }) => (
-            <Autocomplete
-              options={cities}
-              value={field.value || null}
-              onChange={(_, next) => field.onChange(next ?? "")}
-              disabled={cities.length === 0}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label="City"
-                  inputRef={field.ref}
-                  onBlur={field.onBlur}
-                  error={Boolean(fieldState.error)}
-                  helperText={fieldState.error?.message ?? "Pick an open city. New cities are not available yet."}
-                />
-              )}
-            />
+            <TextField
+              select
+              label="City"
+              fullWidth
+              value={field.value}
+              onChange={(event) => field.onChange(event.target.value)}
+              onBlur={field.onBlur}
+              inputRef={field.ref}
+              error={Boolean(fieldState.error)}
+              helperText={fieldState.error?.message ?? (stateId ? "Cities in the state you picked." : "Pick a state first.")}
+              disabled={!stateId || cities.isLoading}
+            >
+              <MenuItem value="">Select</MenuItem>
+              {(cities.data ?? []).map((city) => (
+                <MenuItem key={city.id} value={city.name}>
+                  {city.name}
+                </MenuItem>
+              ))}
+            </TextField>
           )}
         />
         <TextField

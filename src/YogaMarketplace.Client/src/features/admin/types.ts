@@ -177,6 +177,38 @@ export type AdminArea = {
   isActive: boolean;
 };
 
+export type AdminState = {
+  id: string;
+  name: string;
+  code: string;
+  isActive: boolean;
+  displayOrder: number;
+};
+
+export type AdminCity = {
+  id: string;
+  name: string;
+  stateId: string;
+  slug: string;
+  isActive: boolean;
+  displayOrder: number;
+};
+
+export type ActiveState = {
+  id: string;
+  name: string;
+  code: string;
+  displayOrder: number;
+};
+
+export type ActiveCity = {
+  id: string;
+  name: string;
+  stateId: string;
+  slug: string;
+  displayOrder: number;
+};
+
 export type AdminCategory = {
   id: string;
   name: string;
