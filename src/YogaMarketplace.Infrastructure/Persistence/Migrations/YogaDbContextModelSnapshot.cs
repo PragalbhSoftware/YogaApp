@@ -1921,6 +1921,9 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("Code")
+                        .IsUnique();
+
                     b.HasIndex("Name")
                         .IsUnique();
 

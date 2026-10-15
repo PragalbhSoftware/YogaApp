@@ -19,6 +19,7 @@ public sealed class StateCityMigrationTests : IAsyncLifetime
         Assert.Equal(0, await ScalarAsync($"SELECT COUNT(*) AS Value FROM Cities"));
         Assert.Equal(1, await ScalarAsync($"SELECT COUNT(*) AS Value FROM sys.columns WHERE object_id = OBJECT_ID('Areas') AND name = 'City'"));
         Assert.Equal(0, await ScalarAsync($"SELECT COUNT(*) AS Value FROM sys.columns WHERE object_id = OBJECT_ID('Areas') AND name = 'CityId'"));
+        Assert.Equal(1, await ScalarAsync($"SELECT COUNT(*) AS Value FROM sys.indexes WHERE object_id = OBJECT_ID('States') AND name = 'IX_States_Code' AND is_unique = 1"));
 
         await MigrateAsync(BeforeStates);
         Assert.Equal(0, await ScalarAsync($"SELECT COUNT(*) AS Value FROM sys.tables WHERE name = 'States'"));

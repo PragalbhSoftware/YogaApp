@@ -108,6 +108,7 @@ public class AdminMasterService : IAdminMasterService
     {
         var state = CatalogRules.CreateState(request.Name, request.Code, request.DisplayOrder ?? 0);
         await EnsureStateNameAvailableAsync(state.Name, null, cancellationToken);
+        await EnsureStateCodeAvailableAsync(state.Code, null, cancellationToken);
         _db.States.Add(state);
         await _db.SaveChangesAsync(cancellationToken);
         return ToState(state);
@@ -130,6 +131,7 @@ public class AdminMasterService : IAdminMasterService
         if (request.Code is not null)
         {
             state.Code = CatalogRules.NormalizeStateCode(request.Code);
+            await EnsureStateCodeAvailableAsync(state.Code, state.Id, cancellationToken);
             var cities = await _db.Cities.Where(c => c.StateId == state.Id).ToListAsync(cancellationToken);
             foreach (var city in cities)
             {
@@ -161,7 +163,9 @@ public class AdminMasterService : IAdminMasterService
         var file = await JsonSerializer.DeserializeAsync<IndiaLocationFile>(stream, JsonOptions, cancellationToken)
             ?? throw new DomainException("The India location file is empty.");
 
-        var byName = (await _db.States.ToListAsync(cancellationToken)).ToDictionary(s => s.Name);
+        var existingStates = await _db.States.ToListAsync(cancellationToken);
+        var byName = existingStates.ToDictionary(s => s.Name);
+        var byCode = existingStates.ToDictionary(s => s.Code);
         var cityKeys = (await _db.Cities.Select(c => new { c.StateId, c.Name }).ToListAsync(cancellationToken))
             .Select(c => (c.StateId, c.Name))
             .ToHashSet();
@@ -176,7 +180,8 @@ public class AdminMasterService : IAdminMasterService
             try
             {
                 var name = CatalogRules.NormalizeStateName(row.Name);
-                if (byName.TryGetValue(name, out var existing))
+                var code = CatalogRules.NormalizeStateCode(row.Code);
+                if (byName.TryGetValue(name, out var existing) || byCode.TryGetValue(code, out existing))
                 {
                     state = existing;
                     statesSkipped++;
@@ -187,6 +192,7 @@ public class AdminMasterService : IAdminMasterService
                     state.IsActive = false;
                     _db.States.Add(state);
                     byName[state.Name] = state;
+                    byCode[state.Code] = state;
                     statesAdded++;
                 }
             }
@@ -221,23 +227,18 @@ public class AdminMasterService : IAdminMasterService
             stateOrder++;
         }
 
-        await _db.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex) when (UniqueViolation.Is(ex))
+        {
+            throw new DomainException("Another import saved the same states or cities first. Reload and check the list.", 409);
+        }
         return new LocationImportResponse(statesAdded, statesSkipped, citiesAdded, citiesSkipped);
     }
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-
-    private sealed class IndiaLocationFile
-    {
-        public List<IndiaLocationState> States { get; set; } = [];
-    }
-
-    private sealed class IndiaLocationState
-    {
-        public string? Name { get; set; }
-        public string? Code { get; set; }
-        public List<string> Cities { get; set; } = [];
-    }
 
     public async Task<PagedResponse<AdminCityResponse>> ListCitiesAsync(
         Guid? stateId,
@@ -356,6 +357,15 @@ public class AdminMasterService : IAdminMasterService
             matches = matches.Where(s => s.Id != id);
         if (await matches.AnyAsync(cancellationToken))
             throw new DomainException("That state already exists.", 409);
+    }
+
+    private async Task EnsureStateCodeAvailableAsync(string code, Guid? exceptId, CancellationToken cancellationToken)
+    {
+        var matches = _db.States.Where(s => s.Code == code);
+        if (exceptId is Guid id)
+            matches = matches.Where(s => s.Id != id);
+        if (await matches.AnyAsync(cancellationToken))
+            throw new DomainException("That state code is already used.", 409);
     }
 
     private async Task EnsureCityAvailableAsync(City city, CancellationToken cancellationToken)

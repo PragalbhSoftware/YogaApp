@@ -52,4 +52,10 @@ describe("Areas form", () => {
     expect(activeCities).toHaveBeenCalledWith("s1");
     expect(screen.getByRole("combobox", { name: "City" })).not.toHaveTextContent("Harbor");
   });
+
+  it("points to States when no state is switched on", async () => {
+    activeStates.mockResolvedValue([]);
+    renderAreas();
+    expect(await screen.findByText("Turn on a state under Locations > States first")).toBeInTheDocument();
+  });
 });

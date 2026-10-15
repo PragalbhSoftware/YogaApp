@@ -30,21 +30,78 @@ public class StateCityApiTests : IClassFixture<YogaApiFactory>
     }
 
     [Fact]
+    public async Task Customer_and_instructor_calls_are_forbidden()
+    {
+        var customer = _factory.CreateClient();
+        var phone = "+9198" + Random.Shared.Next(10000000, 99999999);
+        var otp = await PostAsync<OtpBody>(customer, "/api/auth/otp/request", new { phone, name = "Places Customer", gender = "Other", isNewUser = true, acceptedPolicies = true });
+        var auth = await PostAsync<AuthBody>(customer, "/api/auth/otp/verify", new { phone, code = otp.DevCode });
+        Assert.Equal("Customer", auth.User.Role);
+        customer.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth.Token);
+        var instructor = await SignInAsync(SeedIds.AnanyaPhone);
+
+        foreach (var client in new[] { customer, instructor })
+        {
+            Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/admin/states")).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync("/api/admin/states", new { name = Word(), code = Code() })).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync("/api/admin/cities", new { name = Word(), stateId = Guid.NewGuid() })).StatusCode);
+            var import = await client.PostAsync("/api/admin/states/import-india", null);
+            Assert.Equal(HttpStatusCode.Forbidden, import.StatusCode);
+            Assert.Contains("Admin access required", (await import.Content.ReadFromJsonAsync<ErrorBody>(Json))!.Error, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public async Task Duplicate_state_code_is_a_conflict_on_create_and_update()
+    {
+        var admin = await SignInAsync();
+        var code = Code();
+        await PostAsync<StateBody>(admin, "/api/admin/states", new { name = Word(), code });
+        var created = await admin.PostAsJsonAsync("/api/admin/states", new { name = Word(), code = code.ToLowerInvariant() });
+        Assert.Equal(HttpStatusCode.Conflict, created.StatusCode);
+        Assert.Contains("code", (await created.Content.ReadFromJsonAsync<ErrorBody>(Json))!.Error, StringComparison.OrdinalIgnoreCase);
+
+        var other = await PostAsync<StateBody>(admin, "/api/admin/states", new { name = Word(), code = Code() });
+        var updated = await admin.PatchAsJsonAsync($"/api/admin/states/{other.Id}", new { code });
+        Assert.Equal(HttpStatusCode.Conflict, updated.StatusCode);
+    }
+
+    [Fact]
+    public async Task Area_needs_its_city_and_state_switched_on()
+    {
+        var admin = await SignInAsync();
+        var state = await PostAsync<StateBody>(admin, "/api/admin/states", new { name = Word(), code = Code() });
+        var quietCity = await PostAsync<CityBody>(admin, "/api/admin/cities", new { name = "Harbor", stateId = state.Id });
+        await PatchAsync<CityBody>(admin, $"/api/admin/cities/{quietCity.Id}", new { isActive = false });
+
+        var cityOff = await admin.PostAsJsonAsync("/api/admin/areas", new { name = "Dockside", city = "Harbor", stateId = state.Id });
+        Assert.Equal(HttpStatusCode.BadRequest, cityOff.StatusCode);
+        Assert.Contains("active city", (await cityOff.Content.ReadFromJsonAsync<ErrorBody>(Json))!.Error, StringComparison.OrdinalIgnoreCase);
+
+        await PatchAsync<StateBody>(admin, $"/api/admin/states/{state.Id}", new { isActive = false });
+        var stateOff = await admin.PostAsJsonAsync("/api/admin/areas", new { name = "Dockside", city = "Harbor", stateId = state.Id });
+        Assert.Equal(HttpStatusCode.BadRequest, stateOff.StatusCode);
+        Assert.Contains("active state", (await stateOff.Content.ReadFromJsonAsync<ErrorBody>(Json))!.Error, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Admin_can_manage_states_and_cities_and_public_lists_hide_inactive_rows()
     {
         var admin = await SignInAsync();
         var firstName = Word();
         var secondName = Word();
-        var first = await PostAsync<StateBody>(admin, "/api/admin/states", new { name = "  " + firstName.ToLowerInvariant() + " ", code = "ab", displayOrder = 2 });
+        var firstCode = Code();
+        var secondCode = Code();
+        var first = await PostAsync<StateBody>(admin, "/api/admin/states", new { name = "  " + firstName.ToLowerInvariant() + " ", code = firstCode.ToLowerInvariant(), displayOrder = 2 });
         Assert.Equal(firstName, first.Name);
-        Assert.Equal("AB", first.Code);
+        Assert.Equal(firstCode, first.Code);
         Assert.True(first.IsActive);
 
-        var duplicate = await admin.PostAsJsonAsync("/api/admin/states", new { name = firstName.ToLowerInvariant(), code = "cd" });
+        var duplicate = await admin.PostAsJsonAsync("/api/admin/states", new { name = firstName.ToLowerInvariant(), code = secondCode });
         Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
         Assert.Contains("already exists", (await duplicate.Content.ReadFromJsonAsync<ErrorBody>(Json))!.Error, StringComparison.OrdinalIgnoreCase);
 
-        var second = await PostAsync<StateBody>(admin, "/api/admin/states", new { name = secondName, code = "cd", displayOrder = 0 });
+        var second = await PostAsync<StateBody>(admin, "/api/admin/states", new { name = secondName, code = secondCode, displayOrder = 0 });
         var openStates = await _factory.CreateClient().GetFromJsonAsync<List<StateBody>>("/api/catalog/states", Json);
         var openOrder = openStates!.Select(row => row.Id).ToList();
         Assert.True(openOrder.IndexOf(second.Id) < openOrder.IndexOf(first.Id));
@@ -52,7 +109,7 @@ public class StateCityApiTests : IClassFixture<YogaApiFactory>
         Assert.Equal(HttpStatusCode.BadRequest, missingState.StatusCode);
         Assert.Contains("active state", (await missingState.Content.ReadFromJsonAsync<ErrorBody>(Json))!.Error, StringComparison.OrdinalIgnoreCase);
 
-        var quiet = await PostAsync<StateBody>(admin, "/api/admin/states", new { name = Word(), code = "ef" });
+        var quiet = await PostAsync<StateBody>(admin, "/api/admin/states", new { name = Word(), code = Code() });
         await PatchAsync<StateBody>(admin, $"/api/admin/states/{quiet.Id}", new { isActive = false });
         var inactiveState = await admin.PostAsJsonAsync("/api/admin/cities", new { name = Word(), stateId = quiet.Id });
         Assert.Equal(HttpStatusCode.BadRequest, inactiveState.StatusCode);
@@ -62,7 +119,7 @@ public class StateCityApiTests : IClassFixture<YogaApiFactory>
         var laterCity = Word();
         var city = await PostAsync<CityBody>(admin, "/api/admin/cities", new { name = " " + cityName.ToLowerInvariant() + " ", stateId = first.Id, displayOrder = 2 });
         Assert.Equal(cityName, city.Name);
-        Assert.Equal("ab-" + cityName.ToLowerInvariant(), city.Slug);
+        Assert.Equal(firstCode.ToLowerInvariant() + "-" + cityName.ToLowerInvariant(), city.Slug);
         Assert.Equal(first.Id, city.StateId);
 
         var sameName = await admin.PostAsJsonAsync("/api/admin/cities", new { name = cityName.ToLowerInvariant(), stateId = first.Id });
@@ -70,12 +127,12 @@ public class StateCityApiTests : IClassFixture<YogaApiFactory>
         Assert.Contains("already exists", (await sameName.Content.ReadFromJsonAsync<ErrorBody>(Json))!.Error, StringComparison.OrdinalIgnoreCase);
 
         var sameNameOtherState = await PostAsync<CityBody>(admin, "/api/admin/cities", new { name = cityName, stateId = second.Id });
-        Assert.Equal("cd-" + cityName.ToLowerInvariant(), sameNameOtherState.Slug);
+        Assert.Equal(secondCode.ToLowerInvariant() + "-" + cityName.ToLowerInvariant(), sameNameOtherState.Slug);
 
         var earlier = await PostAsync<CityBody>(admin, "/api/admin/cities", new { name = laterCity, stateId = first.Id, displayOrder = 0 });
         var renamed = await PatchAsync<CityBody>(admin, $"/api/admin/cities/{earlier.Id}", new { name = laterCity + " End" });
         Assert.Equal(laterCity + " End", renamed.Name);
-        Assert.Equal("ab-" + laterCity.ToLowerInvariant() + "-end", renamed.Slug);
+        Assert.Equal(firstCode.ToLowerInvariant() + "-" + laterCity.ToLowerInvariant() + "-end", renamed.Slug);
 
         var blocked = await admin.PatchAsJsonAsync($"/api/admin/states/{first.Id}", new { isActive = false });
         Assert.Equal(HttpStatusCode.BadRequest, blocked.StatusCode);
@@ -115,11 +172,12 @@ public class StateCityApiTests : IClassFixture<YogaApiFactory>
     public async Task Changing_a_state_code_rewrites_city_slugs()
     {
         var admin = await SignInAsync();
-        var state = await PostAsync<StateBody>(admin, "/api/admin/states", new { name = Word(), code = "ab" });
+        var state = await PostAsync<StateBody>(admin, "/api/admin/states", new { name = Word(), code = Code() });
         var city = await PostAsync<CityBody>(admin, "/api/admin/cities", new { name = "Harbor", stateId = state.Id });
-        await PatchAsync<StateBody>(admin, $"/api/admin/states/{state.Id}", new { code = "xy" });
+        var next = Code();
+        await PatchAsync<StateBody>(admin, $"/api/admin/states/{state.Id}", new { code = next });
         var cities = await admin.GetFromJsonAsync<PagedBody<CityBody>>($"/api/admin/cities?stateId={state.Id}", Json);
-        Assert.Equal("xy-harbor", cities!.Items.Single(row => row.Id == city.Id).Slug);
+        Assert.Equal(next.ToLowerInvariant() + "-harbor", cities!.Items.Single(row => row.Id == city.Id).Slug);
     }
 
     [Fact]
@@ -136,8 +194,8 @@ public class StateCityApiTests : IClassFixture<YogaApiFactory>
         var second = await PostAsync<ImportBody>(admin, "/api/admin/states/import-india", new { });
 
         Assert.Equal(0, first.CitiesSkipped);
-        Assert.True(first.StatesAdded > 0);
-        Assert.True(first.CitiesAdded > 0);
+        Assert.Equal(36, first.StatesAdded + first.StatesSkipped);
+        Assert.Equal(784, first.CitiesAdded + first.CitiesSkipped);
         Assert.Equal(0, second.StatesAdded);
         Assert.Equal(0, second.CitiesAdded);
         Assert.Equal(first.StatesAdded + first.StatesSkipped, second.StatesSkipped);
@@ -223,11 +281,17 @@ public class StateCityApiTests : IClassFixture<YogaApiFactory>
         return "Place" + (char)('a' + (n / 26) % 26) + (char)('a' + (n % 26));
     }
 
-    private async Task<HttpClient> SignInAsync()
+    private static string Code()
+    {
+        var n = Interlocked.Increment(ref _seq);
+        return "Q" + (char)('A' + (n / 26) % 26) + (char)('A' + (n % 26));
+    }
+
+    private async Task<HttpClient> SignInAsync(string phone = SeedIds.AdminPhone)
     {
         var client = _factory.CreateClient();
-        var otp = await PostAsync<OtpBody>(client, "/api/auth/otp/request", new { phone = SeedIds.AdminPhone, isNewUser = false });
-        var auth = await PostAsync<AuthBody>(client, "/api/auth/otp/verify", new { phone = SeedIds.AdminPhone, code = otp.DevCode });
+        var otp = await PostAsync<OtpBody>(client, "/api/auth/otp/request", new { phone, isNewUser = false });
+        var auth = await PostAsync<AuthBody>(client, "/api/auth/otp/verify", new { phone, code = otp.DevCode });
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth.Token);
         return client;
     }

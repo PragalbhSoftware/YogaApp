@@ -112,7 +112,12 @@ function CreateAreaRow() {
               onBlur={field.onBlur}
               inputRef={field.ref}
               error={Boolean(fieldState.error)}
-              helperText={fieldState.error?.message ?? "Required."}
+              helperText={
+                fieldState.error?.message ??
+                (states.isSuccess && states.data.length === 0
+                  ? "Turn on a state under Locations > States first"
+                  : "Required.")
+              }
               disabled={states.isLoading || (states.data?.length ?? 0) === 0}
             >
               <MenuItem value="">Select</MenuItem>
