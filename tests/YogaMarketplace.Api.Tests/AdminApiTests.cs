@@ -209,7 +209,7 @@ public class AdminApiTests : IClassFixture<YogaApiFactory>
                 CreatedAt = DateTimeOffset.UtcNow
             };
             db.Users.Add(customer);
-            sessionDate = MumbaiClock.Today().AddDays(40);
+            sessionDate = MumbaiClock.Today(DateTimeOffset.UtcNow).AddDays(40);
             var otherDate = sessionDate.AddDays(2);
             var slots = Enumerable.Range(0, 5).Select(index => new AvailabilitySlot
             {
@@ -328,7 +328,7 @@ public class AdminApiTests : IClassFixture<YogaApiFactory>
                 Id = Guid.NewGuid(),
                 ProviderId = SeedIds.AnanyaProviderId,
                 Mode = SessionMode.Online,
-                Date = MumbaiClock.Today().AddDays(50),
+                Date = MumbaiClock.Today(DateTimeOffset.UtcNow).AddDays(50),
                 StartTime = new TimeOnly(5, 15),
                 EndTime = new TimeOnly(6, 15),
                 IsBlocked = false

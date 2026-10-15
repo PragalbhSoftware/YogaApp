@@ -18,13 +18,15 @@ public class ProviderMediaService
     private readonly ICurrentUser _current;
     private readonly IFileStorage _storage;
     private readonly ILogger<ProviderMediaService> _logger;
+    private readonly TimeProvider _time;
 
-    public ProviderMediaService(YogaDbContext db, ICurrentUser current, IFileStorage storage, ILogger<ProviderMediaService> logger)
+    public ProviderMediaService(YogaDbContext db, ICurrentUser current, IFileStorage storage, ILogger<ProviderMediaService> logger, TimeProvider time)
     {
         _db = db;
         _current = current;
         _storage = storage;
         _logger = logger;
+        _time = time;
     }
 
     public async Task<ProviderMediaResponse> GetMineAsync(CancellationToken cancellationToken)
@@ -47,7 +49,7 @@ public class ProviderMediaService
             ContentType = contentType,
             SizeBytes = upload.Length,
             SortOrder = existing.Count == 0 ? 0 : existing.Max(p => p.SortOrder) + 1,
-            CreatedAt = DateTimeOffset.UtcNow
+            CreatedAt = _time.GetUtcNow()
         };
         photo.StorageKey = $"photos/{provider.Id:N}/{photo.Id:N}{ProviderMediaRules.ExtensionFor(contentType)}";
         await SaveWithFileAsync(photo.StorageKey, upload, () => _db.ProviderPhotos.Add(photo), cancellationToken);
@@ -88,7 +90,7 @@ public class ProviderMediaService
             ContentType = contentType,
             SizeBytes = upload.Length,
             Status = CertificateStatus.Pending,
-            CreatedAt = DateTimeOffset.UtcNow
+            CreatedAt = _time.GetUtcNow()
         };
         certificate.StorageKey = $"certificates/{provider.Id:N}/{certificate.Id:N}{ProviderMediaRules.ExtensionFor(contentType)}";
         await SaveWithFileAsync(certificate.StorageKey, upload, () => _db.ProviderCertificates.Add(certificate), cancellationToken);

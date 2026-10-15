@@ -18,10 +18,12 @@ public interface IAdminProviderService
 public class AdminProviderService : IAdminProviderService
 {
     private readonly YogaDbContext _db;
+    private readonly TimeProvider _time;
 
-    public AdminProviderService(YogaDbContext db)
+    public AdminProviderService(YogaDbContext db, TimeProvider time)
     {
         _db = db;
+        _time = time;
     }
 
     public async Task<IReadOnlyList<AdminProviderResponse>> ListAsync(string? status, CancellationToken cancellationToken)
@@ -51,10 +53,10 @@ public class AdminProviderService : IAdminProviderService
     }
 
     public Task<AdminProviderResponse> VerifyAsync(Guid id, CancellationToken cancellationToken) =>
-        ReviewAsync(id, ProviderApproval.Verify, cancellationToken);
+        ReviewAsync(id, provider => ProviderApproval.Verify(provider, _time.GetUtcNow()), cancellationToken);
 
     public Task<AdminProviderResponse> RejectAsync(Guid id, string? reason, CancellationToken cancellationToken) =>
-        ReviewAsync(id, provider => ProviderApproval.Reject(provider, reason), cancellationToken);
+        ReviewAsync(id, provider => ProviderApproval.Reject(provider, reason, _time.GetUtcNow()), cancellationToken);
 
     private async Task<AdminProviderResponse> ReviewAsync(
         Guid id,

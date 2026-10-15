@@ -9,6 +9,7 @@ import { useAdminCategories, useRenameCategory } from "@/features/admin/hooks/us
 import { renameSchema, type RenameFormValues } from "@/features/admin/schemas";
 import type { AdminCategory } from "@/features/admin/types";
 import { toUserMessage } from "@/services/http/api-error";
+import { toastError } from "@/services/http/toast-error";
 
 export function CategorySettings() {
   const categories = useAdminCategories();
@@ -47,7 +48,7 @@ function CategoryForm({ category }: { category: AdminCategory }) {
             { id: category.id, name: values.name },
             {
               onSuccess: () => toast.success("Browse label saved."),
-              onError: (error) => toast.error(toUserMessage(error)),
+              onError: (error) => toastError(error),
             },
           );
         })}

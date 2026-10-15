@@ -16,6 +16,7 @@ import { PayoutExportBar } from "@/features/admin/components/payout-export-bar";
 import { ReconciliationPanel } from "@/features/admin/components/reconciliation-panel";
 import { paymentStatusLabel } from "@/features/bookings/utils/status";
 import { toUserMessage } from "@/services/http/api-error";
+import { toastError } from "@/services/http/toast-error";
 
 const paymentFilters = [
   { value: null, label: "All" },
@@ -162,7 +163,7 @@ export function TransactionsPage() {
                   onMarkPaid={(id) => {
                     markPaid.mutate(id, {
                       onSuccess: () => toast.success("Marked paid. This amount drops out of what you owe."),
-                      onError: (error) => toast.error(toUserMessage(error)),
+                      onError: (error) => toastError(error),
                     });
                   }}
                 />

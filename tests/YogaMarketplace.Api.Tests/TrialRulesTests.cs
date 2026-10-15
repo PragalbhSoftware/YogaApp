@@ -4,6 +4,8 @@ namespace YogaMarketplace.Api.Tests;
 
 public class TrialRulesTests
 {
+    private static readonly DateTimeOffset Now = new(2026, 9, 24, 1, 30, 0, TimeSpan.Zero);
+
     [Theory]
     [InlineData(0, 25, 0)]
     [InlineData(199.999, 0, 200)]
@@ -53,7 +55,7 @@ public class TrialRulesTests
     {
         var declined = PendingTrial();
         Assert.True(declined.TrialConsumed);
-        BookingRules.Decline(declined);
+        BookingRules.Decline(declined, Now);
         Assert.False(declined.TrialConsumed);
 
         var adminCancelled = PendingTrial();
@@ -65,8 +67,8 @@ public class TrialRulesTests
         Assert.True(customerCancelled.TrialConsumed);
 
         var noShow = PendingTrial();
-        BookingRules.Accept(noShow);
-        BookingRules.MarkNoShow(noShow);
+        BookingRules.Accept(noShow, Now);
+        BookingRules.MarkNoShow(noShow, Now);
         Assert.True(noShow.TrialConsumed);
     }
 
@@ -76,7 +78,7 @@ public class TrialRulesTests
         var service = new Service { Id = Guid.NewGuid(), ProviderId = providerId };
         var slot = new AvailabilitySlot { Id = Guid.NewGuid(), ProviderId = providerId, Mode = SessionMode.Online };
         return BookingRules.CreateAfterPayment(
-            Guid.NewGuid(), service, slot, 0m, new BookingTerms(10m, 25m, 12, LateCancelFeeType.Percent, 50m), null, null, "https://meet.google.com/abc-defg-hij", null, isTrial: true);
+            Guid.NewGuid(), service, slot, 0m, new BookingTerms(10m, 25m, 12, LateCancelFeeType.Percent, 50m), null, null, "https://meet.google.com/abc-defg-hij", null, Now, isTrial: true);
     }
 
     [Fact]

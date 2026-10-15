@@ -587,7 +587,7 @@ public class ReconciliationTests
                     Id = Guid.NewGuid(),
                     ProviderId = SeedIds.AnanyaProviderId,
                     Mode = SessionMode.Online,
-                    Date = MumbaiClock.Today().AddDays(200 + index),
+                    Date = MumbaiClock.Today(DateTimeOffset.UtcNow).AddDays(200 + index),
                     StartTime = new TimeOnly(6, 0),
                     EndTime = new TimeOnly(7, 0)
                 };

@@ -19,9 +19,10 @@ internal static class PaymentRefunds
         Booking booking,
         Payment payment,
         decimal amount,
+        DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        PaymentRules.Refund(payment, amount);
+        PaymentRules.Refund(payment, amount, now);
 
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
         try

@@ -19,6 +19,7 @@ import {
 import { displayName, formatAdminWhen } from "@/features/admin/utils";
 import { toUserMessage } from "@/services/http/api-error";
 import { toast } from "sonner";
+import { toastError } from "@/services/http/toast-error";
 
 export function UserDetailPage() {
   const { id } = useParams();
@@ -101,7 +102,7 @@ export function UserDetailPage() {
             { id: account.id, blocked, reason },
             {
               onSuccess: () => toast.success(blocked ? "Account blocked." : "Account unblocked."),
-              onError: (error) => toast.error(toUserMessage(error)),
+              onError: (error) => toastError(error),
             },
           );
         }}
@@ -119,7 +120,7 @@ export function UserDetailPage() {
                 toast.success("Verified. Customers can browse this instructor.");
                 void user.refetch();
               },
-              onError: (error) => toast.error(toUserMessage(error)),
+              onError: (error) => toastError(error),
             });
           }}
           onReject={(providerId, reason) => {
@@ -130,7 +131,7 @@ export function UserDetailPage() {
                   toast.success("Rejected. They stay off public browse.");
                   void user.refetch();
                 },
-                onError: (error) => toast.error(toUserMessage(error)),
+                onError: (error) => toastError(error),
               },
             );
           }}

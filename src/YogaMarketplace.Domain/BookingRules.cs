@@ -30,6 +30,7 @@ public static class BookingRules
         string? landmark,
         string? meetLink,
         string? studioAddress,
+        DateTimeOffset now,
         bool isTrial = false)
     {
         if (service.ProviderId != slot.ProviderId)
@@ -41,7 +42,6 @@ public static class BookingRules
 
         EnsureSessionLocation(slot.Mode, homeAddress, landmark, meetLink, studioAddress);
 
-        var now = DateTimeOffset.UtcNow;
         var booking = new Booking
         {
             Id = Guid.NewGuid(),
@@ -84,28 +84,28 @@ public static class BookingRules
             throw new DomainException("Studio sessions require the studio address.");
     }
 
-    public static void Accept(Booking booking)
+    public static void Accept(Booking booking, DateTimeOffset now)
     {
         if (booking.Status != BookingStatus.PendingAccept)
-            throw new DomainException("Only a pending booking can be accepted.");
+            throw new DomainException("Only a pending booking can be accepted.", 409);
         booking.Status = BookingStatus.Upcoming;
         TrialRules.Sync(booking);
-        booking.UpdatedAt = DateTimeOffset.UtcNow;
+        booking.UpdatedAt = now;
     }
 
-    public static void Decline(Booking booking)
+    public static void Decline(Booking booking, DateTimeOffset now)
     {
         if (booking.Status != BookingStatus.PendingAccept)
-            throw new DomainException("Only a pending booking can be declined.");
+            throw new DomainException("Only a pending booking can be declined.", 409);
         booking.Status = BookingStatus.Declined;
         TrialRules.Sync(booking);
-        booking.UpdatedAt = DateTimeOffset.UtcNow;
+        booking.UpdatedAt = now;
     }
 
     public static void Cancel(Booking booking, DateTimeOffset sessionStart, DateTimeOffset now)
     {
         if (booking.Status is not (BookingStatus.PendingAccept or BookingStatus.Upcoming))
-            throw new DomainException("Only a pending or upcoming booking can be cancelled.");
+            throw new DomainException("Only a pending or upcoming booking can be cancelled.", 409);
         if (now >= sessionStart)
             throw new DomainException("This session has already started.");
 
@@ -121,7 +121,7 @@ public static class BookingRules
     public static void AdminCancel(Booking booking, string? reason, DateTimeOffset now)
     {
         if (booking.Status is not (BookingStatus.PendingAccept or BookingStatus.Upcoming))
-            throw new DomainException("Only a pending or upcoming booking can be cancelled.");
+            throw new DomainException("Only a pending or upcoming booking can be cancelled.", 409);
         var trimmed = (reason ?? "").Trim();
         if (trimmed.Length is < CancelReasonMin or > CancelReasonMax)
             throw new DomainException($"Give a reason of {CancelReasonMin} to {CancelReasonMax} characters.");
@@ -164,25 +164,25 @@ public static class BookingRules
         return new CancelSettlement(lateFee, convenienceKept, paid - lateFee - convenienceKept);
     }
 
-    public static void MarkNoShow(Booking booking)
+    public static void MarkNoShow(Booking booking, DateTimeOffset now)
     {
         if (booking.Status != BookingStatus.Upcoming)
             throw new DomainException("Only an upcoming booking can be marked as a no-show.");
         booking.Status = BookingStatus.NoShow;
         TrialRules.Sync(booking);
-        booking.UpdatedAt = DateTimeOffset.UtcNow;
+        booking.UpdatedAt = now;
     }
 
-    public static void Complete(Booking booking)
+    public static void Complete(Booking booking, DateTimeOffset now)
     {
         if (booking.Status != BookingStatus.Upcoming)
             throw new DomainException("Only an upcoming booking can be completed.");
         booking.Status = BookingStatus.Completed;
         TrialRules.Sync(booking);
-        booking.UpdatedAt = DateTimeOffset.UtcNow;
+        booking.UpdatedAt = now;
     }
 
-    public static void Reschedule(Booking booking, AvailabilitySlot newSlot)
+    public static void Reschedule(Booking booking, AvailabilitySlot newSlot, DateTimeOffset now)
     {
         if (booking.Status != BookingStatus.Upcoming)
             throw new DomainException("Only an upcoming booking can be rescheduled.");
@@ -196,7 +196,7 @@ public static class BookingRules
             throw new DomainException("That slot is blocked.");
 
         booking.SlotId = newSlot.Id;
-        booking.UpdatedAt = DateTimeOffset.UtcNow;
+        booking.UpdatedAt = now;
     }
 
     public static void EnsureOutsideLateWindow(Booking booking, DateTimeOffset sessionStart, DateTimeOffset now)
@@ -213,19 +213,19 @@ public sealed record CancelSettlement(decimal LateCancelFee, decimal Convenience
 
 public static class PaymentRules
 {
-    public static void MarkPaid(Payment payment, string? gatewayPaymentId)
+    public static void MarkPaid(Payment payment, string? gatewayPaymentId, DateTimeOffset now)
     {
         if (payment.Status is not (PaymentStatus.Pending or PaymentStatus.Failed))
             throw new DomainException("This payment can no longer be captured.");
         payment.Status = PaymentStatus.Paid;
         payment.GatewayPaymentId = gatewayPaymentId;
-        payment.UpdatedAt = DateTimeOffset.UtcNow;
+        payment.UpdatedAt = now;
     }
 
-    public static void MarkRefunded(Payment payment) => Refund(payment, payment.Amount);
+    public static void MarkRefunded(Payment payment, DateTimeOffset now) => Refund(payment, payment.Amount, now);
 
     /// <summary>Records a refund of <paramref name="amount"/>. Zero leaves the payment Paid.</summary>
-    public static void Refund(Payment payment, decimal amount)
+    public static void Refund(Payment payment, decimal amount, DateTimeOffset now)
     {
         if (payment.Status != PaymentStatus.Paid)
             throw new DomainException("Only a captured payment can be refunded.");
@@ -236,13 +236,13 @@ public static class PaymentRules
 
         payment.RefundedAmount = amount;
         payment.Status = amount == payment.Amount ? PaymentStatus.Refunded : PaymentStatus.PartiallyRefunded;
-        payment.UpdatedAt = DateTimeOffset.UtcNow;
+        payment.UpdatedAt = now;
     }
 }
 
 public static class ReviewRules
 {
-    public static Review Create(Booking booking, Guid customerId, int rating, string? comment)
+    public static Review Create(Booking booking, Guid customerId, int rating, string? comment, DateTimeOffset now)
     {
         if (booking.Status != BookingStatus.Completed)
             throw new DomainException("Reviews are available only after the session is completed.");
@@ -261,7 +261,7 @@ public static class ReviewRules
             ProviderId = booking.ProviderId,
             Rating = rating,
             Comment = string.IsNullOrWhiteSpace(comment) ? null : comment.Trim(),
-            CreatedAt = DateTimeOffset.UtcNow
+            CreatedAt = now
         };
     }
 }
@@ -269,23 +269,23 @@ public static class ReviewRules
 /// <summary>Instructor payouts use the commission copied onto the booking. The convenience fee is never paid out.</summary>
 public static class PayoutCalculator
 {
-    public static PayoutPending ForCompletedBooking(Booking booking)
+    public static PayoutPending ForCompletedBooking(Booking booking, DateTimeOffset now)
     {
         if (booking.Status is not (BookingStatus.Completed or BookingStatus.NoShow))
             throw new DomainException("A payout is created when a session is completed or marked no-show.");
-        return Build(booking, booking.Amount);
+        return Build(booking, booking.Amount, now);
     }
 
-    public static PayoutPending ForLateCancel(Booking booking, decimal keptAmount)
+    public static PayoutPending ForLateCancel(Booking booking, decimal keptAmount, DateTimeOffset now)
     {
         if (booking.Status != BookingStatus.Cancelled || booking.CancelledBy != CancelledBy.Customer)
             throw new DomainException("A late-cancel payout needs a customer-cancelled booking.");
         if (keptAmount <= 0 || keptAmount > booking.Amount)
             throw new DomainException("Kept amount must be above zero and at most the booking amount.");
-        return Build(booking, keptAmount);
+        return Build(booking, keptAmount, now);
     }
 
-    private static PayoutPending Build(Booking booking, decimal gross)
+    private static PayoutPending Build(Booking booking, decimal gross, DateTimeOffset now)
     {
         var feePercent = booking.CommissionPercent;
         if (feePercent is < 0 or > 100)
@@ -302,7 +302,7 @@ public static class PayoutCalculator
             FeeAmount = fee,
             NetAmount = gross - fee,
             Status = PayoutStatus.Pending,
-            CreatedAt = DateTimeOffset.UtcNow
+            CreatedAt = now
         };
     }
 }

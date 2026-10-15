@@ -21,12 +21,14 @@ public class AdminCertificateService : IAdminCertificateService
     private readonly YogaDbContext _db;
     private readonly ICurrentUser _current;
     private readonly ProviderMediaService _media;
+    private readonly TimeProvider _time;
 
-    public AdminCertificateService(YogaDbContext db, ICurrentUser current, ProviderMediaService media)
+    public AdminCertificateService(YogaDbContext db, ICurrentUser current, ProviderMediaService media, TimeProvider time)
     {
         _db = db;
         _current = current;
         _media = media;
+        _time = time;
     }
 
     public async Task<IReadOnlyList<AdminCertificateResponse>> ListAsync(string? status, CancellationToken cancellationToken)
@@ -70,7 +72,7 @@ public class AdminCertificateService : IAdminCertificateService
         var certificate = await _db.ProviderCertificates.Include(c => c.Provider)
             .SingleOrDefaultAsync(c => c.Id == id, cancellationToken)
             ?? throw new DomainException("Certificate not found.", 404);
-        review(certificate, DateTimeOffset.UtcNow);
+        review(certificate, _time.GetUtcNow());
         await _db.SaveChangesAsync(cancellationToken);
         return ToResponse(certificate);
     }

@@ -32,19 +32,22 @@ public class AdminCreditService : IAdminCreditService
     private readonly CreditLedger _credits;
     private readonly ICurrentUser _current;
     private readonly ILogger<AdminCreditService> _logger;
+    private readonly TimeProvider _time;
 
     public AdminCreditService(
         YogaDbContext db,
         IRazorpayClient razorpay,
         CreditLedger credits,
         ICurrentUser current,
-        ILogger<AdminCreditService> logger)
+        ILogger<AdminCreditService> logger,
+        TimeProvider time)
     {
         _db = db;
         _razorpay = razorpay;
         _credits = credits;
         _current = current;
         _logger = logger;
+        _time = time;
     }
 
     public async Task<IReadOnlyList<AdminPackResponse>> ListPacksAsync(CancellationToken cancellationToken)
@@ -79,7 +82,7 @@ public class AdminCreditService : IAdminCreditService
             ValidityDays = validity,
             PriceCap = cap,
             IsActive = request.IsActive ?? true,
-            CreatedAt = DateTimeOffset.UtcNow
+            CreatedAt = _time.GetUtcNow()
         };
         _db.CreditPacks.Add(pack);
         await _db.SaveChangesAsync(cancellationToken);
@@ -110,7 +113,7 @@ public class AdminCreditService : IAdminCreditService
         pack.PriceCap = cap;
         pack.IsActive = request.IsActive ?? pack.IsActive;
         pack.Version = expected + 1;
-        pack.UpdatedAt = DateTimeOffset.UtcNow;
+        pack.UpdatedAt = _time.GetUtcNow();
         try
         {
             await _db.SaveChangesAsync(cancellationToken);
@@ -131,7 +134,7 @@ public class AdminCreditService : IAdminCreditService
             throw new DomainException("User not found.", 404);
         var batches = await _db.CreditBatches.AsNoTracking().Where(b => b.CustomerId == userId).ToListAsync(cancellationToken);
         var used = await UsedByBatchAsync(batches.Select(b => b.Id).ToList(), cancellationToken);
-        var now = DateTimeOffset.UtcNow;
+        var now = _time.GetUtcNow();
         return batches
             .OrderByDescending(b => b.PurchasedAt)
             .Select(b => ToResponse(b, used.GetValueOrDefault(b.Id), now))
@@ -140,7 +143,7 @@ public class AdminCreditService : IAdminCreditService
 
     public async Task<AdminCreditBatchResponse> RefundAsync(Guid batchId, CancellationToken cancellationToken)
     {
-        var now = DateTimeOffset.UtcNow;
+        var now = _time.GetUtcNow();
         var customerId = await _db.CreditBatches.AsNoTracking()
             .Where(b => b.Id == batchId)
             .Select(b => (Guid?)b.CustomerId)

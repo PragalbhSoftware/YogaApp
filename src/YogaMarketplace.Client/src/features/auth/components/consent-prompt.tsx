@@ -5,7 +5,7 @@ import { useAuth } from "@/features/auth/hooks/use-auth";
 import { useAcceptConsent } from "@/features/auth/hooks/use-auth-mutations";
 import { useCurrentUserSync } from "@/features/auth/hooks/use-current-user-sync";
 import { useSignOut } from "@/features/auth/hooks/use-sign-out";
-import { toUserMessage } from "@/services/http/api-error";
+import { toastError } from "@/services/http/toast-error";
 
 /** Asks a signed-in user to accept the Terms and Privacy again after the policy version goes up. */
 export function ConsentPrompt() {
@@ -22,7 +22,7 @@ export function ConsentPrompt() {
         if (token) signIn(token, updated);
         toast.success("Thanks, you're all set.");
       },
-      onError: (err) => toast.error(toUserMessage(err)),
+      onError: (err) => toastError(err),
     });
   }
 

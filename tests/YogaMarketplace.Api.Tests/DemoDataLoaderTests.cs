@@ -62,7 +62,7 @@ public class DemoDataLoaderTests : IClassFixture<YogaApiFactory>
         var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
         var before = await CountsAsync();
 
-        var loader = new DemoDataLoader(db, config, new StubEnvironment(Environments.Production));
+        var loader = new DemoDataLoader(db, config, new StubEnvironment(Environments.Production), TimeProvider.System);
         await Assert.ThrowsAsync<InvalidOperationException>(() => loader.LoadAsync(testPayments: true));
 
         Assert.Equal(before, await CountsAsync());
@@ -76,7 +76,7 @@ public class DemoDataLoaderTests : IClassFixture<YogaApiFactory>
         var db = scope.ServiceProvider.GetRequiredService<YogaDbContext>();
         var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
 
-        var loader = new DemoDataLoader(db, config, new StubEnvironment(Environments.Staging));
+        var loader = new DemoDataLoader(db, config, new StubEnvironment(Environments.Staging), TimeProvider.System);
         var result = await loader.LoadAsync(testPayments: true);
 
         Assert.True(result.Created > 0);

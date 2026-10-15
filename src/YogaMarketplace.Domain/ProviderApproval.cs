@@ -22,17 +22,17 @@ public static class ProviderApproval
         return provider.Status == ProviderStatus.Verified && !user.IsBlocked;
     }
 
-    public static void Verify(Provider provider)
+    public static void Verify(Provider provider, DateTimeOffset now)
     {
         if (provider.Status == ProviderStatus.Verified)
             return;
 
         provider.Status = ProviderStatus.Verified;
         provider.RejectionReason = null;
-        provider.ReviewedAt = DateTimeOffset.UtcNow;
+        provider.ReviewedAt = now;
     }
 
-    public static void Reject(Provider provider, string? reason)
+    public static void Reject(Provider provider, string? reason, DateTimeOffset now)
     {
         var trimmed = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
         if (trimmed is { Length: > MaxReasonLength })
@@ -43,6 +43,6 @@ public static class ProviderApproval
 
         provider.Status = ProviderStatus.Rejected;
         provider.RejectionReason = trimmed;
-        provider.ReviewedAt = DateTimeOffset.UtcNow;
+        provider.ReviewedAt = now;
     }
 }

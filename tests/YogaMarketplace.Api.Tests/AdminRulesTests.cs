@@ -4,6 +4,8 @@ namespace YogaMarketplace.Api.Tests;
 
 public class AdminRulesTests
 {
+    private static readonly DateTimeOffset Now = new(2026, 9, 24, 1, 30, 0, TimeSpan.Zero);
+
     [Fact]
     public void Verify_clears_a_rejection_and_a_second_verify_does_not_move_the_review_time()
     {
@@ -13,13 +15,13 @@ public class AdminRulesTests
             RejectionReason = "Incomplete profile"
         };
 
-        ProviderApproval.Verify(provider);
+        ProviderApproval.Verify(provider, Now);
         Assert.Equal(ProviderStatus.Verified, provider.Status);
         Assert.Null(provider.RejectionReason);
         Assert.NotNull(provider.ReviewedAt);
 
         var reviewedAt = provider.ReviewedAt;
-        ProviderApproval.Verify(provider);
+        ProviderApproval.Verify(provider, Now);
         Assert.Equal(ProviderStatus.Verified, provider.Status);
         Assert.Equal(reviewedAt, provider.ReviewedAt);
     }
@@ -28,20 +30,20 @@ public class AdminRulesTests
     public void Reject_stores_an_optional_reason_and_can_take_a_verified_instructor_off_the_list()
     {
         var pending = new Provider { Status = ProviderStatus.Pending };
-        ProviderApproval.Reject(pending, "  ");
+        ProviderApproval.Reject(pending, "  ", Now);
         Assert.Equal(ProviderStatus.Rejected, pending.Status);
         Assert.Null(pending.RejectionReason);
 
-        ProviderApproval.Reject(pending, "  Incomplete profile  ");
+        ProviderApproval.Reject(pending, "  Incomplete profile  ", Now);
         Assert.Equal("Incomplete profile", pending.RejectionReason);
 
         var verified = new Provider { Status = ProviderStatus.Verified };
-        ProviderApproval.Reject(verified, null);
+        ProviderApproval.Reject(verified, null, Now);
         Assert.Equal(ProviderStatus.Rejected, verified.Status);
         Assert.Null(verified.RejectionReason);
 
         var tooLong = new string('x', ProviderApproval.MaxReasonLength + 1);
-        var rejected = Assert.Throws<DomainException>(() => ProviderApproval.Reject(pending, tooLong));
+        var rejected = Assert.Throws<DomainException>(() => ProviderApproval.Reject(pending, tooLong, Now));
         Assert.Contains("300", rejected.Message, StringComparison.Ordinal);
         Assert.Equal("Incomplete profile", pending.RejectionReason);
     }

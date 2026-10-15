@@ -2,14 +2,14 @@ import type { ReactNode } from "react";
 import { Button, FormControlLabel, Switch, TextField } from "@mui/material";
 import { Controller, useForm, type Control } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { toast } from "sonner";
 import { ErrorState } from "@/components/common/error-state";
 import { BookingListSkeleton } from "@/components/common/loading-skeleton";
 import { SettingsCard, SettingsIntro } from "@/features/admin/components/settings-card";
 import { useAdminSettings, useUpdateSettings } from "@/features/admin/hooks/use-admin";
 import { jobScheduleSettingsSchema, type JobScheduleSettingsValues } from "@/features/admin/schemas";
 import type { AdminSettings } from "@/features/admin/types";
-import { changedFields, settingsSaveError } from "@/features/admin/utils";
+import { changedFields } from "@/features/admin/utils";
+import { keepUnsavedEdits, settingsSaveHandlers } from "@/features/admin/settings-form";
 import { toUserMessage } from "@/services/http/api-error";
 
 type SwitchName = "reconciliationEnabled" | "creditExpiryEnabled" | "webhookCleanupEnabled";
@@ -40,6 +40,7 @@ function JobScheduleForm({ settings }: { settings: AdminSettings }) {
   const form = useForm<JobScheduleSettingsValues>({
     resolver: zodResolver(jobScheduleSettingsSchema),
     values: toFormValues(settings),
+    resetOptions: keepUnsavedEdits,
   });
   const errors = form.formState.errors;
 
@@ -56,10 +57,7 @@ function JobScheduleForm({ settings }: { settings: AdminSettings }) {
           onSubmit={form.handleSubmit((values) =>
             updateSettings.mutate(
               { version: settings.version, ...changedFields(values, form.formState.dirtyFields) },
-              {
-                onSuccess: () => toast.success("Schedules saved."),
-                onError: (error) => toast.error(settingsSaveError(error)),
-              },
+              settingsSaveHandlers(form, toFormValues, "Schedules saved."),
             ),
           )}
         >

@@ -1,7 +1,6 @@
 import { Button, TextField, ToggleButton, ToggleButtonGroup } from "@mui/material";
 import { Controller, useForm, useWatch, type Control } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { toast } from "sonner";
 import { ErrorState } from "@/components/common/error-state";
 import { BookingListSkeleton } from "@/components/common/loading-skeleton";
 import { SettingsAudit } from "@/features/admin/components/settings-audit";
@@ -10,7 +9,8 @@ import { StatCard } from "@/features/admin/components/stat-card";
 import { useAdminSettings, useUpdateSettings } from "@/features/admin/hooks/use-admin";
 import { feeSettingsSchema, settingsLimits, type FeeSettingsValues } from "@/features/admin/schemas";
 import type { AdminSettings } from "@/features/admin/types";
-import { changedFields, formatAdminDay, lateFeeLabel, settingsSaveError } from "@/features/admin/utils";
+import { changedFields, formatAdminDay, lateFeeLabel } from "@/features/admin/utils";
+import { keepUnsavedEdits, settingsSaveHandlers } from "@/features/admin/settings-form";
 import { toUserMessage } from "@/services/http/api-error";
 import { formatInr } from "@/utils/money";
 
@@ -48,6 +48,7 @@ function FeeForm({ settings }: { settings: AdminSettings }) {
   const form = useForm<FeeSettingsValues>({
     resolver: zodResolver(feeSettingsSchema),
     values: toFormValues(settings),
+    resetOptions: keepUnsavedEdits,
   });
   const errors = form.formState.errors;
   const feeType = useWatch({ control: form.control, name: "lateCancelFeeType" });
@@ -79,10 +80,7 @@ function FeeForm({ settings }: { settings: AdminSettings }) {
             const changes = changedFields(values, form.formState.dirtyFields);
             updateSettings.mutate(
               { version: settings.version, ...changes },
-              {
-                onSuccess: () => toast.success("Saved. New bookings use these fees."),
-                onError: (error) => toast.error(settingsSaveError(error)),
-              },
+              settingsSaveHandlers(form, toFormValues, "Saved. New bookings use these fees."),
             );
           })}
         >

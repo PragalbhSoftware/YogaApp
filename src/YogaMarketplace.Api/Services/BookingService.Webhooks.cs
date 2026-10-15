@@ -157,9 +157,9 @@ public partial class BookingService
             return true;
         }
 
-        var now = DateTimeOffset.UtcNow;
+        var now = _time.GetUtcNow();
         var amount = RazorpayMoney.FromPaise(refund.AmountPaise);
-        PaymentRules.Refund(payment, amount);
+        PaymentRules.Refund(payment, amount, now);
         payment.GatewayRefundId = refund.RefundId;
         payment.RefundStatus = RefundStatus.Processed;
         if (payment is { Status: PaymentStatus.Refunded, Booking: { CreditBatchId: null, Status: BookingStatus.PendingAccept or BookingStatus.Upcoming } booking })
@@ -236,7 +236,7 @@ public partial class BookingService
             EventType = envelope.Event,
             GatewayPaymentId = envelope.PaymentId,
             Payload = rawBody,
-            ReceivedAt = DateTimeOffset.UtcNow
+            ReceivedAt = _time.GetUtcNow()
         };
         _db.WebhookEvents.Add(row);
         try
@@ -261,7 +261,7 @@ public partial class BookingService
     private Task FinishEventAsync(Guid id, WebhookEventStatus status, string? error, CancellationToken cancellationToken)
     {
         var trimmed = error is { Length: > 500 } ? error[..500] : error;
-        DateTimeOffset? processedAt = status == WebhookEventStatus.Processed ? DateTimeOffset.UtcNow : null;
+        DateTimeOffset? processedAt = status == WebhookEventStatus.Processed ? _time.GetUtcNow() : null;
         return _db.WebhookEvents
             .Where(e => e.Id == id)
             .ExecuteUpdateAsync(

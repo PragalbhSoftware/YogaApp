@@ -6,8 +6,8 @@ import { MediaHeading } from "@/features/instructor/components/media-heading";
 import { useAddPhoto, useDeletePhoto } from "@/features/instructor/hooks/use-instructor-schedule";
 import { fileProblem, photoRules } from "@/features/instructor/media-rules";
 import type { ProviderPhoto } from "@/features/instructor/types";
-import { toUserMessage } from "@/services/http/api-error";
 import { apiUrl } from "@/services/http/http-client";
+import { toastError } from "@/services/http/toast-error";
 
 type PhotoManagerProps = {
   photos: ProviderPhoto[];
@@ -26,7 +26,7 @@ export function PhotoManager({ photos }: PhotoManagerProps) {
     }
     addPhoto.mutate(file, {
       onSuccess: () => toast.success("Photo added."),
-      onError: (error) => toast.error(toUserMessage(error)),
+      onError: (error) => toastError(error),
     });
   }
 
@@ -57,7 +57,7 @@ export function PhotoManager({ photos }: PhotoManagerProps) {
               onClick={() =>
                 deletePhoto.mutate(photo.id, {
                   onSuccess: () => toast.success("Photo removed."),
-                  onError: (error) => toast.error(toUserMessage(error)),
+                  onError: (error) => toastError(error),
                 })
               }
               size="small"

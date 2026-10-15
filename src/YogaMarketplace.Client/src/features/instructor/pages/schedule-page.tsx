@@ -41,6 +41,7 @@ import {
   monthQueryRange,
   startOfMonth,
 } from "@/utils/clock";
+import { toastError } from "@/services/http/toast-error";
 
 function readMode(value: string | null, allowed: SessionMode[]): SessionMode {
   if (value && allowed.includes(value as SessionMode)) return value as SessionMode;
@@ -190,13 +191,13 @@ export function SchedulePage() {
                 onBlock={(id) => {
                   blockSlot.mutate(id, {
                     onSuccess: () => toast.success("Blocked. Customers no longer see this slot."),
-                    onError: (error) => toast.error(toUserMessage(error)),
+                    onError: (error) => toastError(error),
                   });
                 }}
                 onUnblock={(id) => {
                   unblockSlot.mutate(id, {
                     onSuccess: () => toast.success("Unblocked. Customers can book this slot again."),
-                    onError: (error) => toast.error(toUserMessage(error)),
+                    onError: (error) => toastError(error),
                   });
                 }}
               />
@@ -241,7 +242,7 @@ export function SchedulePage() {
                     setAdding(false);
                     setParam("date", values.date);
                   },
-                  onError: (error) => toast.error(toUserMessage(error)),
+                  onError: (error) => toastError(error),
                 },
               );
             }}
@@ -286,7 +287,7 @@ export function SchedulePage() {
                       setEditing(null);
                       setParam("date", values.date);
                     },
-                    onError: (error) => toast.error(toUserMessage(error)),
+                    onError: (error) => toastError(error),
                   },
                 );
               }}
@@ -339,7 +340,7 @@ export function SchedulePage() {
                   toast.success("Slot removed.");
                   setRemoving(null);
                 },
-                onError: (error) => toast.error(toUserMessage(error)),
+                onError: (error) => toastError(error),
               });
             }}
           >

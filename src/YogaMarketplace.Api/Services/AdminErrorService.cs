@@ -12,13 +12,15 @@ public class AdminErrorService
     private readonly ICurrentUser _current;
     private readonly IAlertSender _sender;
     private readonly ILogger<AdminErrorService> _logger;
+    private readonly TimeProvider _time;
 
-    public AdminErrorService(YogaDbContext db, ICurrentUser current, IAlertSender sender, ILogger<AdminErrorService> logger)
+    public AdminErrorService(YogaDbContext db, ICurrentUser current, IAlertSender sender, ILogger<AdminErrorService> logger, TimeProvider time)
     {
         _db = db;
         _current = current;
         _sender = sender;
         _logger = logger;
+        _time = time;
     }
 
     public async Task<PagedResponse<AdminErrorEventResponse>> ListAsync(bool acknowledged, int? page, int? pageSize, CancellationToken cancellationToken)
@@ -41,7 +43,7 @@ public class AdminErrorService
     /// <summary>Acknowledging twice is fine. The next occurrence of the same type opens it again.</summary>
     public async Task<AdminErrorEventResponse> AcknowledgeAsync(Guid id, CancellationToken cancellationToken)
     {
-        DateTimeOffset? now = DateTimeOffset.UtcNow;
+        DateTimeOffset? now = _time.GetUtcNow();
         Guid? adminId = _current.UserId;
         await _db.ErrorEvents
             .Where(e => e.Id == id && e.AcknowledgedAt == null)

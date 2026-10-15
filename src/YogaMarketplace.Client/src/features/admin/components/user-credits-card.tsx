@@ -11,6 +11,7 @@ import { formatAdminWhen } from "@/features/admin/utils";
 import { toUserMessage } from "@/services/http/api-error";
 import { formatSlotDay } from "@/utils/clock";
 import { formatInr } from "@/utils/money";
+import { toastError } from "@/services/http/toast-error";
 
 const statusLabels: Record<AdminCreditBatch["status"], string> = {
   Active: "Active",
@@ -38,7 +39,7 @@ export function UserCreditsCard({ userId }: { userId: string }) {
             : "Unused credits removed. Nothing to refund.",
         );
       },
-      onError: (error) => toast.error(toUserMessage(error)),
+      onError: (error) => toastError(error),
     });
   }
 

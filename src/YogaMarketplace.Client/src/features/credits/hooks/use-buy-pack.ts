@@ -22,8 +22,9 @@ import {
   savePendingPackOrder,
 } from "@/features/credits/utils/pending-pack-order";
 import { packConfirmTimeoutMs, packFailedTimeoutMs, purchaseStage } from "@/features/credits/utils/purchase-stage";
-import { isRetryable, toUserMessage } from "@/services/http/api-error";
+import { isRetryable } from "@/services/http/api-error";
 import { useAuthStore } from "@/stores/auth-store";
+import { toastError } from "@/services/http/toast-error";
 
 /**
  * Buys a pack: opens a server order, takes payment in Razorpay, then waits for the server to capture it. A confirm
@@ -107,7 +108,7 @@ export function useBuyPack() {
         toast.error(error.message);
         return;
       }
-      toast.error(toUserMessage(error));
+      toastError(error);
     } finally {
       setBuyingId(null);
     }

@@ -35,6 +35,7 @@ import { useCustomerProfile, useSaveVisitAddress } from "@/features/profile/hook
 import type { VisitAddress } from "@/features/profile/types";
 import { toUserMessage } from "@/services/http/api-error";
 import { slotHasEnded, addMonths, endOfMonth, kolkataToday, startOfMonth } from "@/utils/clock";
+import { toastError } from "@/services/http/toast-error";
 
 function readMode(value: string | null, allowed: SessionMode[]): SessionMode {
   if (value && allowed.includes(value as SessionMode)) return value as SessionMode;
@@ -98,7 +99,7 @@ export function BookPage() {
       setChangingAddress(false);
       toast.success("Visit address updated.");
     } catch (error) {
-      toast.error(toUserMessage(error));
+      toastError(error);
     }
   }
 
@@ -108,7 +109,7 @@ export function BookPage() {
       setChangingAddress(false);
       await pay(home);
     } catch (error) {
-      toast.error(toUserMessage(error));
+      toastError(error);
     }
   }
 

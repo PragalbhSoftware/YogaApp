@@ -10,6 +10,7 @@ import { ListPagination } from "@/features/admin/components/list-pagination";
 import { useAcknowledgeError, useAdminErrors } from "@/features/admin/hooks/use-admin";
 import { useStepBackWhenEmpty } from "@/features/admin/hooks/use-step-back-when-empty";
 import { toUserMessage } from "@/services/http/api-error";
+import { toastError } from "@/services/http/toast-error";
 
 const views = ["open", "acknowledged"] as const;
 type ErrorView = (typeof views)[number];
@@ -84,7 +85,7 @@ export function ErrorsPage() {
                 onAcknowledge={() =>
                   acknowledge.mutate(error.id, {
                     onSuccess: () => toast.success("Error acknowledged."),
-                    onError: (failure) => toast.error(toUserMessage(failure)),
+                    onError: (failure) => toastError(failure),
                   })
                 }
               />

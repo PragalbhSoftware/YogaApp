@@ -14,8 +14,9 @@ import {
 import { isFakeOrder, type BookingQuote, type BookingRecord } from "@/features/bookings/types";
 import type { HomeVisitValues } from "@/features/bookings/schemas";
 import { isLostCredit, type PayMethod } from "@/features/bookings/utils/pay-method";
-import { isRetryable, toUserMessage } from "@/services/http/api-error";
+import { isRetryable } from "@/services/http/api-error";
 import { useAuthStore } from "@/stores/auth-store";
+import { toastError } from "@/services/http/toast-error";
 
 const PAID_NOT_CONFIRMED =
   "Your payment went through. We're still confirming the booking, so check My Bookings in a few minutes and don't pay again.";
@@ -101,7 +102,7 @@ export function useBookCheckout({
         return;
       }
       if (useCredit && isLostCredit(error)) onLostCredit();
-      toast.error(toUserMessage(error));
+      toastError(error);
     } finally {
       onCheckoutOpenChange(false);
     }

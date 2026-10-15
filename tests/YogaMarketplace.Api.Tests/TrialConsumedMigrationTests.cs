@@ -13,7 +13,7 @@ public sealed class TrialConsumedMigrationTests : IAsyncLifetime
     private const string BeforeTrialConsumed = "20261012060558_AddContentPages";
 
     private readonly string _connection = SqlServerFactAttribute.ConnectionFor($"YogaMigTest_{Guid.NewGuid():N}");
-    private readonly DateOnly _day = MumbaiClock.Today().AddDays(2);
+    private readonly DateOnly _day = MumbaiClock.Today(DateTimeOffset.UtcNow).AddDays(2);
     private int _slotHour = 5;
 
     [SqlServerFact]
@@ -92,7 +92,7 @@ public sealed class TrialConsumedMigrationTests : IAsyncLifetime
             var config = new ConfigurationBuilder()
                 .AddInMemoryCollection(new Dictionary<string, string?> { ["Seed:DemoData"] = "true" })
                 .Build();
-            await new DbSeeder(db, config).SeedAsync();
+            await new DbSeeder(db, config, TimeProvider.System).SeedAsync();
             var result = await seed(db);
             await db.SaveChangesAsync();
             await MigrateAsync(BeforeTrialConsumed);

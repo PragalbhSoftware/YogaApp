@@ -19,18 +19,20 @@ public class CreditExpiryJob : IBackgroundJobHandler
     private readonly YogaDbContext _db;
     private readonly CreditLedger _credits;
     private readonly ILogger<CreditExpiryJob> _logger;
+    private readonly TimeProvider _time;
 
-    public CreditExpiryJob(YogaDbContext db, CreditLedger credits, ILogger<CreditExpiryJob> logger)
+    public CreditExpiryJob(YogaDbContext db, CreditLedger credits, ILogger<CreditExpiryJob> logger, TimeProvider time)
     {
         _db = db;
         _credits = credits;
         _logger = logger;
+        _time = time;
     }
 
     public string Type => JobType;
 
     public Task RunAsync(string? payload, CancellationToken cancellationToken) =>
-        ExpireDueAsync(DateTimeOffset.UtcNow, cancellationToken);
+        ExpireDueAsync(_time.GetUtcNow(), cancellationToken);
 
     public async Task<int> ExpireDueAsync(DateTimeOffset now, CancellationToken cancellationToken)
     {

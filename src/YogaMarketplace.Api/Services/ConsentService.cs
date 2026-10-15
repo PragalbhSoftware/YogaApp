@@ -14,12 +14,14 @@ public class ConsentService
     private readonly YogaDbContext _db;
     private readonly IPlatformSettingsService _settings;
     private readonly byte[] _pepper;
+    private readonly TimeProvider _time;
 
-    public ConsentService(YogaDbContext db, IPlatformSettingsService settings, IOptions<OtpOptions> otp)
+    public ConsentService(YogaDbContext db, IPlatformSettingsService settings, IOptions<OtpOptions> otp, TimeProvider time)
     {
         _db = db;
         _settings = settings;
         _pepper = Encoding.UTF8.GetBytes(otp.Value.Pepper ?? "");
+        _time = time;
     }
 
     /// <summary>Adds records for the current version to the context without saving. Used when the account is created.</summary>
@@ -64,7 +66,7 @@ public class ConsentService
 
     private void Add(Guid userId, IEnumerable<ConsentPurpose> purposes, int version, string? ipAddress)
     {
-        var now = DateTimeOffset.UtcNow;
+        var now = _time.GetUtcNow();
         var ipHash = HashIp(ipAddress);
         _db.ConsentRecords.AddRange(purposes.Select(purpose => new ConsentRecord
         {

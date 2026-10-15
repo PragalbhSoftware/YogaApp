@@ -24,8 +24,10 @@ public class BookingNotifications
         _settings = settings;
     }
 
-    public Task ConfirmedAsync(Booking booking, CancellationToken cancellationToken) =>
-        QueueAsync(booking, NotificationEvents.BookingConfirmedCustomer, NotificationEvents.BookingConfirmedInstructor, null, cancellationToken);
+    /// <summary>A new booking still waits for the instructor, so it gets the request wording; once accepted it is confirmed.</summary>
+    public Task BookedAsync(Booking booking, CancellationToken cancellationToken) => booking.Status == BookingStatus.PendingAccept
+        ? QueueAsync(booking, NotificationEvents.BookingRequestedCustomer, NotificationEvents.BookingRequestedInstructor, null, cancellationToken)
+        : QueueAsync(booking, NotificationEvents.BookingConfirmedCustomer, NotificationEvents.BookingConfirmedInstructor, null, cancellationToken);
 
     /// <summary>Customer or admin cancel. <paramref name="refund"/> is the money going back; a returned credit is named too.</summary>
     public async Task CancelledAsync(Booking booking, decimal refund, bool creditReturned, CancellationToken cancellationToken) =>

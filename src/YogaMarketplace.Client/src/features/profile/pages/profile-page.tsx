@@ -16,6 +16,7 @@ import { AccountSummaryCard } from "@/features/profile/components/account-summar
 import { useCustomerProfile, useSaveVisitAddress, useUpdateCustomerAccount } from "@/features/profile/hooks/use-profile";
 import { routes } from "@/constants/routes";
 import { toUserMessage } from "@/services/http/api-error";
+import { toastError } from "@/services/http/toast-error";
 
 export function ProfilePage() {
   usePageTitle("Profile");
@@ -33,7 +34,7 @@ export function ProfilePage() {
       setEditingAddress(false);
       toast.success("Visit address saved.");
     } catch (error) {
-      toast.error(toUserMessage(error));
+      toastError(error);
     }
   }
 
@@ -57,7 +58,7 @@ export function ProfilePage() {
           onSubmit={(input) => {
             saveAccount.mutate(input, {
               onSuccess: () => toast.success("Details saved."),
-              onError: (error) => toast.error(toUserMessage(error)),
+              onError: (error) => toastError(error),
             });
           }}
         />

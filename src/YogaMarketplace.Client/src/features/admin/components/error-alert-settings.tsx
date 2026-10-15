@@ -8,8 +8,10 @@ import { SettingsCard, SettingsIntro } from "@/features/admin/components/setting
 import { useAdminSettings, useSendTestAlert, useUpdateSettings } from "@/features/admin/hooks/use-admin";
 import { errorAlertSettingsSchema, type ErrorAlertSettingsValues } from "@/features/admin/schemas";
 import type { AdminSettings } from "@/features/admin/types";
-import { changedFields, settingsSaveError } from "@/features/admin/utils";
+import { changedFields } from "@/features/admin/utils";
+import { keepUnsavedEdits, settingsSaveHandlers } from "@/features/admin/settings-form";
 import { toUserMessage } from "@/services/http/api-error";
+import { toastError } from "@/services/http/toast-error";
 
 function toFormValues(settings: AdminSettings): ErrorAlertSettingsValues {
   return {
@@ -38,6 +40,7 @@ function ErrorAlertForm({ settings }: { settings: AdminSettings }) {
   const form = useForm<ErrorAlertSettingsValues>({
     resolver: zodResolver(errorAlertSettingsSchema),
     values: toFormValues(settings),
+    resetOptions: keepUnsavedEdits,
   });
   const errors = form.formState.errors;
   const canSendTest = settings.emailAlertsEnabled && !form.formState.isDirty && !sendTest.isPending;
@@ -55,10 +58,7 @@ function ErrorAlertForm({ settings }: { settings: AdminSettings }) {
           onSubmit={form.handleSubmit((values) =>
             updateSettings.mutate(
               { version: settings.version, ...changedFields(values, form.formState.dirtyFields) },
-              {
-                onSuccess: () => toast.success("Error alerts saved."),
-                onError: (error) => toast.error(settingsSaveError(error)),
-              },
+              settingsSaveHandlers(form, toFormValues, "Error alerts saved."),
             ),
           )}
         >
@@ -128,7 +128,7 @@ function ErrorAlertForm({ settings }: { settings: AdminSettings }) {
               onClick={() =>
                 sendTest.mutate(undefined, {
                   onSuccess: () => toast.success(`Test email sent to ${settings.errorAlertEmail ?? "the alert address"}.`),
-                  onError: (error) => toast.error(toUserMessage(error)),
+                  onError: (error) => toastError(error),
                 })
               }
               sx={{ minHeight: 44, borderRadius: "14px" }}

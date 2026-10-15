@@ -159,7 +159,7 @@ public static class DatabaseStartup
             return;
         using var scope = app.Services.CreateScope();
         await scope.ServiceProvider.GetRequiredService<YogaMarketplace.Api.Jobs.RecurringJobScheduler>()
-            .EnsureAsync(DateTimeOffset.UtcNow, CancellationToken.None);
+            .EnsureAsync(scope.ServiceProvider.GetRequiredService<TimeProvider>().GetUtcNow(), CancellationToken.None);
     }
 
     public static async Task InitializeAsync(WebApplication app)

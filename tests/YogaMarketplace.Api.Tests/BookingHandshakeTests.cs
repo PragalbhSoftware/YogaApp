@@ -154,7 +154,7 @@ public class BookingHandshakeTests : IClassFixture<YogaApiFactory>
         Assert.Equal(1, await OccupyingCountAsync(slot.Id));
 
         var secondDecline = await instructor.PostAsync($"/api/bookings/{booked.Id}/decline", null);
-        Assert.Equal(HttpStatusCode.BadRequest, secondDecline.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, secondDecline.StatusCode);
         Assert.Single(RefundsFor(booked.GatewayPaymentId!));
 
         var review = await customer.PostAsJsonAsync($"/api/bookings/{booked.Id}/reviews", new { rating = 2 });
@@ -245,10 +245,10 @@ public class BookingHandshakeTests : IClassFixture<YogaApiFactory>
         Assert.Equal("Upcoming", accepted.Status);
 
         var acceptAgain = await instructor.PostAsync($"/api/bookings/{booked.Id}/accept", null);
-        Assert.Equal(HttpStatusCode.BadRequest, acceptAgain.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, acceptAgain.StatusCode);
 
         var declineLate = await instructor.PostAsync($"/api/bookings/{booked.Id}/decline", null);
-        Assert.Equal(HttpStatusCode.BadRequest, declineLate.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, declineLate.StatusCode);
         Assert.Contains("pending", (await declineLate.Content.ReadFromJsonAsync<ErrorBody>(Json))!.Error, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(BookingStatus.Upcoming, await BookingStatusAsync(booked.Id));
         Assert.Equal(PaymentStatus.Paid, await PaymentStatusAsync(booked.Id));

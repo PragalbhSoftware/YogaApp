@@ -2,8 +2,8 @@ import { Button } from "@mui/material";
 import { Download, FileOutput } from "lucide-react";
 import { toast } from "sonner";
 import { useDownloadPayoutsCsv, useExportPayouts } from "@/features/admin/hooks/use-admin";
-import { toUserMessage } from "@/services/http/api-error";
 import { saveBlob } from "@/utils/download";
+import { toastError } from "@/services/http/toast-error";
 
 type PayoutExportBarProps = {
   status: string;
@@ -21,14 +21,14 @@ export function PayoutExportBar({ status, rowCount }: PayoutExportBarProps) {
         saveBlob(file.blob, file.fileName);
         toast.success("Exported. Pay each instructor, then mark their payout paid.");
       },
-      onError: (error) => toast.error(toUserMessage(error)),
+      onError: (error) => toastError(error),
     });
   };
 
   const runDownload = () => {
     download.mutate(status, {
       onSuccess: (file) => saveBlob(file.blob, file.fileName),
-      onError: (error) => toast.error(toUserMessage(error)),
+      onError: (error) => toastError(error),
     });
   };
 

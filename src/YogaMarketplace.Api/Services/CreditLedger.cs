@@ -12,10 +12,12 @@ namespace YogaMarketplace.Api.Services;
 public class CreditLedger
 {
     private readonly YogaDbContext _db;
+    private readonly TimeProvider _time;
 
-    public CreditLedger(YogaDbContext db)
+    public CreditLedger(YogaDbContext db, TimeProvider time)
     {
         _db = db;
+        _time = time;
     }
 
     /// <summary>Creates the customer's account row on its own, so a first purchase never races to insert it.</summary>
@@ -23,7 +25,7 @@ public class CreditLedger
     {
         if (await _db.CreditAccounts.AnyAsync(a => a.CustomerId == customerId, cancellationToken))
             return;
-        var account = new CreditAccount { CustomerId = customerId, Version = 1, UpdatedAt = DateTimeOffset.UtcNow };
+        var account = new CreditAccount { CustomerId = customerId, Version = 1, UpdatedAt = _time.GetUtcNow() };
         _db.CreditAccounts.Add(account);
         try
         {

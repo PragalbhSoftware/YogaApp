@@ -12,6 +12,7 @@ import { useAdminProviders, useRejectProvider, useVerifyProvider } from "@/featu
 import { certificateStatuses, providerStatuses } from "@/features/admin/types";
 import { listCap } from "@/features/admin/utils";
 import { toUserMessage } from "@/services/http/api-error";
+import { toastError } from "@/services/http/toast-error";
 
 const filters = [
   { value: "Pending", label: "Pending" },
@@ -112,7 +113,7 @@ function InstructorApprovals({ status, onStatusChange }: InstructorApprovalsProp
               onVerify={(id) => {
                 verify.mutate(id, {
                   onSuccess: () => toast.success("Verified. Customers can browse this instructor."),
-                  onError: (error) => toast.error(toUserMessage(error)),
+                  onError: (error) => toastError(error),
                 });
               }}
               onReject={(id, reason) => {
@@ -120,7 +121,7 @@ function InstructorApprovals({ status, onStatusChange }: InstructorApprovalsProp
                   { id, reason },
                   {
                     onSuccess: () => toast.success("Rejected. They stay off public browse."),
-                    onError: (error) => toast.error(toUserMessage(error)),
+                    onError: (error) => toastError(error),
                   },
                 );
               }}

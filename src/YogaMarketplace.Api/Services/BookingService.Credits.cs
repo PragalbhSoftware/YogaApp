@@ -27,7 +27,7 @@ public partial class BookingService
         var service = await ResolveServiceAsync(provider.Id, request.ServiceId, cancellationToken);
         var settings = await _settings.GetAsync(cancellationToken);
         var rate = RateOf(slot);
-        var now = DateTimeOffset.UtcNow;
+        var now = _time.GetUtcNow();
         await _credits.LockAsync(customer.Id, now, cancellationToken);
         var batch = await RequireCreditAsync(customer.Id, slot, rate, now, cancellationToken);
         if (CreditFeeFor(batch, settings.Terms) > 0)
@@ -42,7 +42,8 @@ public partial class BookingService
             homeAddress,
             landmark,
             provider.GoogleMeetLink,
-            provider.StudioAddress);
+            provider.StudioAddress,
+            now);
         CreditRules.Attach(booking, batch);
         _credits.Use(batch, booking.Id, now);
 
@@ -55,14 +56,14 @@ public partial class BookingService
             Gateway = PaymentGateways.Credit,
             CreatedAt = now
         };
-        PaymentRules.MarkPaid(payment, null);
+        PaymentRules.MarkPaid(payment, null, now);
         _db.Services.Attach(service);
         booking.Provider = provider;
         booking.Service = service;
         booking.Slot = slot;
         booking.Payment = payment;
         _db.Bookings.Add(booking);
-        await _notifications.ConfirmedAsync(booking, cancellationToken);
+        await _notifications.BookedAsync(booking, cancellationToken);
 
         try
         {
@@ -72,7 +73,7 @@ public partial class BookingService
         {
             _logger.LogWarning(ex, "Credit booking conflict for customer {CustomerId} on slot {SlotId}.", customer.Id, slot.Id);
             _db.ChangeTracker.Clear();
-            var stillCovered = (await _credits.ChooseAsync(customer.Id, rate, SessionStartOf(slot), DateTimeOffset.UtcNow, cancellationToken)).Batch;
+            var stillCovered = (await _credits.ChooseAsync(customer.Id, rate, SessionStartOf(slot), _time.GetUtcNow(), cancellationToken)).Batch;
             throw new DomainException(stillCovered is null ? CreditRules.LastCreditTakenMessage : "That slot was just booked.", 409);
         }
 
@@ -93,7 +94,7 @@ public partial class BookingService
         if (customer.IsBlocked)
             return Unavailable(CreditUnavailable.Blocked, CreditRules.BlockedMessage);
 
-        var choice = await _credits.ChooseAsync(customer.Id, RateOf(slot), SessionStartOf(slot), DateTimeOffset.UtcNow, cancellationToken);
+        var choice = await _credits.ChooseAsync(customer.Id, RateOf(slot), SessionStartOf(slot), _time.GetUtcNow(), cancellationToken);
         if (choice.Batch is not CreditBatch batch)
             return Unavailable(choice.Reason!.Value, UnavailableMessage(choice.Reason!.Value));
 
@@ -138,7 +139,7 @@ public partial class BookingService
             throw new DomainException(CreditRules.BlockedMessage, 403);
         if (trial)
             throw new DomainException("A trial class can't be paid with a credit.", 409);
-        var batch = await RequireCreditAsync(customer.Id, slot, RateOf(slot), DateTimeOffset.UtcNow, cancellationToken);
+        var batch = await RequireCreditAsync(customer.Id, slot, RateOf(slot), _time.GetUtcNow(), cancellationToken);
         var fee = CreditFeeFor(batch, terms);
         if (fee <= 0)
             throw new DomainException("This credit booking has nothing to pay. Book it with your credit directly.", 409);
@@ -165,7 +166,7 @@ public partial class BookingService
         if (blocked)
             await RefundCheckoutAsync(checkout, paymentId, total, tx, CreditBlockedRefundedMessage, cancellationToken);
 
-        var now = DateTimeOffset.UtcNow;
+        var now = _time.GetUtcNow();
         await _credits.LockAsync(checkout.CustomerId, now, cancellationToken);
         var choice = await _credits.ChooseAsync(checkout.CustomerId, RateOf(slot), SessionStartOf(slot), now, cancellationToken);
         if (choice.Batch is null)
@@ -178,7 +179,7 @@ public partial class BookingService
         var batch = await BatchOfAsync(booking, cancellationToken);
         var paid = booking.Payment?.Amount ?? 0m;
         var start = SessionStartOf(booking);
-        var now = DateTimeOffset.UtcNow;
+        var now = _time.GetUtcNow();
         var settlement = CreditRules.SettleCustomerCancel(booking, batch, paid, start, now);
         var noCreditBack = CreditRules.NoCreditBackReason(batch, settlement, now);
         return new CancelQuoteResponse(
@@ -202,7 +203,7 @@ public partial class BookingService
         var payment = booking.Payment ?? throw new DomainException("This booking has no payment record.");
         var batch = await BatchOfAsync(booking, cancellationToken);
         var start = SessionStartOf(booking);
-        var now = DateTimeOffset.UtcNow;
+        var now = _time.GetUtcNow();
         var settlement = CreditRules.SettleCustomerCancel(booking, batch, payment.Amount, start, now);
 
         BookingRules.Cancel(booking, start, now);
@@ -210,7 +211,7 @@ public partial class BookingService
         if (settlement.InstructorShare > 0)
         {
             booking.LateCancelFee = settlement.InstructorShare;
-            payout = PayoutCalculator.ForLateCancel(booking, settlement.InstructorShare);
+            payout = PayoutCalculator.ForLateCancel(booking, settlement.InstructorShare, now);
             _db.PayoutsPending.Add(payout);
         }
         if (settlement.ReturnCredit)
@@ -232,8 +233,8 @@ public partial class BookingService
     private async Task DeclineCreditBookingAsync(Booking booking, CancellationToken cancellationToken)
     {
         var payment = booking.Payment ?? throw new DomainException("This booking has no payment record.");
-        BookingRules.Decline(booking);
-        await _credits.ReturnAsync(booking, DateTimeOffset.UtcNow, cancellationToken);
+        BookingRules.Decline(booking, _time.GetUtcNow());
+        await _credits.ReturnAsync(booking, _time.GetUtcNow(), cancellationToken);
         await _notifications.RefundedAsync(booking, payment.Amount, true, cancellationToken);
         await RefundAndSaveAsync(booking, payment, payment.Amount, cancellationToken);
     }

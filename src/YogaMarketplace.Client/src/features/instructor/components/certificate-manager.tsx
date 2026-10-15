@@ -17,8 +17,8 @@ import {
   type CertificateFormValues,
 } from "@/features/instructor/media-rules";
 import type { CertificateStatus, ProviderCertificate } from "@/features/instructor/types";
-import { toUserMessage } from "@/services/http/api-error";
 import { saveBlob } from "@/utils/download";
+import { toastError } from "@/services/http/toast-error";
 
 const statusLabel: Record<CertificateStatus, { label: string; color: "default" | "success" | "warning" }> = {
   Pending: { label: "Waiting for review", color: "default" },
@@ -57,7 +57,7 @@ export function CertificateManager({ certificates, badge }: CertificateManagerPr
         certificateFileName(certificate.title, certificate.contentType),
       );
     } catch (error) {
-      toast.error(toUserMessage(error));
+      toastError(error);
     }
   }
 
@@ -100,7 +100,7 @@ export function CertificateManager({ certificates, badge }: CertificateManagerPr
                   onClick={() =>
                     deleteCertificate.mutate(certificate.id, {
                       onSuccess: () => toast.success("Certificate removed."),
-                      onError: (error) => toast.error(toUserMessage(error)),
+                      onError: (error) => toastError(error),
                     })
                   }
                   size="small"
@@ -132,7 +132,7 @@ export function CertificateManager({ certificates, badge }: CertificateManagerPr
                   form.reset({ title: "" });
                   setFile(null);
                 },
-                onError: (error) => toast.error(toUserMessage(error)),
+                onError: (error) => toastError(error),
               },
             );
           })}

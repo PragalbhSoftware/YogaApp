@@ -10,6 +10,7 @@ import { useAdminAreas, useCreateArea, useUpdateArea } from "@/features/admin/ho
 import { areaEditSchema, areaSchema, type AreaEditValues, type AreaFormValues } from "@/features/admin/schemas";
 import type { AdminArea } from "@/features/admin/types";
 import { toUserMessage } from "@/services/http/api-error";
+import { toastError } from "@/services/http/toast-error";
 
 function groupByCity(areas: AdminArea[]) {
   const groups = new Map<string, AdminArea[]>();
@@ -93,7 +94,7 @@ function CreateAreaRow({ cities }: { cities: string[] }) {
               toast.success(`${saved.name} added in ${saved.city}.`);
               form.reset({ name: "", city: saved.city });
             },
-            onError: (error) => toast.error(toUserMessage(error)),
+            onError: (error) => toastError(error),
           },
         );
       })}
@@ -157,7 +158,7 @@ function AreaRow({ area }: { area: AdminArea }) {
           form.reset({ name: saved.name, isActive: saved.isActive });
           toast.success(message);
         },
-        onError: (error) => toast.error(toUserMessage(error)),
+        onError: (error) => toastError(error),
       },
     );
   }

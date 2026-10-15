@@ -15,6 +15,7 @@ import {
   useMarkNoShow,
 } from "@/features/instructor/hooks/use-instructor-schedule";
 import { toUserMessage } from "@/services/http/api-error";
+import { toastError } from "@/services/http/toast-error";
 
 function readStatus(value: string | null) {
   return isBookingStatus(value) ? value : undefined;
@@ -51,7 +52,7 @@ export function InstructorRequestsPage() {
       await action(id);
       toast.success(success);
     } catch (error) {
-      toast.error(toUserMessage(error));
+      toastError(error);
     }
   }
 

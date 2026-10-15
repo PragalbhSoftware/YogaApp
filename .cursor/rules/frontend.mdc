@@ -63,6 +63,7 @@ src/
 
 - Forms use React Hook Form + Zod: field messages, disabled submit while pending, no duplicate submits, success feedback.
 - API errors go through `toUserMessage` and Sonner toasts. Never show raw backend exception text.
+- Show API error toasts only with `toastError` (`services/http/toast-error`), never `toast.error(toUserMessage(...))`.
 - Every API-driven page has loading (skeleton), empty and error-with-retry states. Never leave a page blank.
 
 ## Admin lists

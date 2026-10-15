@@ -1,7 +1,9 @@
 using System.Collections.Concurrent;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using YogaMarketplace.Api.Jobs;
 using YogaMarketplace.Domain;
@@ -12,6 +14,7 @@ namespace YogaMarketplace.Api.Tests;
 public class BackgroundJobRunnerTests : IClassFixture<YogaApiFactory>
 {
     private readonly YogaApiFactory _factory;
+    private readonly TestClock _clock = new(DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.ToUnixTimeSeconds()));
 
     public BackgroundJobRunnerTests(YogaApiFactory factory)
     {
@@ -31,7 +34,7 @@ public class BackgroundJobRunnerTests : IClassFixture<YogaApiFactory>
     public async Task Due_job_runs_once_and_a_future_job_waits_for_its_time()
     {
         await using var host = WithTestHandler();
-        var now = WholeSecondNow();
+        var now = _clock.Now;
         var due = await EnqueueAsync(host, TestJobHandler.JobType, "ok:" + Guid.NewGuid());
         var later = await EnqueueAsync(host, TestJobHandler.JobType, "ok:" + Guid.NewGuid(), runAt: now.AddHours(1));
 
@@ -55,7 +58,7 @@ public class BackgroundJobRunnerTests : IClassFixture<YogaApiFactory>
     public async Task Failing_job_retries_with_backoff_then_fails_for_good()
     {
         await using var host = WithTestHandler();
-        var now = WholeSecondNow();
+        var now = _clock.Now;
         var job = await EnqueueAsync(host, TestJobHandler.JobType, "fail:" + Guid.NewGuid(), maxAttempts: 3);
 
         await RunAsync(host, now);
@@ -89,7 +92,7 @@ public class BackgroundJobRunnerTests : IClassFixture<YogaApiFactory>
         await using var host = WithTestHandler();
         var job = await EnqueueAsync(host, "test.missing", null);
 
-        await RunAsync(host, WholeSecondNow());
+        await RunAsync(host, _clock.Now);
         var failed = await JobAsync(host, job.Id);
         Assert.Equal(BackgroundJobStatus.Failed, failed.Status);
         Assert.Equal(1, failed.Attempts);
@@ -100,7 +103,7 @@ public class BackgroundJobRunnerTests : IClassFixture<YogaApiFactory>
     public async Task Job_whose_worker_died_is_picked_up_again_after_its_lock_expires()
     {
         await using var host = WithTestHandler();
-        var now = WholeSecondNow();
+        var now = _clock.Now;
         var payload = "ok:" + Guid.NewGuid();
         var id = Guid.NewGuid();
         using (var scope = host.Services.CreateScope())
@@ -135,7 +138,7 @@ public class BackgroundJobRunnerTests : IClassFixture<YogaApiFactory>
     public async Task Two_workers_never_run_the_same_job()
     {
         await using var host = WithTestHandler();
-        var now = WholeSecondNow();
+        var now = _clock.Now;
         var jobs = new List<BackgroundJob>();
         for (var i = 0; i < 6; i++)
             jobs.Add(await EnqueueAsync(host, TestJobHandler.JobType, "ok:" + Guid.NewGuid()));
@@ -156,22 +159,22 @@ public class BackgroundJobRunnerTests : IClassFixture<YogaApiFactory>
     }
 
     /// <summary>
-    /// Starts the host up front so its startup time never pushes an enqueue past the test's clock, and queues the
-    /// credit expiry job the way production does so every test proves it only counts its own jobs.
+    /// The host reads the time from the test's fixed clock (a whole second, as SQLite drops sub-millisecond ticks), so
+    /// an enqueued job is due at exactly <c>_clock.Now</c> however slowly the test runs. It also queues the credit
+    /// expiry job the way production does, so every test proves it only counts its own jobs.
     /// </summary>
     private WebApplicationFactory<Program> WithTestHandler()
     {
-        var host = _factory.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
-            services.AddScoped<IBackgroundJobHandler, TestJobHandler>()));
+        var host = _factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.AddScoped<IBackgroundJobHandler, TestJobHandler>();
+            services.Replace(ServiceDescriptor.Singleton<TimeProvider>(_clock));
+        }));
         using var scope = host.Services.CreateScope();
         scope.ServiceProvider.GetRequiredService<RecurringJobScheduler>()
-            .EnsureAsync(DateTimeOffset.UtcNow, CancellationToken.None).GetAwaiter().GetResult();
+            .EnsureAsync(_clock.Now, CancellationToken.None).GetAwaiter().GetResult();
         return host;
     }
-
-    /// <summary>The next whole second, so jobs enqueued just before it are already due.</summary>
-    private static DateTimeOffset WholeSecondNow() =>
-        DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 1);
 
     private static async Task<BackgroundJob> EnqueueAsync(
         WebApplicationFactory<Program> host,

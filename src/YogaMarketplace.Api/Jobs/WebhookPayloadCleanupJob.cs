@@ -20,21 +20,24 @@ public class WebhookPayloadCleanupJob : IBackgroundJobHandler
     private readonly YogaDbContext _db;
     private readonly IPlatformSettingsService _settings;
     private readonly ILogger<WebhookPayloadCleanupJob> _logger;
+    private readonly TimeProvider _time;
 
     public WebhookPayloadCleanupJob(
         YogaDbContext db,
         IPlatformSettingsService settings,
-        ILogger<WebhookPayloadCleanupJob> logger)
+        ILogger<WebhookPayloadCleanupJob> logger,
+        TimeProvider time)
     {
         _db = db;
         _settings = settings;
         _logger = logger;
+        _time = time;
     }
 
     public string Type => JobType;
 
     public Task RunAsync(string? payload, CancellationToken cancellationToken) =>
-        ClearAsync(DateTimeOffset.UtcNow, cancellationToken);
+        ClearAsync(_time.GetUtcNow(), cancellationToken);
 
     public async Task<int> ClearAsync(DateTimeOffset now, CancellationToken cancellationToken)
     {

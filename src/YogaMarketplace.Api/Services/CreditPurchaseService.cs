@@ -21,6 +21,7 @@ public class CreditPurchaseService
     private readonly IPlatformSettingsService _settings;
     private readonly CreditLedger _credits;
     private readonly ILogger<CreditPurchaseService> _logger;
+    private readonly TimeProvider _time;
 
     public CreditPurchaseService(
         YogaDbContext db,
@@ -28,7 +29,8 @@ public class CreditPurchaseService
         IRazorpayClient razorpay,
         IPlatformSettingsService settings,
         CreditLedger credits,
-        ILogger<CreditPurchaseService> logger)
+        ILogger<CreditPurchaseService> logger,
+        TimeProvider time)
     {
         _db = db;
         _current = current;
@@ -36,6 +38,7 @@ public class CreditPurchaseService
         _settings = settings;
         _credits = credits;
         _logger = logger;
+        _time = time;
     }
 
     public async Task<IReadOnlyList<PackResponse>> ListActiveAsync(CancellationToken cancellationToken)
@@ -60,7 +63,7 @@ public class CreditPurchaseService
     public async Task<MyCreditsResponse> MineAsync(CancellationToken cancellationToken)
     {
         var customer = await RequireCustomerAsync(cancellationToken);
-        var batches = await _credits.UsableAsync(customer.Id, DateTimeOffset.UtcNow, cancellationToken);
+        var batches = await _credits.UsableAsync(customer.Id, _time.GetUtcNow(), cancellationToken);
         return new MyCreditsResponse(batches.Sum(b => b.Remaining), batches.Select(ToResponse).ToList());
     }
 
@@ -101,7 +104,7 @@ public class CreditPurchaseService
             Gateway = PaymentGateways.Razorpay,
             GatewayOrderId = created.OrderId,
             Status = CheckoutStatus.Open,
-            CreatedAt = DateTimeOffset.UtcNow
+            CreatedAt = _time.GetUtcNow()
         });
         await _db.SaveChangesAsync(cancellationToken);
         _logger.LogInformation("Opened pack checkout {CheckoutId} for pack {PackId}, Razorpay order {OrderId}.", checkoutId, pack.Id, created.OrderId);
@@ -211,7 +214,7 @@ public class CreditPurchaseService
             return await StatusOfAsync(checkout, cancellationToken);
         }
 
-        var now = DateTimeOffset.UtcNow;
+        var now = _time.GetUtcNow();
         var blocked = await _db.Users.AsNoTracking().Where(u => u.Id == checkout.CustomerId).Select(u => u.IsBlocked).SingleAsync(cancellationToken);
         if (blocked)
         {

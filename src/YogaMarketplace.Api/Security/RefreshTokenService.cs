@@ -22,12 +22,14 @@ public class RefreshTokenService
     private readonly YogaDbContext _db;
     private readonly RefreshTokenOptions _options;
     private readonly ILogger<RefreshTokenService> _logger;
+    private readonly TimeProvider _time;
 
-    public RefreshTokenService(YogaDbContext db, IOptions<RefreshTokenOptions> options, ILogger<RefreshTokenService> logger)
+    public RefreshTokenService(YogaDbContext db, IOptions<RefreshTokenOptions> options, ILogger<RefreshTokenService> logger, TimeProvider time)
     {
         _db = db;
         _options = options.Value;
         _logger = logger;
+        _time = time;
     }
 
     private TimeSpan Lifetime => TimeSpan.FromDays(_options.LifetimeDays);
@@ -36,7 +38,7 @@ public class RefreshTokenService
     public async Task<IssuedRefreshToken> IssueAsync(User user, CancellationToken cancellationToken)
     {
         var value = NewValue();
-        var token = RefreshTokenRules.Issue(user.Id, Guid.NewGuid(), Hash(value), DateTimeOffset.UtcNow, Lifetime);
+        var token = RefreshTokenRules.Issue(user.Id, Guid.NewGuid(), Hash(value), _time.GetUtcNow(), Lifetime);
         _db.RefreshTokens.Add(token);
         await _db.SaveChangesAsync(cancellationToken);
         return new IssuedRefreshToken(value, token.ExpiresAt);
@@ -58,7 +60,7 @@ public class RefreshTokenService
             .SingleOrDefaultAsync(t => t.TokenHash == hash, cancellationToken)
             ?? throw new DomainException(SessionEnded, 401);
 
-        var now = DateTimeOffset.UtcNow;
+        var now = _time.GetUtcNow();
         switch (RefreshTokenRules.StateOf(current, now, TimeSpan.FromSeconds(_options.ReuseGraceSeconds)))
         {
             case RefreshTokenState.JustRotated:
@@ -107,14 +109,14 @@ public class RefreshTokenService
             .SingleOrDefaultAsync(cancellationToken);
         if (familyId is null)
             return;
-        await RevokeFamilyAsync(familyId.Value, RefreshTokenRevokeReason.SignedOut, DateTimeOffset.UtcNow, cancellationToken);
+        await RevokeFamilyAsync(familyId.Value, RefreshTokenRevokeReason.SignedOut, _time.GetUtcNow(), cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
     }
 
     /// <summary>Marks every active token of the user revoked. The caller saves.</summary>
     public async Task RevokeAllForUserAsync(Guid userId, RefreshTokenRevokeReason reason, CancellationToken cancellationToken)
     {
-        var now = DateTimeOffset.UtcNow;
+        var now = _time.GetUtcNow();
         var active = await _db.RefreshTokens
             .Where(t => t.UserId == userId && t.RevokedAt == null)
             .ToListAsync(cancellationToken);

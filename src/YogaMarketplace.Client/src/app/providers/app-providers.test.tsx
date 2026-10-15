@@ -11,6 +11,7 @@ vi.mock("@/app/router/app-router", async (importOriginal) => ({
 
 describe("AppProviders", () => {
   it("shows the loading screen until the session is restored, then the routes", async () => {
+    localStorage.setItem("ym.signedIn", "1");
     let finish!: () => void;
     vi.mocked(refreshSession).mockReturnValue(
       new Promise((resolve) => {
