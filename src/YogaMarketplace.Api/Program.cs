@@ -115,6 +115,7 @@ app.UseSecurityHeaders();
 if (productionLike)
     app.UseHsts();
 app.UseApiErrorResponses();
+app.UseMiddleware<ClientAbortMiddleware>();
 app.UseMiddleware<DomainExceptionMiddleware>();
 if (!productionLike)
 {
