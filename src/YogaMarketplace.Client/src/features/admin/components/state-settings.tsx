@@ -8,7 +8,7 @@ import { ErrorState } from "@/components/common/error-state";
 import { BookingListSkeleton } from "@/components/common/loading-skeleton";
 import { ListPagination } from "@/features/admin/components/list-pagination";
 import { SettingsCard, SettingsIntro } from "@/features/admin/components/settings-card";
-import { useAdminStates, useCreateState, useUpdateState } from "@/features/admin/hooks/use-admin";
+import { useAdminStates, useCreateState, useImportIndiaLocations, useUpdateState } from "@/features/admin/hooks/use-admin";
 import { stateEditSchema, stateSchema, type StateEditValues, type StateFormValues } from "@/features/admin/schemas";
 import type { AdminState } from "@/features/admin/types";
 import { toUserMessage } from "@/services/http/api-error";
@@ -37,8 +37,9 @@ export function StateSettings() {
         lead="Add a state before its cities. A state stays on until every city in it is turned off."
       />
       <SettingsCard className="space-y-0 p-0 sm:p-0">
-        <div className="border-b border-brand-border p-5 sm:p-6">
+        <div className="flex flex-col gap-4 border-b border-brand-border p-5 sm:p-6">
           <CreateStateRow />
+          <ImportIndiaButton />
         </div>
         {states.isLoading ? (
           <div className="p-5 sm:p-6">
@@ -69,6 +70,29 @@ export function StateSettings() {
         ) : null}
       </SettingsCard>
     </div>
+  );
+}
+
+function ImportIndiaButton() {
+  const importIndia = useImportIndiaLocations();
+  return (
+    <Button
+      type="button"
+      variant="outlined"
+      disabled={importIndia.isPending}
+      onClick={() => {
+        importIndia.mutate(undefined, {
+          onSuccess: (result) =>
+            toast.success(
+              `States added ${result.statesAdded}, skipped ${result.statesSkipped}. Cities added ${result.citiesAdded}, skipped ${result.citiesSkipped}.`,
+            ),
+          onError: (error) => toastError(error),
+        });
+      }}
+      sx={{ minHeight: 48, borderRadius: "14px", alignSelf: "flex-start", px: 3 }}
+    >
+      {importIndia.isPending ? "Importing…" : "Import India states & cities"}
+    </Button>
   );
 }
 

@@ -192,6 +192,8 @@ public class CreateAreaRequest
 
 public record AdminStateResponse(Guid Id, string Name, string Code, bool IsActive, int DisplayOrder);
 
+public record LocationImportResponse(int StatesAdded, int StatesSkipped, int CitiesAdded, int CitiesSkipped);
+
 public record AdminCityResponse(Guid Id, string Name, Guid StateId, string Slug, bool IsActive, int DisplayOrder);
 
 public class CreateStateRequest

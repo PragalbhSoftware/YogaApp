@@ -57,6 +57,10 @@ public class AdminMastersController : AdminControllerBase
         return Created($"/api/admin/states/{state.Id}", state);
     }
 
+    [HttpPost("states/import-india")]
+    public async Task<ActionResult<LocationImportResponse>> ImportIndia(CancellationToken cancellationToken) =>
+        Ok(await _masters.ImportIndiaLocationsAsync(cancellationToken));
+
     [HttpPatch("states/{id:guid}")]
     public async Task<ActionResult<AdminStateResponse>> UpdateState(
         Guid id,

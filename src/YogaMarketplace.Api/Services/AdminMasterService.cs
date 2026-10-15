@@ -1,3 +1,5 @@
+using System.Text.Json;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using YogaMarketplace.Domain;
 using YogaMarketplace.Infrastructure.Persistence;
@@ -18,6 +20,8 @@ public interface IAdminMasterService
 
     Task<AdminStateResponse> UpdateStateAsync(Guid id, PatchStateRequest request, CancellationToken cancellationToken);
 
+    Task<LocationImportResponse> ImportIndiaLocationsAsync(CancellationToken cancellationToken);
+
     Task<PagedResponse<AdminCityResponse>> ListCitiesAsync(Guid? stateId, int? page, int? pageSize, CancellationToken cancellationToken);
 
     Task<AdminCityResponse> CreateCityAsync(CreateCityRequest request, CancellationToken cancellationToken);
@@ -32,10 +36,12 @@ public interface IAdminMasterService
 public class AdminMasterService : IAdminMasterService
 {
     private readonly YogaDbContext _db;
+    private readonly IWebHostEnvironment _env;
 
-    public AdminMasterService(YogaDbContext db)
+    public AdminMasterService(YogaDbContext db, IWebHostEnvironment env)
     {
         _db = db;
+        _env = env;
     }
 
     public async Task<IReadOnlyList<AdminAreaResponse>> ListAreasAsync(CancellationToken cancellationToken) =>
@@ -122,7 +128,15 @@ public class AdminMasterService : IAdminMasterService
         }
 
         if (request.Code is not null)
+        {
             state.Code = CatalogRules.NormalizeStateCode(request.Code);
+            var cities = await _db.Cities.Where(c => c.StateId == state.Id).ToListAsync(cancellationToken);
+            foreach (var city in cities)
+            {
+                city.Slug = CatalogRules.CitySlug(state.Code, city.Name);
+                await EnsureCityAvailableAsync(city, cancellationToken);
+            }
+        }
 
         if (request.DisplayOrder is int order)
             state.DisplayOrder = order;
@@ -135,6 +149,94 @@ public class AdminMasterService : IAdminMasterService
 
         await _db.SaveChangesAsync(cancellationToken);
         return ToState(state);
+    }
+
+    public async Task<LocationImportResponse> ImportIndiaLocationsAsync(CancellationToken cancellationToken)
+    {
+        var path = Path.Combine(_env.ContentRootPath, "SeedData", "locations-in.json");
+        if (!File.Exists(path))
+            throw new DomainException("The India location file is missing.");
+
+        await using var stream = File.OpenRead(path);
+        var file = await JsonSerializer.DeserializeAsync<IndiaLocationFile>(stream, JsonOptions, cancellationToken)
+            ?? throw new DomainException("The India location file is empty.");
+
+        var byName = (await _db.States.ToListAsync(cancellationToken)).ToDictionary(s => s.Name);
+        var cityKeys = (await _db.Cities.Select(c => new { c.StateId, c.Name }).ToListAsync(cancellationToken))
+            .Select(c => (c.StateId, c.Name))
+            .ToHashSet();
+        var statesAdded = 0;
+        var statesSkipped = 0;
+        var citiesAdded = 0;
+        var citiesSkipped = 0;
+        var stateOrder = 0;
+        foreach (var row in file.States)
+        {
+            State state;
+            try
+            {
+                var name = CatalogRules.NormalizeStateName(row.Name);
+                if (byName.TryGetValue(name, out var existing))
+                {
+                    state = existing;
+                    statesSkipped++;
+                }
+                else
+                {
+                    state = CatalogRules.CreateState(row.Name, row.Code, stateOrder);
+                    state.IsActive = false;
+                    _db.States.Add(state);
+                    byName[state.Name] = state;
+                    statesAdded++;
+                }
+            }
+            catch (DomainException)
+            {
+                statesSkipped++;
+                stateOrder++;
+                continue;
+            }
+
+            var cityOrder = 0;
+            foreach (var cityName in row.Cities)
+            {
+                try
+                {
+                    var city = CatalogRules.CreateCity(cityName, state.Id, state.Code, cityOrder);
+                    city.IsActive = false;
+                    if (!cityKeys.Add((state.Id, city.Name)))
+                        citiesSkipped++;
+                    else
+                    {
+                        _db.Cities.Add(city);
+                        citiesAdded++;
+                    }
+                }
+                catch (DomainException)
+                {
+                    citiesSkipped++;
+                }
+                cityOrder++;
+            }
+            stateOrder++;
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
+        return new LocationImportResponse(statesAdded, statesSkipped, citiesAdded, citiesSkipped);
+    }
+
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    private sealed class IndiaLocationFile
+    {
+        public List<IndiaLocationState> States { get; set; } = [];
+    }
+
+    private sealed class IndiaLocationState
+    {
+        public string? Name { get; set; }
+        public string? Code { get; set; }
+        public List<string> Cities { get; set; } = [];
     }
 
     public async Task<PagedResponse<AdminCityResponse>> ListCitiesAsync(
@@ -163,8 +265,8 @@ public class AdminMasterService : IAdminMasterService
     {
         if (request.StateId is not Guid stateId)
             throw new DomainException("Pick an active state.");
-        await RequireActiveStateAsync(stateId, cancellationToken);
-        var city = CatalogRules.CreateCity(request.Name, stateId, request.DisplayOrder ?? 0);
+        var state = await RequireActiveStateAsync(stateId, cancellationToken);
+        var city = CatalogRules.CreateCity(request.Name, state.Id, state.Code, request.DisplayOrder ?? 0);
         await EnsureCityAvailableAsync(city, cancellationToken);
         _db.Cities.Add(city);
         await _db.SaveChangesAsync(cancellationToken);
@@ -181,12 +283,13 @@ public class AdminMasterService : IAdminMasterService
 
         if (request.StateId is Guid stateId)
         {
-            await RequireActiveStateAsync(stateId, cancellationToken);
-            city.StateId = stateId;
+            var next = await RequireActiveStateAsync(stateId, cancellationToken);
+            city.StateId = next.Id;
         }
 
-        if (request.Name is not null)
-            CatalogRules.RenameCity(city, request.Name);
+        var stateCode = await _db.States.Where(s => s.Id == city.StateId).Select(s => s.Code).SingleAsync(cancellationToken);
+        if (request.Name is not null || request.StateId is not null)
+            CatalogRules.RenameCity(city, request.Name ?? city.Name, stateCode);
 
         if (request.DisplayOrder is int order)
             city.DisplayOrder = order;
@@ -231,11 +334,12 @@ public class AdminMasterService : IAdminMasterService
             throw new DomainException("That area already exists.", 409);
     }
 
-    private async Task RequireActiveStateAsync(Guid stateId, CancellationToken cancellationToken)
+    private async Task<State> RequireActiveStateAsync(Guid stateId, CancellationToken cancellationToken)
     {
-        var active = await _db.States.AnyAsync(s => s.Id == stateId && s.IsActive, cancellationToken);
-        if (!active)
+        var state = await _db.States.SingleOrDefaultAsync(s => s.Id == stateId && s.IsActive, cancellationToken);
+        if (state is null)
             throw new DomainException("Pick an active state.");
+        return state;
     }
 
     private async Task EnsureStateCanTurnOffAsync(Guid stateId, CancellationToken cancellationToken)

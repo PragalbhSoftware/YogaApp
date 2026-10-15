@@ -67,9 +67,9 @@ export const citySchema = z.object({
   name: z
     .string()
     .trim()
-    .min(2, "City must be 2 to 40 characters.")
-    .max(40, "City must be 2 to 40 characters.")
-    .regex(/^[A-Za-z][A-Za-z .-]*$/, "Use letters, spaces, hyphens or dots only."),
+    .min(2, "City must be 2 to 80 characters.")
+    .max(80, "City must be 2 to 80 characters.")
+    .regex(/^[A-Za-z0-9(][A-Za-z0-9 .()-]*$/, "Use letters, digits, spaces, hyphens, dots, or parentheses."),
   displayOrder,
 });
 

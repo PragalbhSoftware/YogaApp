@@ -310,6 +310,14 @@ export function useCreateState() {
   });
 }
 
+export function useImportIndiaLocations() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: adminApi.importIndiaLocations,
+    onSuccess: () => refreshPlaces(queryClient),
+  });
+}
+
 export function useUpdateState() {
   const queryClient = useQueryClient();
   return useMutation({

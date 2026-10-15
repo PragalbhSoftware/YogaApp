@@ -229,6 +229,14 @@ export const adminApi = {
     return http.post<AdminState>("/api/admin/states", input).then((res) => res.data);
   },
 
+  importIndiaLocations() {
+    return http
+      .post<{ statesAdded: number; statesSkipped: number; citiesAdded: number; citiesSkipped: number }>(
+        "/api/admin/states/import-india",
+      )
+      .then((res) => res.data);
+  },
+
   updateState(id: string, input: { name?: string; code?: string; displayOrder?: number; isActive?: boolean }) {
     return http.patch<AdminState>(`/api/admin/states/${id}`, input).then((res) => res.data);
   },

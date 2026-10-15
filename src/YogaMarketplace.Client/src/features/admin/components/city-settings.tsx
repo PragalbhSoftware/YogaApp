@@ -92,7 +92,7 @@ export function CitySettings() {
               error={Boolean(form.formState.errors.name)}
               helperText={form.formState.errors.name?.message}
               {...form.register("name")}
-              slotProps={{ htmlInput: { maxLength: 40 } }}
+              slotProps={{ htmlInput: { maxLength: 80 } }}
             />
             <TextField
               label="Display order"
@@ -186,7 +186,7 @@ function CityRow({ city }: { city: AdminCity }) {
           error={Boolean(form.formState.errors.name)}
           helperText={form.formState.errors.name?.message ?? `Slug ${city.slug}.`}
           {...form.register("name")}
-          slotProps={{ htmlInput: { maxLength: 40 } }}
+          slotProps={{ htmlInput: { maxLength: 80 } }}
         />
         <TextField
           label="Display order"

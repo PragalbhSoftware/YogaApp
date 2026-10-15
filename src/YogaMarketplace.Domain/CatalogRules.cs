@@ -26,9 +26,9 @@ public static class CatalogRules
         DisplayOrder = displayOrder
     };
 
-    public static City CreateCity(string? name, Guid stateId, int displayOrder)
+    public static City CreateCity(string? name, Guid stateId, string? stateCode, int displayOrder)
     {
-        var normalized = NormalizeCity(name);
+        var normalized = NormalizeCityName(name);
         return new City
         {
             Id = Guid.NewGuid(),
@@ -36,14 +36,14 @@ public static class CatalogRules
             StateId = stateId,
             IsActive = true,
             DisplayOrder = displayOrder,
-            Slug = CitySlug(normalized)
+            Slug = CitySlug(stateCode, normalized)
         };
     }
 
-    public static void RenameCity(City city, string? name)
+    public static void RenameCity(City city, string? name, string? stateCode)
     {
-        city.Name = NormalizeCity(name);
-        city.Slug = CitySlug(city.Name);
+        city.Name = NormalizeCityName(name);
+        city.Slug = CitySlug(stateCode, city.Name);
     }
 
     public static void RenameArea(Area area, string? name) =>
@@ -60,13 +60,18 @@ public static class CatalogRules
     public const int CityMin = 2;
     /// <summary>Matches the <c>Areas.City</c> column length.</summary>
     public const int CityMax = 40;
+    /// <summary>City master names. Longer than an area's city text because official district names run past 40.</summary>
+    public const int CityNameMax = 80;
     public const int StateNameMax = 80;
     public const int StateCodeMax = 10;
-    public const int SlugMax = CityMax;
+    public const int SlugMax = StateCodeMax + 1 + CityNameMax;
 
-    public static string NormalizeCity(string? city) => NormalizePlaceName(city, CityMax, "City");
+    public static string NormalizeCity(string? city) => NormalizePlaceName(city, CityMax, "City", official: false);
 
-    public static string NormalizeStateName(string? name) => NormalizePlaceName(name, StateNameMax, "State");
+    /// <summary>City master name. Allows the digits and parentheses used in official district names.</summary>
+    public static string NormalizeCityName(string? name) => NormalizePlaceName(name, CityNameMax, "City", official: true);
+
+    public static string NormalizeStateName(string? name) => NormalizePlaceName(name, StateNameMax, "State", official: false);
 
     public static string NormalizeStateCode(string? code)
     {
@@ -76,24 +81,32 @@ public static class CatalogRules
         return trimmed.ToUpperInvariant();
     }
 
-    /// <summary>Kebab-case of a name already passed through <see cref="NormalizeCity"/>.</summary>
-    public static string CitySlug(string normalizedName)
+    /// <summary>State code plus the city name, so the same name can exist in two states.</summary>
+    public static string CitySlug(string? stateCode, string normalizedName)
     {
-        var slug = normalizedName.ToLowerInvariant().Replace(".", "", StringComparison.Ordinal).Replace(' ', '-');
-        while (slug.Contains("--", StringComparison.Ordinal))
-            slug = slug.Replace("--", "-", StringComparison.Ordinal);
-        return slug.Trim('-');
+        var code = NormalizeStateCode(stateCode).ToLowerInvariant();
+        var body = string.Join('-', normalizedName
+            .ToLowerInvariant()
+            .Replace(".", " ", StringComparison.Ordinal)
+            .Replace("(", " ", StringComparison.Ordinal)
+            .Replace(")", " ", StringComparison.Ordinal)
+            .Split(new[] { ' ', '-' }, StringSplitOptions.RemoveEmptyEntries));
+        var slug = $"{code}-{body}";
+        return slug;
     }
 
-    private static string NormalizePlaceName(string? value, int max, string label)
+    private static string NormalizePlaceName(string? value, int max, string label, bool official)
     {
         if (string.IsNullOrWhiteSpace(value))
             throw new DomainException($"{label} is required.");
         var collapsed = string.Join(' ', value.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
         if (collapsed.Length < CityMin || collapsed.Length > max)
             throw new DomainException($"{label} must be {CityMin} to {max} characters.");
-        if (!collapsed.All(c => char.IsLetter(c) || c is ' ' or '-' or '.'))
-            throw new DomainException($"{label} can use letters, spaces, hyphens, and dots only.");
+        var allowed = collapsed.All(c => char.IsLetter(c) || c is ' ' or '-' or '.' || (official && (char.IsDigit(c) || c is '(' or ')')));
+        if (!allowed)
+            throw new DomainException(official
+                ? $"{label} can use letters, digits, spaces, hyphens, dots, and parentheses only."
+                : $"{label} can use letters, spaces, hyphens, and dots only.");
         return CultureInfo.InvariantCulture.TextInfo.ToTitleCase(collapsed.ToLowerInvariant());
     }
 

@@ -475,13 +475,13 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("nvarchar(40)");
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
 
                     b.Property<string>("Slug")
                         .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("nvarchar(40)");
+                        .HasMaxLength(91)
+                        .HasColumnType("nvarchar(91)");
 
                     b.Property<Guid>("StateId")
                         .HasColumnType("uniqueidentifier");

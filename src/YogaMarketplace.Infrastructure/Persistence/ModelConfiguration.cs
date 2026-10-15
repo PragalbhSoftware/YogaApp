@@ -188,7 +188,7 @@ internal static class ModelConfiguration
 
     private static void ConfigureCity(EntityTypeBuilder<City> entity)
     {
-        entity.Property(c => c.Name).HasMaxLength(CatalogRules.CityMax);
+        entity.Property(c => c.Name).HasMaxLength(CatalogRules.CityNameMax);
         entity.Property(c => c.Slug).HasMaxLength(CatalogRules.SlugMax);
         entity.HasIndex(c => c.Slug).IsUnique();
         entity.HasIndex(c => new { c.StateId, c.Name }).IsUnique();
