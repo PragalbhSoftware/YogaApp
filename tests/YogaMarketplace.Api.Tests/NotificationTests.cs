@@ -167,6 +167,42 @@ public class NotificationTests
     }
 
     [Fact]
+    public async Task A_credit_booking_gets_request_wording_and_accepting_it_sends_the_confirmation()
+    {
+        await using var factory = new YogaApiFactory();
+        var (host, sender, _) = NewHost(factory);
+        await PatchSettingsAsync(host, new { emailNotificationsEnabled = true });
+        var admin = await SignInAsync(host, SeedIds.AdminPhone);
+        var instructor = await SignInAsync(host, SeedIds.AnanyaPhone);
+        var pack = await PostAsync<IdBody>(admin, "/api/admin/packs",
+            new { name = "Notify pack " + Guid.NewGuid().ToString("N")[..8], sessions = 2, price = 1600m, validityDays = 30, priceCap = 5000m });
+        var (customer, phone) = await SignUpAsync(host);
+        await QueryAsync(host, db => db.Users.Where(u => u.Phone == phone).ExecuteUpdateAsync(u => u.SetProperty(x => x.Email, "asha@example.com")));
+        var packOrder = await PostAsync<OrderBody>(customer, $"/api/packs/{pack.Id}/orders", new { });
+        await PostAsync<JsonElement>(customer, "/api/packs/local-confirm", new { orderId = packOrder.OrderId });
+
+        var booking = await PostAsync<BookingBody>(customer, "/api/bookings/credit", new { slotId = await OpenSlotAsync(customer) });
+        await RunJobsAsync(host, DateTimeOffset.UtcNow.AddSeconds(1));
+
+        var requested = sender.Sent.ToList();
+        Assert.Equal(2, requested.Count);
+        Assert.StartsWith("Request received:", requested.Single(m => m.To == "asha@example.com").Subject, StringComparison.Ordinal);
+        Assert.StartsWith("New booking request:", requested.Single(m => m.To == InstructorEmail).Subject, StringComparison.Ordinal);
+        Assert.All(requested, m => Assert.DoesNotContain("confirmed", m.Subject + m.Body, StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(0, await CountRowsAsync(host, NotificationEvents.BookingConfirmedCustomer));
+
+        await PostAsync<BookingBody>(instructor, $"/api/bookings/{booking.Id}/accept", new { });
+        await RunJobsAsync(host, DateTimeOffset.UtcNow.AddSeconds(1));
+
+        Assert.Equal(1, await CountRowsAsync(host, NotificationEvents.BookingConfirmedCustomer));
+        Assert.Equal(1, await CountRowsAsync(host, NotificationEvents.BookingConfirmedInstructor));
+        var confirmed = sender.Sent.Skip(2).ToList();
+        Assert.Equal(2, confirmed.Count);
+        Assert.StartsWith("Booking confirmed:", confirmed.Single(m => m.To == InstructorEmail).Subject, StringComparison.Ordinal);
+        Assert.DoesNotContain("request", confirmed.Single(m => m.To == "asha@example.com").Subject, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Recipient_email_and_phone_are_masked_in_logs()
     {
         await using var factory = new YogaApiFactory();
