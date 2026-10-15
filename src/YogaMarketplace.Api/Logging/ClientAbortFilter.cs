@@ -8,7 +8,7 @@ namespace YogaMarketplace.Api.Logging;
 /// <summary>
 /// Drops Error events that only say the current request's client went away. Kept narrow: Error level only, only while
 /// the request on this call is aborted, and only when the logged exception is a cancellation. The one exception-less
-/// event dropped is EF Core's "Failed executing DbCommand", which never carries the exception; when the failure was
+/// event dropped is EF Core's "Failed executing DbCommand", which may not carry the exception; when the failure was
 /// real, EF Core's query or save failure and the error handler still log it with the exception, so it is recorded.
 /// </summary>
 public class ClientAbortFilter : ILogEventFilter

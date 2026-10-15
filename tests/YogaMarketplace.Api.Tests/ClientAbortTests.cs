@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Data.Common;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
@@ -24,6 +25,7 @@ namespace YogaMarketplace.Api.Tests;
 public class ClientAbortTests
 {
     private const string CancelledLine = "Information Request \"GET\" \"/api/pages/terms\" was cancelled by the client.";
+    private static readonly TimeSpan WaitLimit = TimeSpan.FromSeconds(10);
 
     [Theory]
     [InlineData(false)]
@@ -38,8 +40,9 @@ public class ClientAbortTests
         await DrainErrorsAsync(host);
 
         await CancelMidQueryAsync(client, interceptor, "corr-abort");
-        await WaitForAsync(() => logs.Lines.Any(l => l.StartsWith(CancelledLine, StringComparison.Ordinal)));
+        await logs.WhenLogged(l => l.StartsWith(CancelledLine, StringComparison.Ordinal)).WaitAsync(WaitLimit);
 
+        Assert.Single(logs.Lines, l => l.StartsWith(CancelledLine, StringComparison.Ordinal));
         Assert.DoesNotContain(logs.Lines, l => l.StartsWith("Error", StringComparison.Ordinal) || l.StartsWith("Critical", StringComparison.Ordinal));
         Assert.Equal(0, await DrainErrorsAsync(host));
         Assert.False(await AnyErrorAsync(host, e => e.LastCorrelationId == "corr-abort"));
@@ -56,7 +59,7 @@ public class ClientAbortTests
         await DrainErrorsAsync(host);
 
         await CancelMidQueryAsync(client, interceptor, "corr-abort-unrelated");
-        await WaitForAsync(() => logs.Lines.Any(l => l.StartsWith("Error An unhandled exception", StringComparison.Ordinal)));
+        await logs.WhenLogged(l => l.StartsWith("Error An unhandled exception", StringComparison.Ordinal)).WaitAsync(WaitLimit);
 
         Assert.True(await DrainErrorsAsync(host) > 0);
         Assert.True(await AnyErrorAsync(host, e => e.LastCorrelationId == "corr-abort-unrelated"));
@@ -76,6 +79,7 @@ public class ClientAbortTests
 
         Assert.True(filter.IsEnabled(Event(LogEventLevel.Error, new InvalidOperationException("Content store is down."))));
         Assert.True(filter.IsEnabled(Event(LogEventLevel.Error, SqlExceptions.Create(1205, 13, "Deadlock victim."))));
+        Assert.True(filter.IsEnabled(Event(LogEventLevel.Error, SqlExceptions.Create(-2, 11, "Execution Timeout Expired."))));
         Assert.True(filter.IsEnabled(Event(LogEventLevel.Error, null)));
         Assert.True(filter.IsEnabled(Event(LogEventLevel.Error, null, CoreEventId.SaveChangesFailed.Id)));
         Assert.True(filter.IsEnabled(Event(LogEventLevel.Fatal, new OperationCanceledException())));
@@ -100,6 +104,18 @@ public class ClientAbortTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => Middleware(new InvalidOperationException("Boom")).InvokeAsync(Context(aborted: true)));
     }
 
+    [Fact]
+    public async Task Middleware_leaves_the_status_alone_when_the_response_has_already_started()
+    {
+        var started = Context(aborted: true);
+        started.Features.Set<IHttpResponseFeature>(new StartedResponse { StatusCode = StatusCodes.Status200OK });
+
+        await Middleware(new OperationCanceledException()).InvokeAsync(started);
+
+        Assert.True(started.Response.HasStarted);
+        Assert.Equal(StatusCodes.Status200OK, started.Response.StatusCode);
+    }
+
     private static ClientAbortMiddleware Middleware(Exception thrown) =>
         new(_ => throw thrown, NullLogger<ClientAbortMiddleware>.Instance);
 
@@ -122,16 +138,6 @@ public class ClientAbortTests
         await interceptor.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
         cancel.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => sent);
-    }
-
-    private static async Task WaitForAsync(Func<bool> done)
-    {
-        var until = DateTime.UtcNow.AddSeconds(10);
-        while (!done())
-        {
-            Assert.True(DateTime.UtcNow < until, "The aborted request did not finish in time.");
-            await Task.Delay(20);
-        }
     }
 
     private static (WebApplicationFactory<Program> Host, LogCapture Logs) NewHost(YogaApiFactory factory, HoldingInterceptor interceptor)
@@ -196,25 +202,59 @@ public class ClientAbortTests
         }
     }
 
+    private sealed class StartedResponse : HttpResponseFeature
+    {
+        public override bool HasStarted => true;
+    }
+
     /// <summary>Every event Serilog lets through, as "level message | exception".</summary>
     private sealed class LogCapture : ILoggerProvider
     {
+        private readonly object _gate = new();
+        private readonly List<(Func<string, bool> Match, TaskCompletionSource Logged)> _waiters = [];
+
         public ConcurrentQueue<string> Lines { get; } = new();
 
-        public ILogger CreateLogger(string categoryName) => new Logger(Lines);
+        /// <summary>Completes once a line matching <paramref name="match"/> has been logged, including one logged already.</summary>
+        public Task WhenLogged(Func<string, bool> match)
+        {
+            lock (_gate)
+            {
+                if (Lines.Any(match))
+                    return Task.CompletedTask;
+                var logged = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                _waiters.Add((match, logged));
+                return logged.Task;
+            }
+        }
+
+        public ILogger CreateLogger(string categoryName) => new Logger(this);
 
         public void Dispose()
         {
         }
 
-        private sealed class Logger(ConcurrentQueue<string> lines) : ILogger
+        private void Add(string line)
+        {
+            lock (_gate)
+            {
+                Lines.Enqueue(line);
+                foreach (var waiter in _waiters.Where(w => w.Match(line)).ToList())
+                {
+                    waiter.Logged.TrySetResult();
+                    _waiters.Remove(waiter);
+                }
+            }
+        }
+
+        private sealed class Logger(LogCapture capture) : ILogger
         {
             public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
             public bool IsEnabled(LogLevel logLevel) => true;
 
             public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
-                lines.Enqueue($"{logLevel} {formatter(state, exception)} | {exception?.GetType().Name}");
+                capture.Add($"{logLevel} {formatter(state, exception)} | {exception?.GetType().Name}");
         }
     }
 }
