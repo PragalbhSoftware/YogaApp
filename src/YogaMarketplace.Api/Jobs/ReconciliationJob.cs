@@ -119,12 +119,30 @@ public class ReconciliationJob : IBackgroundJobHandler
             return saved;
         }
 
-        if (items.Count > 0)
-            _logger.LogError("Reconciliation run {RunId} for {MarketDate} found {ItemCount} items to check.", run.Id, marketDate, items.Count);
-        else
+        if (items.Count == 0)
+        {
             _logger.LogInformation("Reconciliation run {RunId} for {MarketDate} found nothing to check.", run.Id, marketDate);
+            return run;
+        }
+
+        _logger.LogInformation("Reconciliation run {RunId} for {MarketDate} found {ItemCount} items to check: {ItemTypes}.",
+            run.Id, marketDate, items.Count, CountsByType(items));
+        var needAction = items.Where(i => ReconciliationRules.NeedsAction(i.Type)).ToList();
+        if (needAction.Count > 0)
+        {
+            _logger.LogError("Reconciliation run {RunId} for {MarketDate} found {ActionCount} items that need action: {ActionItems}.",
+                run.Id, marketDate, needAction.Count, IdsByType(needAction));
+        }
         return run;
     }
+
+    private static string CountsByType(IEnumerable<ReconciliationItem> items) =>
+        string.Join(", ", items.GroupBy(i => i.Type).OrderBy(g => g.Key).Select(g => $"{g.Key} {g.Count()}"));
+
+    /// <summary>The Razorpay refund or payment id (or the item's reference when it has neither) per type. No amounts.</summary>
+    private static string IdsByType(IEnumerable<ReconciliationItem> items) =>
+        string.Join("; ", items.GroupBy(i => i.Type).OrderBy(g => g.Key).Select(g =>
+            $"{g.Key}: {string.Join(", ", g.Select(i => i.GatewayRefundId ?? i.GatewayPaymentId ?? i.Reference))}"));
 
     private async Task<List<ReconciliationItem>> CompareGatewayAsync(DateTimeOffset start, DateTimeOffset end, CancellationToken cancellationToken)
     {

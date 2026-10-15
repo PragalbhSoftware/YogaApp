@@ -77,6 +77,13 @@ public static class ReconciliationRules
     public static (DateTimeOffset Start, DateTimeOffset End) WindowFor(DateOnly marketDate) =>
         (MumbaiClock.SessionStart(marketDate, TimeOnly.MinValue), MumbaiClock.SessionStart(marketDate.AddDays(1), TimeOnly.MinValue));
 
+    /// <summary>
+    /// Whether an item means money or a booking may be wrong and someone must look now. A refund still pending at
+    /// Razorpay and a refund made from the Razorpay dashboard are normal and only listed for the admin.
+    /// </summary>
+    public static bool NeedsAction(ReconciliationItemType type) =>
+        type is not (ReconciliationItemType.RefundPending or ReconciliationItemType.DashboardRefund);
+
     public static void Resolve(ReconciliationItem item, Guid adminUserId, string? note, DateTimeOffset now)
     {
         var trimmed = note?.Trim() ?? "";

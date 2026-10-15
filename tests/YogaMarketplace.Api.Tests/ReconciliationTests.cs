@@ -8,9 +8,11 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Migrations.Operations;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using YogaMarketplace.Api.Jobs;
+using YogaMarketplace.Api.Logging;
 using YogaMarketplace.Api.Options;
 using YogaMarketplace.Api.Services;
 using YogaMarketplace.Domain;
@@ -154,6 +156,48 @@ public class ReconciliationTests
         Assert.Equal(
             new[] { "evt_fresh", fresh.ToString() }.Order(),
             (await host.ItemsAsync(again.Id)).Select(i => i.Reference!).Order());
+    }
+
+    [Fact]
+    public async Task Normal_run_with_only_pending_and_dashboard_refunds_logs_information_and_writes_no_error_event()
+    {
+        await using var host = new Host();
+        await host.SetThresholdsAsync(webhookMinutes: 30, refundHours: 24);
+        var now = DateTimeOffset.UtcNow;
+        await host.SeedPaymentAsync("pay_pending_slow", 500m, PaymentStatus.Refunded, now.AddHours(-30),
+            refunded: 500m, refundId: "rfnd_slow", refundStatus: RefundStatus.Pending);
+        await host.SeedPaymentAsync("pay_dash_normal", 500m, PaymentStatus.Paid, BeforeWindow);
+        host.Gateway.Refunds.Add(new RazorpayRefundRecord("rfnd_dash_normal", "pay_dash_normal", 20000, "processed", null));
+
+        var run = await host.ReconcileAsync(Day, now);
+
+        Assert.Equal(2, run.ItemCount);
+        Assert.Empty(host.Logs.Errors);
+        var summary = Assert.Single(host.Logs.Infos, l => l.Contains("items to check", StringComparison.Ordinal));
+        Assert.Contains("found 2 items to check: \"DashboardRefund 1, RefundPending 1\".", summary, StringComparison.Ordinal);
+        Assert.Empty(await host.ReconciliationErrorsAsync());
+    }
+
+    [Fact]
+    public async Task A_real_mismatch_writes_one_error_event_naming_the_payment_and_the_stuck_webhook()
+    {
+        await using var host = new Host();
+        await host.SetThresholdsAsync(webhookMinutes: 30, refundHours: 24);
+        var now = DateTimeOffset.UtcNow;
+        await host.SeedWebhookAsync("evt_stuck_alert", now.AddMinutes(-45), WebhookEventStatus.Received);
+        await host.SeedPaymentAsync("pay_pending_alert", 500m, PaymentStatus.Refunded, now.AddHours(-30),
+            refunded: 500m, refundId: "rfnd_pending_alert", refundStatus: RefundStatus.Pending);
+        host.Gateway.Payments.Add(Captured("pay_paid_not_booked", 799m));
+
+        await host.ReconcileAsync(Day, now);
+
+        var error = Assert.Single(await host.ReconciliationErrorsAsync());
+        Assert.Equal(("Error", 1), (error.Level, error.Count));
+        Assert.Contains("found 2 items that need action", error.LastMessage, StringComparison.Ordinal);
+        Assert.Contains("MissingInDatabase: pay_paid_not_booked", error.LastMessage, StringComparison.Ordinal);
+        Assert.Contains("StuckWebhook: evt_stuck_alert", error.LastMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain("rfnd_pending_alert", error.LastMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain("799", error.LastMessage, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -506,9 +550,23 @@ public class ReconciliationTests
             _host = _factory.WithWebHostBuilder(builder =>
             {
                 builder.ConfigureLogging(logging => logging.AddProvider(Logs));
-                if (useStub)
-                    builder.ConfigureServices(services => services.AddSingleton<IRazorpayClient>(gateway ?? Gateway));
+                builder.ConfigureServices(services =>
+                {
+                    if (useStub)
+                        services.AddSingleton<IRazorpayClient>(gateway ?? Gateway);
+                    services.Remove(services.Single(d => d.ServiceType == typeof(IHostedService) && d.ImplementationType == typeof(ErrorEventWriter)));
+                });
             });
+        }
+
+        /// <summary>Saves queued errors the way the background writer would, then returns the reconciliation job's rows.</summary>
+        public async Task<List<ErrorEvent>> ReconciliationErrorsAsync()
+        {
+            var queue = _host.Services.GetRequiredService<ErrorEventQueue>();
+            var writer = ActivatorUtilities.CreateInstance<ErrorEventWriter>(_host.Services);
+            while (queue.Reader.TryRead(out var occurrence))
+                await writer.WriteAsync(occurrence, CancellationToken.None);
+            return await QueryAsync(db => db.ErrorEvents.AsNoTracking().Where(e => e.Source == typeof(ReconciliationJob).FullName).ToListAsync());
         }
 
         public StubGateway Gateway { get; } = new();

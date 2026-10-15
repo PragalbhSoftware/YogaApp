@@ -21,7 +21,8 @@ public static class StructuredLogging
 {
     /// <summary>
     /// One JSON object per line on the console and in a file that rolls daily. Levels come from the <c>Serilog</c>
-    /// section. Error and Critical events are also queued for the <c>ErrorEvents</c> table. Other logger providers
+    /// section. Error and Critical events are also queued for the <c>ErrorEvents</c> table, except the errors a client
+    /// disconnect causes (see <see cref="ClientAbortFilter"/>). Other logger providers
     /// (tests add some) still receive every event.
     /// </summary>
     public static WebApplicationBuilder AddStructuredLogging(this WebApplicationBuilder builder)
@@ -30,11 +31,13 @@ public static class StructuredLogging
         builder.Logging.ClearProviders();
         builder.Services.AddSingleton<ErrorEventQueue>();
         builder.Services.AddHostedService<ErrorEventWriter>();
+        builder.Services.AddHttpContextAccessor();
         builder.Services.AddSerilog(
             (services, logger) =>
             {
                 logger.ReadFrom.Configuration(builder.Configuration)
                     .Enrich.FromLogContext()
+                    .Filter.With(new ClientAbortFilter(services.GetRequiredService<IHttpContextAccessor>()))
                     .WriteTo.Console(new RenderedCompactJsonFormatter())
                     .WriteTo.Sink(new ErrorEventSink(services.GetRequiredService<ErrorEventQueue>()), LogEventLevel.Error);
                 if (!string.IsNullOrWhiteSpace(file.Path))
