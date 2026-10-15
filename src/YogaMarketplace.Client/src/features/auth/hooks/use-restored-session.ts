@@ -11,9 +11,11 @@ export const SESSION_RESTORE_TIMEOUT_MS = 5_000;
  * that never signed in has no cookie, so it skips the call and starts as a guest at once.
  */
 export function useRestoredSession() {
-  const [restored, setRestored] = useState(() => !wasSignedIn());
-  useEffect(() => {
+  const [restored, setRestored] = useState(() => {
     forgetStoredSession();
+    return !wasSignedIn();
+  });
+  useEffect(() => {
     if (!wasSignedIn()) return;
     void refreshSession(SESSION_RESTORE_TIMEOUT_MS)
       .then((result) => {

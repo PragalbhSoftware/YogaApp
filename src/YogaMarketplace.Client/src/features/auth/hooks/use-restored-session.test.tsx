@@ -57,6 +57,23 @@ describe("session storage", () => {
     expect(storedText()).not.toContain("restored-token");
   });
 
+  it("treats a session an older build stored as signed in, so its user is not signed out by the deploy", async () => {
+    localStorage.setItem("ym.auth", JSON.stringify({ state: { token: "old-stored-token" } }));
+    vi.mocked(refreshSession).mockImplementation(() => {
+      useAuthStore.getState().signIn("restored-token", customer);
+      return Promise.resolve({ ok: true, token: "restored-token" });
+    });
+
+    const { result } = renderHook(() => useRestoredSession());
+
+    expect(result.current).toBe(false);
+    await waitFor(() => expect(result.current).toBe(true));
+    expect(refreshSession).toHaveBeenCalledWith(SESSION_RESTORE_TIMEOUT_MS);
+    expect(useAuthStore.getState().user?.id).toBe("u1");
+    expect(localStorage.getItem("ym.auth")).toBeNull();
+    expect(localStorage.getItem("ym.signedIn")).toBe("1");
+  });
+
   it("skips the refresh call for a guest who never signed in", () => {
     const { result } = renderHook(() => useRestoredSession());
 

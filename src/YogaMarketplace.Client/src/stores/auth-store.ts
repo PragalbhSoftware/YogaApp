@@ -48,9 +48,11 @@ export const useAuthStore = create<AuthState>()((set) => ({
   },
 }));
 
-/** Drops a session an older build left in localStorage. */
+/** Drops a session an older build left in localStorage. That browser signed in, so it gets the flag first. */
 export function forgetStoredSession() {
   try {
+    if (localStorage.getItem(LEGACY_STORAGE_KEY) === null) return;
+    localStorage.setItem(SIGNED_IN_KEY, "1");
     localStorage.removeItem(LEGACY_STORAGE_KEY);
   } catch {
     // Storage blocked: nothing could have been stored either.
