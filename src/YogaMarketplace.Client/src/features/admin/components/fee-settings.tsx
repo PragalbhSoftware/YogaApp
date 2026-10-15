@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { ErrorState } from "@/components/common/error-state";
 import { BookingListSkeleton } from "@/components/common/loading-skeleton";
 import { SettingsAudit } from "@/features/admin/components/settings-audit";
-import { SettingsCard, SettingsIntro } from "@/features/admin/components/settings-card";
+import { SettingsCard } from "@/features/admin/components/settings-card";
 import { StatCard } from "@/features/admin/components/stat-card";
 import { useAdminSettings, useUpdateSettings } from "@/features/admin/hooks/use-admin";
 import { feeSettingsSchema, settingsLimits, type FeeSettingsValues } from "@/features/admin/schemas";
@@ -55,10 +55,6 @@ function FeeForm({ settings }: { settings: AdminSettings }) {
 
   return (
     <div className="space-y-5">
-      <SettingsIntro
-        title="Fees and payouts"
-        lead="Changes apply to bookings made after you save. Existing bookings keep the fees they were booked with."
-      />
       <div className="grid gap-3 sm:grid-cols-3">
         <StatCard label="Your commission" value={`${settings.commissionPercent}%`} hint="Of each session" />
         <StatCard

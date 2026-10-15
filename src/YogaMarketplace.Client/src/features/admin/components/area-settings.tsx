@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { EmptyState } from "@/components/common/empty-state";
 import { ErrorState } from "@/components/common/error-state";
 import { BookingListSkeleton } from "@/components/common/loading-skeleton";
-import { SettingsCard, SettingsIntro } from "@/features/admin/components/settings-card";
+import { SettingsCard } from "@/features/admin/components/settings-card";
 import { useActiveCities, useActiveStates, useAdminAreas, useCreateArea, useUpdateArea } from "@/features/admin/hooks/use-admin";
 import { areaEditSchema, areaSchema, type AreaEditValues, type AreaFormValues } from "@/features/admin/schemas";
 import type { AdminArea } from "@/features/admin/types";
@@ -28,10 +28,6 @@ export function AreaSettings() {
 
   return (
     <div className="flex flex-col gap-5">
-      <SettingsIntro
-        title="Cities and neighbourhoods"
-        lead="Pick a state, then one of its cities, then add a neighbourhood. Hide a neighbourhood to take it out of browse. Existing bookings there carry on."
-      />
       <SettingsCard className="space-y-0 p-0 sm:p-0">
         <div className="border-b border-brand-border p-5 sm:p-6">
           <CreateAreaRow />

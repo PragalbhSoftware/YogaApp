@@ -7,7 +7,7 @@ import { EmptyState } from "@/components/common/empty-state";
 import { ErrorState } from "@/components/common/error-state";
 import { BookingListSkeleton } from "@/components/common/loading-skeleton";
 import { ListPagination } from "@/features/admin/components/list-pagination";
-import { SettingsCard, SettingsIntro } from "@/features/admin/components/settings-card";
+import { SettingsCard } from "@/features/admin/components/settings-card";
 import { useAdminCities, useAdminStates, useCreateCity, useUpdateCity } from "@/features/admin/hooks/use-admin";
 import { cityEditSchema, citySchema, type CityEditValues, type CityFormValues } from "@/features/admin/schemas";
 import type { AdminCity } from "@/features/admin/types";
@@ -49,10 +49,6 @@ export function CitySettings() {
 
   return (
     <div className="flex flex-col gap-5">
-      <SettingsIntro
-        title="Cities"
-        lead="Every city belongs to a state. Pick a state to see its cities, and to add another."
-      />
       <SettingsCard className="space-y-0 p-0 sm:p-0">
         <form
           noValidate

@@ -7,7 +7,7 @@ import { EmptyState } from "@/components/common/empty-state";
 import { ErrorState } from "@/components/common/error-state";
 import { BookingListSkeleton } from "@/components/common/loading-skeleton";
 import { ListPagination } from "@/features/admin/components/list-pagination";
-import { SettingsCard, SettingsIntro } from "@/features/admin/components/settings-card";
+import { SettingsCard } from "@/features/admin/components/settings-card";
 import { useAdminStates, useCreateState, useImportIndiaLocations, useUpdateState } from "@/features/admin/hooks/use-admin";
 import { stateEditSchema, stateSchema, type StateEditValues, type StateFormValues } from "@/features/admin/schemas";
 import type { AdminState } from "@/features/admin/types";
@@ -32,10 +32,6 @@ export function StateSettings() {
 
   return (
     <div className="flex flex-col gap-5">
-      <SettingsIntro
-        title="States"
-        lead="Add a state before its cities. A state stays on until every city in it is turned off."
-      />
       <SettingsCard className="space-y-0 p-0 sm:p-0">
         <div className="flex flex-col gap-4 border-b border-brand-border p-5 sm:p-6">
           <CreateStateRow />

@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { ErrorState } from "@/components/common/error-state";
 import { BookingListSkeleton } from "@/components/common/loading-skeleton";
-import { SettingsCard, SettingsIntro } from "@/features/admin/components/settings-card";
+import { SettingsCard } from "@/features/admin/components/settings-card";
 import { useAdminSettings, useUpdateSettings } from "@/features/admin/hooks/use-admin";
 import { bannerSchema, settingsLimits, type BannerValues } from "@/features/admin/schemas";
 import type { AdminSettings } from "@/features/admin/types";
@@ -38,10 +38,6 @@ function BannerForm({ settings }: { settings: AdminSettings }) {
 
   return (
     <div className="space-y-5">
-      <SettingsIntro
-        title="Home banner"
-        lead="The headline customers see on the home page. Leave a field empty to show the default text."
-      />
       <SettingsCard>
         <form
           noValidate

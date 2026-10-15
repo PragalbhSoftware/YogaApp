@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { ErrorState } from "@/components/common/error-state";
 import { BookingListSkeleton } from "@/components/common/loading-skeleton";
-import { SettingsCard, SettingsIntro } from "@/features/admin/components/settings-card";
+import { SettingsCard } from "@/features/admin/components/settings-card";
 import { useAdminCategories, useRenameCategory } from "@/features/admin/hooks/use-admin";
 import { renameSchema, type RenameFormValues } from "@/features/admin/schemas";
 import type { AdminCategory } from "@/features/admin/types";
@@ -21,10 +21,6 @@ export function CategorySettings() {
 
   return (
     <div className="space-y-5">
-      <SettingsIntro
-        title="Browse label"
-        lead="Customers see this name. The slug stays yoga so public browse does not break."
-      />
       {categories.data?.map((category) => (
         <CategoryForm key={category.id} category={category} />
       ))}

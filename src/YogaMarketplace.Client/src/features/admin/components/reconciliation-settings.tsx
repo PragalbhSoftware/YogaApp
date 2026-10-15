@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ErrorState } from "@/components/common/error-state";
 import { BookingListSkeleton } from "@/components/common/loading-skeleton";
-import { SettingsCard, SettingsIntro } from "@/features/admin/components/settings-card";
+import { SettingsCard } from "@/features/admin/components/settings-card";
 import { useAdminSettings, useUpdateSettings } from "@/features/admin/hooks/use-admin";
 import { reconciliationSettingsSchema, type ReconciliationSettingsValues } from "@/features/admin/schemas";
 import type { AdminSettings } from "@/features/admin/types";
@@ -41,10 +41,6 @@ function ReconciliationForm({ settings }: { settings: AdminSettings }) {
 
   return (
     <div className="space-y-5">
-      <SettingsIntro
-        title="Payment reconciliation"
-        lead="Once a day we compare Razorpay with our records for the previous day and list anything that differs under Reconciliation. Nothing is changed automatically."
-      />
       <SettingsCard>
         <form
           noValidate

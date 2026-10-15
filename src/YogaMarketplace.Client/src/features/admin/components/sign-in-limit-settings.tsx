@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ErrorState } from "@/components/common/error-state";
 import { BookingListSkeleton } from "@/components/common/loading-skeleton";
-import { SettingsCard, SettingsIntro } from "@/features/admin/components/settings-card";
+import { SettingsCard } from "@/features/admin/components/settings-card";
 import { useAdminSettings, useUpdateSettings } from "@/features/admin/hooks/use-admin";
 import { signInLimitSettingsSchema, type SignInLimitSettingsValues } from "@/features/admin/schemas";
 import type { AdminSettings } from "@/features/admin/types";
@@ -41,10 +41,6 @@ function SignInLimitForm({ settings }: { settings: AdminSettings }) {
 
   return (
     <div className="space-y-5">
-      <SettingsIntro
-        title="Sign-in code limits"
-        lead="Stops one phone number from being flooded with codes or guessed at. Codes and wrong tries are counted over the lock time; reaching either limit locks that number for the lock time."
-      />
       <SettingsCard>
         <form
           noValidate
