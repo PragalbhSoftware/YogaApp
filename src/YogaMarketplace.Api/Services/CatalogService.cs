@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using YogaMarketplace.Domain;
 using YogaMarketplace.Infrastructure.Persistence;
 
 namespace YogaMarketplace.Api.Services;
@@ -21,6 +22,27 @@ public class CatalogService
             .ThenBy(a => a.Name)
             .Select(a => new AreaResponse(a.Id, a.City, a.Name))
             .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<StateResponse>> StatesAsync(CancellationToken cancellationToken) =>
+        await _db.States.AsNoTracking()
+            .Where(s => s.IsActive)
+            .OrderBy(s => s.DisplayOrder)
+            .ThenBy(s => s.Name)
+            .Select(s => new StateResponse(s.Id, s.Name, s.Code, s.DisplayOrder))
+            .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<CityResponse>> CitiesAsync(Guid? stateId, CancellationToken cancellationToken)
+    {
+        if (stateId is not Guid id || id == Guid.Empty)
+            throw new DomainException("Pick a state.");
+
+        return await _db.Cities.AsNoTracking()
+            .Where(c => c.IsActive && c.StateId == id && c.State!.IsActive)
+            .OrderBy(c => c.DisplayOrder)
+            .ThenBy(c => c.Name)
+            .Select(c => new CityResponse(c.Id, c.Name, c.StateId, c.Slug, c.DisplayOrder))
+            .ToListAsync(cancellationToken);
+    }
 
     public async Task<IReadOnlyList<CategoryResponse>> CategoriesAsync(CancellationToken cancellationToken) =>
         await _db.Categories.AsNoTracking()

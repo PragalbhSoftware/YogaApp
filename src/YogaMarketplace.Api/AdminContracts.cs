@@ -187,6 +187,41 @@ public class CreateAreaRequest
 {
     public string? Name { get; set; }
     public string? City { get; set; }
+    public Guid? StateId { get; set; }
+}
+
+public record AdminStateResponse(Guid Id, string Name, string Code, bool IsActive, int DisplayOrder);
+
+public record AdminCityResponse(Guid Id, string Name, Guid StateId, string Slug, bool IsActive, int DisplayOrder);
+
+public class CreateStateRequest
+{
+    public string? Name { get; set; }
+    public string? Code { get; set; }
+    public int? DisplayOrder { get; set; }
+}
+
+public class PatchStateRequest
+{
+    public string? Name { get; set; }
+    public string? Code { get; set; }
+    public int? DisplayOrder { get; set; }
+    public bool? IsActive { get; set; }
+}
+
+public class CreateCityRequest
+{
+    public string? Name { get; set; }
+    public Guid? StateId { get; set; }
+    public int? DisplayOrder { get; set; }
+}
+
+public class PatchCityRequest
+{
+    public string? Name { get; set; }
+    public Guid? StateId { get; set; }
+    public int? DisplayOrder { get; set; }
+    public bool? IsActive { get; set; }
 }
 
 public class PatchAreaRequest

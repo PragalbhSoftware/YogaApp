@@ -4,7 +4,11 @@ import {
   errorsPageSize,
   jobsPageSize,
   reconciliationPageSize,
+  type ActiveCity,
+  type ActiveState,
   type AdminArea,
+  type AdminCity,
+  type AdminState,
   type AdminErrorEvent,
   type AdminCertificate,
   type AdminBooking,
@@ -213,8 +217,42 @@ export const adminApi = {
     return http.get<AdminArea[]>("/api/admin/areas").then((res) => res.data);
   },
 
-  createArea(input: { name: string; city?: string }) {
+  createArea(input: { name: string; city: string; stateId: string }) {
     return http.post<AdminArea>("/api/admin/areas", input).then((res) => res.data);
+  },
+
+  states(page = 1) {
+    return http.get<PagedList<AdminState>>("/api/admin/states", { params: { page } }).then((res) => res.data);
+  },
+
+  createState(input: { name: string; code: string; displayOrder: number }) {
+    return http.post<AdminState>("/api/admin/states", input).then((res) => res.data);
+  },
+
+  updateState(id: string, input: { name?: string; code?: string; displayOrder?: number; isActive?: boolean }) {
+    return http.patch<AdminState>(`/api/admin/states/${id}`, input).then((res) => res.data);
+  },
+
+  cities(stateId: string, page = 1) {
+    return http
+      .get<PagedList<AdminCity>>("/api/admin/cities", { params: { stateId, page } })
+      .then((res) => res.data);
+  },
+
+  createCity(input: { name: string; stateId: string; displayOrder: number }) {
+    return http.post<AdminCity>("/api/admin/cities", input).then((res) => res.data);
+  },
+
+  updateCity(id: string, input: { name?: string; stateId?: string; displayOrder?: number; isActive?: boolean }) {
+    return http.patch<AdminCity>(`/api/admin/cities/${id}`, input).then((res) => res.data);
+  },
+
+  activeStates() {
+    return http.get<ActiveState[]>("/api/catalog/states").then((res) => res.data);
+  },
+
+  activeCities(stateId: string) {
+    return http.get<ActiveCity[]>("/api/catalog/cities", { params: { stateId } }).then((res) => res.data);
   },
 
   updateArea(id: string, input: { name?: string; isActive?: boolean }) {

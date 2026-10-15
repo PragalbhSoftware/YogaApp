@@ -288,6 +288,77 @@ export function useUpdateArea() {
   });
 }
 
+function refreshPlaces(queryClient: ReturnType<typeof useQueryClient>) {
+  void queryClient.invalidateQueries({ queryKey: ["admin-states"] });
+  void queryClient.invalidateQueries({ queryKey: ["admin-cities"] });
+  void queryClient.invalidateQueries({ queryKey: ["active-states"] });
+  void queryClient.invalidateQueries({ queryKey: ["active-cities"] });
+}
+
+export function useAdminStates(page: number) {
+  return useQuery({
+    queryKey: ["admin-states", page],
+    queryFn: () => adminApi.states(page),
+  });
+}
+
+export function useCreateState() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: adminApi.createState,
+    onSuccess: () => refreshPlaces(queryClient),
+  });
+}
+
+export function useUpdateState() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { id: string; name?: string; code?: string; displayOrder?: number; isActive?: boolean }) =>
+      adminApi.updateState(input.id, input),
+    onSuccess: () => refreshPlaces(queryClient),
+  });
+}
+
+export function useAdminCities(stateId: string, page: number) {
+  return useQuery({
+    queryKey: ["admin-cities", stateId, page],
+    queryFn: () => adminApi.cities(stateId, page),
+    enabled: Boolean(stateId),
+  });
+}
+
+export function useCreateCity() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: adminApi.createCity,
+    onSuccess: () => refreshPlaces(queryClient),
+  });
+}
+
+export function useUpdateCity() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { id: string; name?: string; displayOrder?: number; isActive?: boolean }) =>
+      adminApi.updateCity(input.id, input),
+    onSuccess: () => refreshPlaces(queryClient),
+  });
+}
+
+export function useActiveStates() {
+  return useQuery({
+    queryKey: ["active-states"],
+    queryFn: adminApi.activeStates,
+  });
+}
+
+export function useActiveCities(stateId: string) {
+  return useQuery({
+    queryKey: ["active-cities", stateId],
+    queryFn: () => adminApi.activeCities(stateId),
+    enabled: Boolean(stateId),
+  });
+}
+
 export function useAdminCategories() {
   return useQuery({
     queryKey: ["admin-categories"],

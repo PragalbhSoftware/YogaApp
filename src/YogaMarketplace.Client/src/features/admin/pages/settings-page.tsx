@@ -2,6 +2,8 @@ import { Tab, Tabs } from "@mui/material";
 import { useSearchParams } from "react-router-dom";
 import { AdminPage } from "@/features/admin/components/admin-page";
 import { AreaSettings } from "@/features/admin/components/area-settings";
+import { CitySettings } from "@/features/admin/components/city-settings";
+import { StateSettings } from "@/features/admin/components/state-settings";
 import { BannerSettings } from "@/features/admin/components/banner-settings";
 import { CategorySettings } from "@/features/admin/components/category-settings";
 import { CreditRulesSettings } from "@/features/admin/components/credit-rules-settings";
@@ -14,7 +16,7 @@ import { PrivacySettings } from "@/features/admin/components/privacy-settings";
 import { ReconciliationSettings } from "@/features/admin/components/reconciliation-settings";
 import { SignInLimitSettings } from "@/features/admin/components/sign-in-limit-settings";
 
-const tabs = ["earnings", "packs", "areas", "banner", "catalog", "pages", "alerts", "sign-in"] as const;
+const tabs = ["earnings", "packs", "states", "cities", "areas", "banner", "catalog", "pages", "alerts", "sign-in"] as const;
 type SettingsTab = (typeof tabs)[number];
 
 function readTab(value: string | null): SettingsTab {
@@ -29,13 +31,14 @@ export function SettingsPage() {
     <AdminPage
       kicker="Owner"
       title="Settings"
-      lead="Fees and payouts, session packs and credit rules, the neighbourhoods customers can pick, the home banner, the yoga label on browse, the policy pages, error alerts, booking emails and sign-in code limits."
+      lead="Fees and payouts, session packs and credit rules, states, cities, the neighbourhoods customers can pick, the home banner, the yoga label on browse, the policy pages, error alerts, booking emails and sign-in code limits."
     >
       <Tabs
         value={tab}
         onChange={(_, next: SettingsTab) => {
           const params = new URLSearchParams(searchParams);
           params.set("tab", next);
+          params.delete("page");
           setSearchParams(params, { replace: true });
         }}
         aria-label="Settings"
@@ -48,6 +51,8 @@ export function SettingsPage() {
       >
         <Tab value="earnings" label="Fees" />
         <Tab value="packs" label="Packs" />
+        <Tab value="states" label="States" />
+        <Tab value="cities" label="Cities" />
         <Tab value="areas" label="Areas" />
         <Tab value="banner" label="Banner" />
         <Tab value="catalog" label="Catalog" />
@@ -68,6 +73,8 @@ export function SettingsPage() {
           <CreditRulesSettings />
         </div>
       ) : null}
+      {tab === "states" ? <StateSettings /> : null}
+      {tab === "cities" ? <CitySettings /> : null}
       {tab === "areas" ? <AreaSettings /> : null}
       {tab === "banner" ? <BannerSettings /> : null}
       {tab === "catalog" ? <CategorySettings /> : null}

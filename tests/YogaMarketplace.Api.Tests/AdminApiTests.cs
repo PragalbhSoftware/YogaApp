@@ -43,6 +43,8 @@ public class AdminApiTests : IClassFixture<YogaApiFactory>
             "/api/admin/payouts",
             "/api/admin/reports/summary",
             "/api/admin/areas",
+            "/api/admin/states",
+            "/api/admin/cities",
             "/api/admin/settings",
             "/api/admin/settings/audit"
         })
@@ -425,27 +427,25 @@ public class AdminApiTests : IClassFixture<YogaApiFactory>
         var tooLong = await admin.Client.PostAsJsonAsync("/api/admin/areas", new { name = "Colaba", city = new string('a', 41) });
         Assert.Equal(HttpStatusCode.BadRequest, tooLong.StatusCode);
 
-        var created = await PostAsync<AreaAdminBody>(admin.Client, "/api/admin/areas", new { name = "Colaba", city = "Mumbai" });
+        var state = await PostAsync<PlaceBody>(admin.Client, "/api/admin/states", new { name = "Region Alpha", code = "ra" });
+        var mumbai = await PostAsync<PlaceBody>(admin.Client, "/api/admin/cities", new { name = "Mumbai", stateId = state.Id });
+        var created = await PostAsync<AreaAdminBody>(admin.Client, "/api/admin/areas", new { name = "Colaba", city = "Mumbai", stateId = state.Id });
         Assert.Equal("Mumbai", created.City);
+        Assert.Equal(mumbai.Name, created.City);
         Assert.True(created.IsActive);
         var publicAreas = await _factory.CreateClient().GetFromJsonAsync<List<AreaBody>>("/api/areas", Json);
         Assert.Contains(publicAreas!, area => area.Name == "Colaba");
 
-        var duplicate = await admin.Client.PostAsJsonAsync("/api/admin/areas", new { name = " colaba ", city = "mumbai" });
+        var duplicate = await admin.Client.PostAsJsonAsync("/api/admin/areas", new { name = " colaba ", city = "mumbai", stateId = state.Id });
         Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
-        var newCity = await admin.Client.PostAsJsonAsync("/api/admin/areas", new { name = "Kothrud", city = "Pune" });
+        var newCity = await admin.Client.PostAsJsonAsync("/api/admin/areas", new { name = "Kothrud", city = "Pune", stateId = state.Id });
         Assert.Equal(HttpStatusCode.BadRequest, newCity.StatusCode);
-        Assert.Contains("existing cities", (await newCity.Content.ReadFromJsonAsync<ErrorBody>(Json))!.Error, StringComparison.Ordinal);
-        using (var scope = _factory.Services.CreateScope())
-        {
-            var db = scope.ServiceProvider.GetRequiredService<YogaDbContext>();
-            db.Areas.Add(CatalogRules.CreateArea("Pune", "Baner"));
-            await db.SaveChangesAsync();
-        }
+        Assert.Contains("active city", (await newCity.Content.ReadFromJsonAsync<ErrorBody>(Json))!.Error, StringComparison.OrdinalIgnoreCase);
 
-        var otherCity = await PostAsync<AreaAdminBody>(admin.Client, "/api/admin/areas", new { name = "Kothrud", city = "  pune " });
+        await PostAsync<PlaceBody>(admin.Client, "/api/admin/cities", new { name = "Pune", stateId = state.Id });
+        var otherCity = await PostAsync<AreaAdminBody>(admin.Client, "/api/admin/areas", new { name = "Kothrud", city = "  pune ", stateId = state.Id });
         Assert.Equal("Pune", otherCity.City);
-        var sameNameOtherCity = await PostAsync<AreaAdminBody>(admin.Client, "/api/admin/areas", new { name = "Colaba", city = "Pune" });
+        var sameNameOtherCity = await PostAsync<AreaAdminBody>(admin.Client, "/api/admin/areas", new { name = "Colaba", city = "Pune", stateId = state.Id });
         Assert.Equal("Pune", sameNameOtherCity.City);
         var badCity = await admin.Client.PostAsJsonAsync("/api/admin/areas", new { name = "Nowhere", city = "P1" });
         Assert.Equal(HttpStatusCode.BadRequest, badCity.StatusCode);
@@ -616,6 +616,7 @@ public class AdminApiTests : IClassFixture<YogaApiFactory>
     private sealed record PayoutTotals(int Count, decimal Gross, decimal Net);
     private sealed record ReportBody(List<StatusCount> BookingsByStatus, decimal GmvPaid, string Currency, PayoutTotals PendingPayouts);
     private sealed record AreaAdminBody(Guid Id, string City, string Name, bool IsActive);
+    private sealed record PlaceBody(Guid Id, string Name, string Code, bool IsActive, int DisplayOrder, string? Slug, Guid StateId);
     private sealed record CategoryBody(Guid Id, string Name, string Slug);
     private sealed record CategoryAdminBody(Guid Id, string Name, string Slug, bool IsActive);
     private sealed record PolicyBody(

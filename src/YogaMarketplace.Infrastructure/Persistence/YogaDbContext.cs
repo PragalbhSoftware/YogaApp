@@ -13,6 +13,8 @@ public class YogaDbContext : DbContext
     }
 
     public DbSet<Category> Categories => Set<Category>();
+    public DbSet<State> States => Set<State>();
+    public DbSet<City> Cities => Set<City>();
     public DbSet<Area> Areas => Set<Area>();
     public DbSet<User> Users => Set<User>();
     public DbSet<UserBlockEvent> UserBlockEvents => Set<UserBlockEvent>();

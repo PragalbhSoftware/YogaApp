@@ -64,6 +64,10 @@ public class ResendOtpRequest
 
 public record AreaResponse(Guid Id, string City, string Name);
 
+public record StateResponse(Guid Id, string Name, string Code, int DisplayOrder);
+
+public record CityResponse(Guid Id, string Name, Guid StateId, string Slug, int DisplayOrder);
+
 public record CategoryResponse(Guid Id, string Name, string Slug);
 
 /// <summary>Terms for new bookings. Existing bookings keep the terms they were made with.</summary>
