@@ -44,4 +44,16 @@ describe("CustomerLayout navigation", () => {
       expect(labels).toEqual(["Home", "Bookings", "Profile"]);
     }
   });
+
+  it("shows the footer with packs and the three policy pages", () => {
+    renderLayout();
+
+    const footer = within(screen.getByRole("navigation", { name: "More" }));
+    expect(footer.getAllByRole("link").map((link) => link.getAttribute("href"))).toEqual([
+      routes.packs,
+      routes.refundPolicy,
+      routes.terms,
+      routes.privacy,
+    ]);
+  });
 });

@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@mui/material";
@@ -21,6 +22,7 @@ type HomeVisitFormProps = {
   cancelLabel?: string;
   onCancel?: () => void;
   onSubmit: (values: HomeVisitValues, form: HomeVisitFormValues) => void;
+  onValuesChange?: (values: HomeVisitFormValues) => void;
 };
 
 export function HomeVisitForm({
@@ -33,11 +35,20 @@ export function HomeVisitForm({
   cancelLabel = "Use saved address",
   onCancel,
   onSubmit,
+  onValuesChange,
 }: HomeVisitFormProps) {
   const form = useForm<HomeVisitFormValues>({
     resolver: zodResolver(homeVisitFormSchema),
     defaultValues,
   });
+
+  useEffect(() => {
+    if (!onValuesChange) return;
+    return form.subscribe({
+      formState: { values: true },
+      callback: ({ values }) => onValuesChange({ ...emptyHomeVisitForm, ...values }),
+    });
+  }, [form, onValuesChange]);
 
   return (
     <form

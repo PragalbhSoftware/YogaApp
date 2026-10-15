@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Button } from "@mui/material";
 import { ArrowLeft } from "lucide-react";
@@ -36,6 +36,17 @@ import type { VisitAddress } from "@/features/profile/types";
 import { toUserMessage } from "@/services/http/api-error";
 import { slotHasEnded, addMonths, endOfMonth, kolkataToday, startOfMonth } from "@/utils/clock";
 import { toastError } from "@/services/http/toast-error";
+import { emptyBookingDraft, useBookingDraftStore } from "@/stores/booking-draft-store";
+
+function readTrialChoice(value: string | null): boolean | null {
+  if (value === "1") return true;
+  if (value === "0") return false;
+  return null;
+}
+
+function readPayChoice(value: string | null): PayMethod | null {
+  return value === "credit" || value === "pay" ? value : null;
+}
 
 function readMode(value: string | null, allowed: SessionMode[]): SessionMode {
   if (value && allowed.includes(value as SessionMode)) return value as SessionMode;
@@ -47,7 +58,7 @@ export function BookPage() {
   usePageTitle("Book a session");
   const navigate = useNavigate();
   const { providerId, slotId } = useParams();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const instructor = useInstructor(providerId);
   const allowed = instructor.data ? offeredSessionModes(instructor.data.modes) : [...sessionModes];
   const mode = readMode(searchParams.get("mode"), allowed);
@@ -60,16 +71,37 @@ export function BookPage() {
   const saveAddress = useSaveVisitAddress();
   const [booking, setBooking] = useState<BookingRecord | null>(null);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
-  const [changingAddress, setChangingAddress] = useState(false);
+  const draftKey = slotId ?? "";
+  const draft = useBookingDraftStore((state) => state.drafts[draftKey]) ?? emptyBookingDraft;
+  const saveDraft = useBookingDraftStore((state) => state.saveDraft);
+  const clearDraft = useBookingDraftStore((state) => state.clearDraft);
+  const changingAddress = draft.changingAddress;
+  const setChangingAddress = (changing: boolean) => saveDraft(draftKey, { changingAddress: changing, address: null });
+  const saveDraftAddress = useCallback(
+    (address: HomeVisitFormValues) => saveDraft(draftKey, { address }),
+    [saveDraft, draftKey],
+  );
+
+  /** Kept in the URL, replacing the history entry, so a trip to a policy page and back keeps the choice. */
+  function setChoice(name: "trial" | "pay", value: string) {
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        next.set(name, value);
+        return next;
+      },
+      { replace: true },
+    );
+  }
 
   const slot = (slotsQuery.data?.slots ?? []).find((item) => item.id === slotId);
   const offersTrial = Boolean(instructor.data?.trial) && areaOpen;
   const trialStatus = useTrialStatus(providerId, offersTrial);
   const trialAvailable = offersTrial && trialStatus.data?.offered === true && !trialStatus.data.used;
-  const [trialChoice, setTrialChoice] = useState<boolean | null>(null);
+  const trialChoice = readTrialChoice(searchParams.get("trial"));
   const bookTrial = trialAvailable && (trialChoice ?? true);
   const quote = useBookingQuote(slotId, bookTrial, Boolean(slot) && !booking && !trialStatus.isLoading);
-  const [payChoice, setPayChoice] = useState<PayMethod | null>(null);
+  const payChoice = readPayChoice(searchParams.get("pay"));
   const method = resolvePayMethod(quote.data?.credit, payChoice);
   const savedAddress = profile.data?.visitAddress ?? null;
   const { checkout: pay, pending } = useBookCheckout({
@@ -77,9 +109,12 @@ export function BookPage() {
     trial: bookTrial,
     method,
     quote: quote.data,
-    onBooked: setBooking,
+    onBooked: (booked) => {
+      clearDraft(draftKey);
+      setBooking(booked);
+    },
     onLostCredit: () => {
-      setPayChoice("pay");
+      setChoice("pay", "pay");
       void quote.refetch();
     },
     onCheckoutOpenChange: setCheckoutOpen,
@@ -244,7 +279,7 @@ export function BookPage() {
               trialPrice={instructor.data.trial.price}
               useTrial={bookTrial}
               disabled={busy}
-              onChange={setTrialChoice}
+              onChange={(useTrial) => setChoice("trial", useTrial ? "1" : "0")}
             />
           ) : null}
           {offersTrial && trialStatus.data?.used ? (
@@ -254,17 +289,25 @@ export function BookPage() {
           ) : null}
 
           {quote.data && showCreditChoice(quote.data.credit) ? (
-            <PaymentChoice quote={quote.data} method={method} disabled={busy} onChange={setPayChoice} />
+            <PaymentChoice
+              quote={quote.data}
+              method={method}
+              disabled={busy}
+              onChange={(next) => setChoice("pay", next)}
+            />
           ) : null}
           {!bookTrial ? <CreditsPanel /> : null}
 
           {mode === "Home" ? (
             <HomeCheckout
+              key={draftKey}
               profileLoading={profile.isLoading}
               profileError={profile.isError}
               profileMessage={profile.error ? toUserMessage(profile.error) : ""}
               onRetryProfile={() => void profile.refetch()}
               savedAddress={savedAddress}
+              draftAddress={draft.address}
+              onDraftAddress={saveDraftAddress}
               changingAddress={changingAddress}
               busy={busy}
               payLabel={payLabel}
@@ -292,6 +335,8 @@ type HomeCheckoutProps = {
   profileMessage: string;
   onRetryProfile: () => void;
   savedAddress: VisitAddress | null;
+  draftAddress: HomeVisitFormValues | null;
+  onDraftAddress: (address: HomeVisitFormValues) => void;
   changingAddress: boolean;
   busy: boolean;
   payLabel: string;
@@ -309,6 +354,8 @@ function HomeCheckout({
   profileMessage,
   onRetryProfile,
   savedAddress,
+  draftAddress,
+  onDraftAddress,
   changingAddress,
   busy,
   payLabel,
@@ -347,7 +394,8 @@ function HomeCheckout({
     <HomeVisitForm
       key={savedAddress ? `${savedAddress.line1}|${savedAddress.pin}|${savedAddress.landmark}` : "new"}
       busy={busy}
-      defaultValues={savedAddress ? toHomeVisitFormValues(savedAddress) : undefined}
+      defaultValues={draftAddress ?? (savedAddress ? toHomeVisitFormValues(savedAddress) : undefined)}
+      onValuesChange={onDraftAddress}
       description={
         savedAddress
           ? "Update the visit address. This becomes your default for the next booking."
