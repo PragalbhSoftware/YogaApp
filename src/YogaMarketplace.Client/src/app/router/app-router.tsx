@@ -3,6 +3,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { CircularProgress } from "@mui/material";
 import { AppErrorBoundary } from "@/app/router/app-error-boundary";
 import { NotFoundPage } from "@/app/router/not-found-page";
+import { ScrollToTop } from "@/app/router/scroll-to-top";
 import { AdminLayout } from "@/app/layouts/admin-layout";
 import { AuthLayout } from "@/app/layouts/auth-layout";
 import { CustomerLayout } from "@/app/layouts/customer-layout";
@@ -128,6 +129,7 @@ export function RouteFallback() {
 export function AppRouter() {
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <AppErrorBoundary>
         <Suspense fallback={<RouteFallback />}>
           <Routes>
