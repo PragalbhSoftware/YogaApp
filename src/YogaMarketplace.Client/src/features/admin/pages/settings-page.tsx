@@ -1,11 +1,9 @@
-import { Tab, Tabs } from "@mui/material";
-import { useSearchParams } from "react-router-dom";
+import type { ComponentType } from "react";
 import { AdminPage } from "@/features/admin/components/admin-page";
 import { AreaSettings } from "@/features/admin/components/area-settings";
-import { CitySettings } from "@/features/admin/components/city-settings";
-import { StateSettings } from "@/features/admin/components/state-settings";
 import { BannerSettings } from "@/features/admin/components/banner-settings";
 import { CategorySettings } from "@/features/admin/components/category-settings";
+import { CitySettings } from "@/features/admin/components/city-settings";
 import { CreditRulesSettings } from "@/features/admin/components/credit-rules-settings";
 import { ErrorAlertSettings } from "@/features/admin/components/error-alert-settings";
 import { FeeSettings } from "@/features/admin/components/fee-settings";
@@ -15,82 +13,102 @@ import { PageSettings } from "@/features/admin/components/page-settings";
 import { PrivacySettings } from "@/features/admin/components/privacy-settings";
 import { ReconciliationSettings } from "@/features/admin/components/reconciliation-settings";
 import { SignInLimitSettings } from "@/features/admin/components/sign-in-limit-settings";
+import { StateSettings } from "@/features/admin/components/state-settings";
 
-const tabs = ["earnings", "packs", "states", "cities", "areas", "banner", "catalog", "pages", "alerts", "sign-in"] as const;
-type SettingsTab = (typeof tabs)[number];
-
-function readTab(value: string | null): SettingsTab {
-  return tabs.includes(value as SettingsTab) ? (value as SettingsTab) : "earnings";
+function section(kicker: string, title: string, lead: string, Body: ComponentType) {
+  return function AdminSectionPage() {
+    return (
+      <AdminPage kicker={kicker} title={title} lead={lead}>
+        <Body />
+      </AdminPage>
+    );
+  };
 }
 
-export function SettingsPage() {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const tab = readTab(searchParams.get("tab"));
-
+function AlertsBody() {
   return (
-    <AdminPage
-      kicker="Owner"
-      title="Settings"
-      lead="Fees and payouts, session packs and credit rules, states, cities, the neighbourhoods customers can pick, the home banner, the yoga label on browse, the policy pages, error alerts, booking emails and sign-in code limits."
-    >
-      <Tabs
-        value={tab}
-        onChange={(_, next: SettingsTab) => {
-          const params = new URLSearchParams(searchParams);
-          params.set("tab", next);
-          params.delete("page");
-          setSearchParams(params, { replace: true });
-        }}
-        aria-label="Settings"
-        variant="scrollable"
-        allowScrollButtonsMobile
-        sx={{
-          minHeight: 48,
-          "& .MuiTab-root": { fontFamily: "inherit", fontWeight: 600, textTransform: "none" },
-        }}
-      >
-        <Tab value="earnings" label="Fees" />
-        <Tab value="packs" label="Packs" />
-        <Tab value="states" label="States" />
-        <Tab value="cities" label="Cities" />
-        <Tab value="areas" label="Areas" />
-        <Tab value="banner" label="Banner" />
-        <Tab value="catalog" label="Catalog" />
-        <Tab value="pages" label="Pages" />
-        <Tab value="alerts" label="Alerts" />
-        <Tab value="sign-in" label="Sign-in" />
-      </Tabs>
-
-      {tab === "earnings" ? (
-        <div className="space-y-8">
-          <FeeSettings />
-          <ReconciliationSettings />
-        </div>
-      ) : null}
-      {tab === "packs" ? (
-        <div className="space-y-8">
-          <PackSettings />
-          <CreditRulesSettings />
-        </div>
-      ) : null}
-      {tab === "states" ? <StateSettings /> : null}
-      {tab === "cities" ? <CitySettings /> : null}
-      {tab === "areas" ? <AreaSettings /> : null}
-      {tab === "banner" ? <BannerSettings /> : null}
-      {tab === "catalog" ? <CategorySettings /> : null}
-      {tab === "pages" ? (
-        <div className="space-y-8">
-          <PageSettings />
-          <PrivacySettings />
-        </div>
-      ) : null}
-      {tab === "alerts" ? (
-        <div className="space-y-8">
-          <ErrorAlertSettings />
-          <NotificationSettings />
-        </div>
-      ) : null}
-      {tab === "sign-in" ? <SignInLimitSettings /> : null}
-    </AdminPage>
+    <div className="space-y-8">
+      <ErrorAlertSettings />
+      <NotificationSettings />
+    </div>
   );
 }
+
+export const StatesPage = section(
+  "Locations",
+  "States",
+  "Add a state before its cities. A state stays on until every city in it is turned off.",
+  StateSettings,
+);
+export const CitiesPage = section(
+  "Locations",
+  "Cities",
+  "Every city belongs to a state. Pick a state to see its cities, and to add another.",
+  CitySettings,
+);
+export const AreasPage = section(
+  "Locations",
+  "Areas",
+  "Pick a state, then one of its cities, then add a neighbourhood. Hide a neighbourhood to take it out of browse. Existing bookings there carry on.",
+  AreaSettings,
+);
+export const CategoriesPage = section(
+  "Catalog",
+  "Categories",
+  "Customers see this name. The slug stays yoga so public browse does not break.",
+  CategorySettings,
+);
+export const PacksPage = section(
+  "Catalog",
+  "Session packs",
+  "Customers buy a pack once and book with credits. Changes apply to new purchases only. Packs can be turned off but never deleted, so past purchases keep their history.",
+  PackSettings,
+);
+export const CreditRulesPage = section(
+  "Catalog",
+  "Credit rules",
+  "Applies to new purchases only. Each purchase keeps the rules in force when it was bought.",
+  CreditRulesSettings,
+);
+export const PolicyPagesPage = section(
+  "Content",
+  "Policy pages",
+  "Refund policy, Terms and Privacy are linked in the site footer. Changes go live as soon as you save.",
+  PageSettings,
+);
+export const BannerPage = section(
+  "Content",
+  "Home banner",
+  "The headline customers see on the home page. Leave a field empty to show the default text.",
+  BannerSettings,
+);
+export const ConsentPage = section(
+  "Content",
+  "Consent and data",
+  "Raise the policy version after an important change to Terms or Privacy, and every user is asked once to accept again when they next sign in or their session renews.",
+  PrivacySettings,
+);
+export const FeesPage = section(
+  "Finance",
+  "Fees and payouts",
+  "Changes apply to bookings made after you save. Existing bookings keep the fees they were booked with.",
+  FeeSettings,
+);
+export const ReconciliationSettingsPage = section(
+  "Finance",
+  "Reconciliation settings",
+  "Once a day we compare Razorpay with our records for the previous day and list anything that differs under Reconciliation. Nothing is changed automatically.",
+  ReconciliationSettings,
+);
+export const SignInPage = section(
+  "Settings",
+  "Sign-in limits",
+  "Stops one phone number from being flooded with codes or guessed at. Codes and wrong tries are counted over the lock time; reaching either limit locks that number for the lock time.",
+  SignInLimitSettings,
+);
+export const AlertsPage = section(
+  "Settings",
+  "Alerts",
+  "Error emails, and emails to customers and instructors when a booking is requested, confirmed, cancelled or refunded.",
+  AlertsBody,
+);

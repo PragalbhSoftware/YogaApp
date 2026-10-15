@@ -43,7 +43,7 @@ function ReconciliationForm({ settings }: { settings: AdminSettings }) {
     <div className="space-y-5">
       <SettingsIntro
         title="Payment reconciliation"
-        lead="Once a day we compare Razorpay with our records for the previous day and list anything that differs under Transactions. Nothing is changed automatically."
+        lead="Once a day we compare Razorpay with our records for the previous day and list anything that differs under Reconciliation. Nothing is changed automatically."
       />
       <SettingsCard>
         <form
