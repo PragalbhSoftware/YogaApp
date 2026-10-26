@@ -243,8 +243,8 @@ public class ReconciliationTests
         var job = Assert.Single(await host.JobsAsync(BackgroundJobStatus.Pending));
         var expected = JobSchedule.Daily(new TimeOnly(7, 30)).NextRunAfter(now);
         Assert.Equal(expected, job.RunAt);
-        Assert.Equal(TimeOnly.FromDateTime(TimeZoneInfo.ConvertTime(job.RunAt, MumbaiClock.Zone).DateTime), new TimeOnly(7, 30));
-        var marketDay = MumbaiClock.Today(job.RunAt).AddDays(-1);
+        Assert.Equal(TimeOnly.FromDateTime(TimeZoneInfo.ConvertTime(job.RunAt, MarketClock.Zone).DateTime), new TimeOnly(7, 30));
+        var marketDay = MarketClock.Today(job.RunAt).AddDays(-1);
         Assert.Equal(marketDay.ToString("yyyy-MM-dd"), job.Payload);
         host.Gateway.Payments.Add(Captured("pay_scheduled_orphan", 100m));
 
@@ -263,11 +263,11 @@ public class ReconciliationTests
     {
         var day = new DateOnly(2026, 3, 1);
         var at = new TimeOnly(6, 0);
-        var before = MumbaiClock.SessionStart(day, new TimeOnly(5, 59));
-        var after = MumbaiClock.SessionStart(day, new TimeOnly(6, 0));
+        var before = MarketClock.SessionStart(day, new TimeOnly(5, 59));
+        var after = MarketClock.SessionStart(day, new TimeOnly(6, 0));
 
-        Assert.Equal(MumbaiClock.SessionStart(day, at), JobSchedule.Daily(at).NextRunAfter(before));
-        Assert.Equal(MumbaiClock.SessionStart(day.AddDays(1), at), JobSchedule.Daily(at).NextRunAfter(after));
+        Assert.Equal(MarketClock.SessionStart(day, at), JobSchedule.Daily(at).NextRunAfter(before));
+        Assert.Equal(MarketClock.SessionStart(day.AddDays(1), at), JobSchedule.Daily(at).NextRunAfter(after));
     }
 
     [Fact]
@@ -461,7 +461,7 @@ public class ReconciliationTests
     {
         await using var host = new Host();
         var nextDay = Day.AddDays(1);
-        var savedAt = MumbaiClock.SessionStart(nextDay, new TimeOnly(0, 0, 5));
+        var savedAt = MarketClock.SessionStart(nextDay, new TimeOnly(0, 0, 5));
         await host.SeedPaymentAsync("pay_midnight", 500m, PaymentStatus.Paid, savedAt);
         // Razorpay lists it on the day it was captured (23:59:59); the next day only a direct fetch finds it.
         host.Gateway.Payments.Add(Captured("pay_midnight", 500m));
@@ -645,7 +645,7 @@ public class ReconciliationTests
                     Id = Guid.NewGuid(),
                     ProviderId = SeedIds.AnanyaProviderId,
                     Mode = SessionMode.Online,
-                    Date = MumbaiClock.Today(DateTimeOffset.UtcNow).AddDays(200 + index),
+                    Date = MarketClock.Today(DateTimeOffset.UtcNow).AddDays(200 + index),
                     StartTime = new TimeOnly(6, 0),
                     EndTime = new TimeOnly(7, 0)
                 };

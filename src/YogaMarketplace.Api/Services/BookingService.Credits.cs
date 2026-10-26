@@ -257,5 +257,5 @@ public partial class BookingService
             ? rate
             : throw new DomainException("This session has no price.");
 
-    private static DateTimeOffset SessionStartOf(AvailabilitySlot slot) => MumbaiClock.SessionStart(slot.Date, slot.StartTime);
+    private static DateTimeOffset SessionStartOf(AvailabilitySlot slot) => MarketClock.SessionStart(slot.Date, slot.StartTime);
 }

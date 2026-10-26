@@ -1,4 +1,5 @@
 using System.Net;
+using Microsoft.EntityFrameworkCore;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -47,6 +48,7 @@ public class StateCityApiTests : IClassFixture<YogaApiFactory>
             Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync("/api/admin/cities", new { name = Word(), stateId = Guid.NewGuid() })).StatusCode);
             var import = await client.PostAsync("/api/admin/states/import-india", null);
             Assert.Equal(HttpStatusCode.Forbidden, import.StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync("/api/admin/areas", new { name = "Dock", cityId = Guid.NewGuid(), pincode = "560001" })).StatusCode);
             Assert.Contains("Admin access required", (await import.Content.ReadFromJsonAsync<ErrorBody>(Json))!.Error, StringComparison.Ordinal);
         }
     }
@@ -71,17 +73,55 @@ public class StateCityApiTests : IClassFixture<YogaApiFactory>
     {
         var admin = await SignInAsync();
         var state = await PostAsync<StateBody>(admin, "/api/admin/states", new { name = Word(), code = Code() });
-        var quietCity = await PostAsync<CityBody>(admin, "/api/admin/cities", new { name = "Harbor", stateId = state.Id });
+        var quietCity = await PostAsync<CityBody>(admin, "/api/admin/cities", new { name = "Docktown", stateId = state.Id });
         await PatchAsync<CityBody>(admin, $"/api/admin/cities/{quietCity.Id}", new { isActive = false });
 
-        var cityOff = await admin.PostAsJsonAsync("/api/admin/areas", new { name = "Dockside", city = "Harbor", stateId = state.Id });
+        var cityOff = await admin.PostAsJsonAsync("/api/admin/areas", new { name = "Dockside", cityId = quietCity.Id, pincode = "560001" });
         Assert.Equal(HttpStatusCode.BadRequest, cityOff.StatusCode);
         Assert.Contains("active city", (await cityOff.Content.ReadFromJsonAsync<ErrorBody>(Json))!.Error, StringComparison.OrdinalIgnoreCase);
 
-        await PatchAsync<StateBody>(admin, $"/api/admin/states/{state.Id}", new { isActive = false });
-        var stateOff = await admin.PostAsJsonAsync("/api/admin/areas", new { name = "Dockside", city = "Harbor", stateId = state.Id });
+        await PatchAsync<CityBody>(admin, $"/api/admin/cities/{quietCity.Id}", new { isActive = true });
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<YogaDbContext>();
+            var row = await db.States.SingleAsync(s => s.Id == state.Id);
+            row.IsActive = false;
+            await db.SaveChangesAsync();
+        }
+        var stateOff = await admin.PostAsJsonAsync("/api/admin/areas", new { name = "Dockside", cityId = quietCity.Id, pincode = "560001" });
         Assert.Equal(HttpStatusCode.BadRequest, stateOff.StatusCode);
         Assert.Contains("active state", (await stateOff.Content.ReadFromJsonAsync<ErrorBody>(Json))!.Error, StringComparison.OrdinalIgnoreCase);
+
+        var badPin = await admin.PostAsJsonAsync("/api/admin/areas", new { name = "Dockside", cityId = quietCity.Id, pincode = "12" });
+        Assert.Equal(HttpStatusCode.BadRequest, badPin.StatusCode);
+    }
+
+    [Fact]
+    public async Task Browse_hides_home_and_studio_in_an_inactive_city_and_keeps_online()
+    {
+        var admin = await SignInAsync();
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<YogaDbContext>();
+        var cityId = await db.Areas.Where(a => a.Id == SeedIds.AreaBandra).Select(a => a.CityId).SingleAsync();
+        var city = await db.Cities.SingleAsync(c => c.Id == cityId);
+        try
+        {
+            await PatchAsync<CityBody>(admin, $"/api/admin/cities/{city.Id}", new { isActive = false });
+            var anon = _factory.CreateClient();
+            var home = await anon.GetFromJsonAsync<List<ProviderBody>>("/api/providers?mode=Home", Json);
+            var studio = await anon.GetFromJsonAsync<List<ProviderBody>>("/api/providers?mode=Studio", Json);
+            var online = await anon.GetFromJsonAsync<List<ProviderBody>>("/api/providers?mode=Online", Json);
+            Assert.DoesNotContain(home!, row => row.Id == SeedIds.AnanyaProviderId);
+            Assert.DoesNotContain(studio!, row => row.Id == SeedIds.AnanyaProviderId);
+            Assert.Contains(online!, row => row.Id == SeedIds.AnanyaProviderId);
+
+            var adminList = await admin.GetFromJsonAsync<List<ProviderBody>>("/api/admin/providers?status=all", Json);
+            Assert.Contains(adminList!, row => row.Id == SeedIds.AnanyaProviderId);
+        }
+        finally
+        {
+            await PatchAsync<CityBody>(admin, $"/api/admin/cities/{city.Id}", new { isActive = true });
+        }
     }
 
     [Fact]
@@ -244,6 +284,28 @@ public class StateCityApiTests : IClassFixture<YogaApiFactory>
         Assert.Equal(new[] { harbor.Id }, keptOpen!.Select(row => row.Id).ToArray());
     }
 
+    [Fact]
+    public async Task City_with_an_area_can_be_renamed_and_turned_off()
+    {
+        var admin = await SignInAsync();
+        var state = await PostAsync<StateBody>(admin, "/api/admin/states", new { name = Word(), code = Code() });
+        var city = await PostAsync<CityBody>(admin, "/api/admin/cities", new { name = Word(), stateId = state.Id });
+        var area = await PostAsync<AreaBody>(admin, "/api/admin/areas", new { name = "Dockside", cityId = city.Id, pincode = "560001" });
+
+        var nextName = city.Name + " West";
+        var renamed = await PatchAsync<CityBody>(admin, $"/api/admin/cities/{city.Id}", new { name = nextName });
+        Assert.Equal(nextName, renamed.Name);
+        var areas = await admin.GetFromJsonAsync<List<AreaBody>>("/api/admin/areas", Json);
+        var row = areas!.Single(item => item.Id == area.Id);
+        Assert.Equal(city.Id, row.CityId);
+        Assert.Equal(nextName, row.CityName);
+
+        var off = await PatchAsync<CityBody>(admin, $"/api/admin/cities/{city.Id}", new { isActive = false });
+        Assert.False(off.IsActive);
+        var after = await admin.GetFromJsonAsync<List<AreaBody>>("/api/admin/areas", Json);
+        Assert.Contains(after!, item => item.Id == area.Id && item.CityId == city.Id);
+    }
+
     private LocationFileBody LocationFile()
     {
         var root = _factory.Services.GetRequiredService<Microsoft.AspNetCore.Hosting.IWebHostEnvironment>().ContentRootPath;
@@ -312,12 +374,14 @@ public class StateCityApiTests : IClassFixture<YogaApiFactory>
         return JsonSerializer.Deserialize<T>(payload, Json)!;
     }
 
+    private sealed record ProviderBody(Guid Id);
     private sealed record ErrorBody(string Error);
     private sealed record OtpBody(Guid ChallengeId, DateTimeOffset ExpiresAt, string? DevCode);
     private sealed record UserAuthBody(string Role);
     private sealed record AuthBody(string Token, UserAuthBody User);
     private sealed record StateBody(Guid Id, string Name, string Code, bool IsActive, int DisplayOrder);
     private sealed record CityBody(Guid Id, string Name, Guid StateId, string Slug, bool IsActive, int DisplayOrder);
+    private sealed record AreaBody(Guid Id, Guid CityId, string CityName, string Name);
     private sealed record PagedBody<T>(List<T> Items, int Total, int Page, int PageSize);
     private sealed record ImportBody(int StatesAdded, int StatesSkipped, int CitiesAdded, int CitiesSkipped);
     private sealed record LocationStateBody(string Name, string Code, List<string> Cities);

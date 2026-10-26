@@ -11,8 +11,12 @@ public class Category
 public class Area
 {
     public Guid Id { get; set; }
-    public string City { get; set; } = "";
+    public Guid CityId { get; set; }
+    public City? City { get; set; }
     public string Name { get; set; } = "";
+    public string Pincode { get; set; } = "";
+    public decimal? Latitude { get; set; }
+    public decimal? Longitude { get; set; }
     public bool IsActive { get; set; } = true;
 }
 
@@ -306,6 +310,7 @@ public class PlatformSettings
 {
     public Guid Id { get; set; }
     public string Currency { get; set; } = "INR";
+    public string TimeZoneId { get; set; } = MarketClock.DefaultTimeZoneId;
     public decimal CommissionPercent { get; set; }
     public decimal ConvenienceFee { get; set; }
     public int CancelFreeWindowHours { get; set; }

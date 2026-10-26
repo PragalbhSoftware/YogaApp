@@ -1,9 +1,54 @@
+export const defaultMarketTimeZone = "Asia/Kolkata";
+
+let zoneId = defaultMarketTimeZone;
+
+export function setMarketTimeZone(id: string) {
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: id });
+    zoneId = id;
+  } catch {
+    zoneId = defaultMarketTimeZone;
+  }
+}
+
+export async function loadMarketTimeZone(signal?: AbortSignal) {
+  try {
+    const response = await fetch("/api/config", { signal });
+    if (!response.ok) return;
+    const body = (await response.json()) as { timeZoneId?: string };
+    if (body.timeZoneId) setMarketTimeZone(body.timeZoneId);
+  } catch {
+    // The default zone stays in place when config is unreachable or the id is unusable.
+  }
+}
+
+export function marketTimeZone() {
+  return zoneId;
+}
+
+function wallTime(date: string, time: string) {
+  const guess = new Date(`${date}T${time}:00Z`);
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: zoneId,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(guess);
+  const pick = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((part) => part.type === type)?.value);
+  const shown = Date.UTC(pick("year"), pick("month") - 1, pick("day"), pick("hour"), pick("minute"), pick("second"));
+  return new Date(guess.getTime() - (shown - guess.getTime()));
+}
+
 export function kolkataToday() {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+  return new Intl.DateTimeFormat("en-CA", { timeZone: zoneId }).format(new Date());
 }
 
 export function formatSlotDay(date: string) {
-  const value = new Date(`${date}T12:00:00+05:30`);
+  const value = wallTime(date, "12:00");
   return new Intl.DateTimeFormat("en-IN", {
     weekday: "long",
     day: "numeric",
@@ -12,15 +57,15 @@ export function formatSlotDay(date: string) {
 }
 
 export function formatDateRange(from: string, to: string) {
-  const start = new Date(`${from}T12:00:00+05:30`);
-  const end = new Date(`${to}T12:00:00+05:30`);
+  const start = wallTime(from, "12:00");
+  const end = wallTime(to, "12:00");
   const opts: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", year: "numeric" };
   return `${new Intl.DateTimeFormat("en-IN", opts).format(start)} – ${new Intl.DateTimeFormat("en-IN", opts).format(end)}`;
 }
 
 export function formatWhenKolkata(value: string) {
   return new Intl.DateTimeFormat("en-IN", {
-    timeZone: "Asia/Kolkata",
+    timeZone: zoneId,
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -31,7 +76,7 @@ export function formatWhenKolkata(value: string) {
 
 export function formatDayKolkata(value: string) {
   return new Intl.DateTimeFormat("en-IN", {
-    timeZone: "Asia/Kolkata",
+    timeZone: zoneId,
     day: "numeric",
     month: "long",
     year: "numeric",
@@ -104,7 +149,7 @@ export function slotHasStarted(date: string, start: string) {
 function isAtOrAfterKolkata(date: string, clock: string) {
   const time = toHHmm(clock);
   if (!/^\d{2}:\d{2}$/.test(time)) return false;
-  return Date.now() >= new Date(`${date}T${time}:00+05:30`).getTime();
+  return Date.now() >= wallTime(date, time).getTime();
 }
 
 export function addIsoDays(date: string, days: number) {
@@ -124,20 +169,20 @@ export function enumerateIsoDates(from: string, to: string) {
 export function formatCalendarWeekday(date: string) {
   return new Intl.DateTimeFormat("en-IN", {
     weekday: "short",
-    timeZone: "Asia/Kolkata",
-  }).format(new Date(`${date}T12:00:00+05:30`));
+    timeZone: zoneId,
+  }).format(wallTime(date, "12:00"));
 }
 
 export function formatCalendarDay(date: string) {
   return new Intl.DateTimeFormat("en-IN", {
     day: "numeric",
-    timeZone: "Asia/Kolkata",
-  }).format(new Date(`${date}T12:00:00+05:30`));
+    timeZone: zoneId,
+  }).format(wallTime(date, "12:00"));
 }
 
 export function formatCalendarSpan(from: string, to: string) {
-  const start = new Date(`${from}T12:00:00+05:30`);
-  const end = new Date(`${to}T12:00:00+05:30`);
+  const start = wallTime(from, "12:00");
+  const end = wallTime(to, "12:00");
   const opts: Intl.DateTimeFormatOptions = { day: "numeric", month: "short" };
   return `${new Intl.DateTimeFormat("en-IN", opts).format(start)} – ${new Intl.DateTimeFormat("en-IN", opts).format(end)}`;
 }
@@ -164,8 +209,8 @@ export function formatCalendarMonth(date: string) {
   return new Intl.DateTimeFormat("en-IN", {
     month: "long",
     year: "numeric",
-    timeZone: "Asia/Kolkata",
-  }).format(new Date(`${startOfMonth(date)}T12:00:00+05:30`));
+    timeZone: zoneId,
+  }).format(wallTime(startOfMonth(date), "12:00"));
 }
 
 export const calendarWeekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
@@ -178,7 +223,8 @@ export type CalendarCell = {
 export function monthGrid(monthDate: string): CalendarCell[] {
   const start = startOfMonth(monthDate);
   const end = endOfMonth(monthDate);
-  const sundayIndex = new Date(`${start}T12:00:00+05:30`).getDay();
+  const weekday = new Intl.DateTimeFormat("en-US", { timeZone: zoneId, weekday: "short" }).format(wallTime(start, "12:00"));
+  const sundayIndex = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(weekday);
   const mondayIndex = sundayIndex === 0 ? 6 : sundayIndex - 1;
   const first = addIsoDays(start, -mondayIndex);
   const cells: CalendarCell[] = [];

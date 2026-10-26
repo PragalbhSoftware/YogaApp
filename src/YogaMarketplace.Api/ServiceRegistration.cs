@@ -4,6 +4,7 @@ using YogaMarketplace.Api.Jobs;
 using YogaMarketplace.Api.Options;
 using YogaMarketplace.Api.Security;
 using YogaMarketplace.Api.Services;
+using YogaMarketplace.Domain;
 
 namespace YogaMarketplace.Api;
 
@@ -54,6 +55,7 @@ public static class ServiceRegistration
         services.AddScoped<IBackgroundJobHandler>(sp => sp.GetRequiredService<ErrorAlertJob>());
         services.AddSingleton(ErrorAlertJob.Recurring);
         services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<IMarketClock, HostMarketClock>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<BookingNotifications>();
         services.AddScoped<IBackgroundJobHandler, NotificationSendJob>();

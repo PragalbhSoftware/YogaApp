@@ -26,7 +26,8 @@ public sealed record CurrentSettings(
     NotificationTerms Notifications,
     OtpLimitTerms OtpLimits,
     int Version,
-    DateTimeOffset? UpdatedAt)
+    DateTimeOffset? UpdatedAt,
+    string TimeZoneId)
 {
     public static CurrentSettings From(PlatformSettings settings) => new(
         settings.Currency,
@@ -46,7 +47,8 @@ public sealed record CurrentSettings(
         PlatformSettingsRules.NotificationTermsFor(settings),
         PlatformSettingsRules.OtpLimitTermsFor(settings),
         settings.Version,
-        settings.UpdatedAt);
+        settings.UpdatedAt,
+        settings.TimeZoneId);
 }
 
 public interface IPlatformSettingsService
@@ -76,19 +78,22 @@ public class PlatformSettingsService : IPlatformSettingsService
     private readonly ICurrentUser _current;
     private readonly ILogger<PlatformSettingsService> _logger;
     private readonly TimeProvider _time;
+    private readonly IMarketClock _clock;
 
     public PlatformSettingsService(
         YogaDbContext db,
         IMemoryCache cache,
         ICurrentUser current,
         ILogger<PlatformSettingsService> logger,
-        TimeProvider time)
+        TimeProvider time,
+        IMarketClock clock)
     {
         _db = db;
         _cache = cache;
         _current = current;
         _logger = logger;
         _time = time;
+        _clock = clock;
     }
 
     public async Task<CurrentSettings> GetAsync(CancellationToken cancellationToken)
@@ -135,6 +140,7 @@ public class PlatformSettingsService : IPlatformSettingsService
         try
         {
             await _db.SaveChangesAsync(cancellationToken);
+            _clock.Use(settings.TimeZoneId);
         }
         catch (DbUpdateConcurrencyException)
         {
@@ -211,7 +217,8 @@ public class PlatformSettingsService : IPlatformSettingsService
         request.NotificationMaxAttempts,
         request.OtpMaxSendsPerPhone,
         request.OtpMaxWrongCodesPerPhone,
-        request.OtpLockMinutes);
+        request.OtpLockMinutes,
+        request.TimeZoneId);
 
     private static TimeOnly? ParseTime(string? value, string label)
     {
@@ -266,5 +273,6 @@ public class PlatformSettingsService : IPlatformSettingsService
         settings.NotificationMaxAttempts,
         settings.OtpMaxSendsPerPhone,
         settings.OtpMaxWrongCodesPerPhone,
-        settings.OtpLockMinutes);
+        settings.OtpLockMinutes,
+        settings.TimeZoneId);
 }

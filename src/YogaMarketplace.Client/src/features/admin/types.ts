@@ -172,8 +172,14 @@ export type AdminPayout = {
 
 export type AdminArea = {
   id: string;
-  city: string;
+  cityId: string;
+  cityName: string;
+  stateId: string;
+  stateName: string;
   name: string;
+  pincode: string;
+  latitude: number | null;
+  longitude: number | null;
   isActive: boolean;
 };
 
@@ -241,6 +247,7 @@ export type CreditSettings = {
 
 /** Daily Razorpay reconciliation. `reconciliationTime` is HH:mm on the market clock. */
 export type ReconciliationSettings = {
+  timeZoneId: string;
   reconciliationTime: string;
   webhookStuckMinutes: number;
   refundPendingHours: number;

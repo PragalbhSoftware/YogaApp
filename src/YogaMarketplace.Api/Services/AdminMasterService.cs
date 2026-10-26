@@ -46,47 +46,55 @@ public class AdminMasterService : IAdminMasterService
 
     public async Task<IReadOnlyList<AdminAreaResponse>> ListAreasAsync(CancellationToken cancellationToken) =>
         await _db.Areas.AsNoTracking()
-            .OrderBy(a => a.City)
+            .OrderBy(a => a.City!.State!.Name)
+            .ThenBy(a => a.City!.Name)
             .ThenBy(a => a.Name)
-            .Select(a => new AdminAreaResponse(a.Id, a.City, a.Name, a.IsActive))
+            .Select(a => new AdminAreaResponse(
+                a.Id, a.CityId, a.City!.Name, a.City.StateId, a.City.State!.Name, a.Name, a.Pincode, a.Latitude, a.Longitude, a.IsActive))
             .ToListAsync(cancellationToken);
 
     public async Task<AdminAreaResponse> CreateAreaAsync(CreateAreaRequest request, CancellationToken cancellationToken)
     {
-        var area = CatalogRules.CreateArea(request.City, request.Name);
-        if (request.StateId is not Guid stateId)
-            throw new DomainException("Pick an active state.");
-        await RequireActiveStateAsync(stateId, cancellationToken);
-        var cityOpen = await _db.Cities.AnyAsync(
-            c => c.StateId == stateId && c.Name == area.City && c.IsActive,
-            cancellationToken);
-        if (!cityOpen)
-            throw new DomainException("Pick an active city.");
-        await EnsureAreaNameAvailableAsync(area.City, area.Name, null, cancellationToken);
+        var area = CatalogRules.CreateArea(request.CityId ?? Guid.Empty, request.Name, request.Pincode, request.Latitude, request.Longitude);
+        await RequireActiveCityAsync(area.CityId, cancellationToken);
+        await EnsureAreaNameAvailableAsync(area.CityId, area.Name, null, cancellationToken);
         _db.Areas.Add(area);
         await _db.SaveChangesAsync(cancellationToken);
-        return ToArea(area);
+        return await ToAreaAsync(area.Id, cancellationToken);
     }
 
     public async Task<AdminAreaResponse> UpdateAreaAsync(Guid id, PatchAreaRequest request, CancellationToken cancellationToken)
     {
-        if (request.Name is null && request.IsActive is null)
-            throw new DomainException("Send a name or isActive.");
+        if (request.Name is null && request.CityId is null && request.Pincode is null
+            && request.Latitude is null && request.Longitude is null && request.IsActive is null)
+            throw new DomainException("Send a name, city, PIN, coordinates, or isActive.");
 
         var area = await _db.Areas.SingleOrDefaultAsync(a => a.Id == id, cancellationToken)
             ?? throw new DomainException("Area not found.", 404);
 
-        if (request.Name is not null)
+        if (request.CityId is Guid cityId)
         {
-            CatalogRules.RenameArea(area, request.Name);
-            await EnsureAreaNameAvailableAsync(area.City, area.Name, area.Id, cancellationToken);
+            await RequireActiveCityAsync(cityId, cancellationToken);
+            area.CityId = cityId;
         }
+
+        if (request.Name is not null)
+            CatalogRules.RenameArea(area, request.Name);
+
+        if (request.Pincode is not null)
+            area.Pincode = CatalogRules.NormalizePincode(request.Pincode);
+
+        if (request.Latitude is not null || request.Longitude is not null)
+            CatalogRules.SetCoordinates(area, request.Latitude ?? area.Latitude, request.Longitude ?? area.Longitude);
+
+        if (request.Name is not null || request.CityId is not null)
+            await EnsureAreaNameAvailableAsync(area.CityId, area.Name, area.Id, cancellationToken);
 
         if (request.IsActive is bool active)
             area.IsActive = active;
 
         await _db.SaveChangesAsync(cancellationToken);
-        return ToArea(area);
+        return await ToAreaAsync(area.Id, cancellationToken);
     }
 
     public async Task<PagedResponse<AdminStateResponse>> ListStatesAsync(int? page, int? pageSize, CancellationToken cancellationToken)
@@ -324,10 +332,21 @@ public class AdminMasterService : IAdminMasterService
         return new AdminCategoryResponse(category.Id, category.Name, category.Slug, category.IsActive);
     }
 
-    private async Task EnsureAreaNameAvailableAsync(string city, string name, Guid? exceptId, CancellationToken cancellationToken)
+    private async Task<City> RequireActiveCityAsync(Guid cityId, CancellationToken cancellationToken)
+    {
+        var city = await _db.Cities.Include(c => c.State).SingleOrDefaultAsync(c => c.Id == cityId, cancellationToken)
+            ?? throw new DomainException("Pick an active city.");
+        if (!city.IsActive)
+            throw new DomainException("Pick an active city.");
+        if (city.State is not { IsActive: true })
+            throw new DomainException("Pick an active state.");
+        return city;
+    }
+
+    private async Task EnsureAreaNameAvailableAsync(Guid cityId, string name, Guid? exceptId, CancellationToken cancellationToken)
     {
         var lowered = name.ToLower();
-        var matches = _db.Areas.Where(a => a.City == city && a.Name.ToLower() == lowered);
+        var matches = _db.Areas.Where(a => a.CityId == cityId && a.Name.ToLower() == lowered);
         if (exceptId is Guid id)
             matches = matches.Where(a => a.Id != id);
         var taken = await matches.AnyAsync(cancellationToken);
@@ -379,7 +398,12 @@ public class AdminMasterService : IAdminMasterService
             throw new DomainException("That city slug is already used.", 409);
     }
 
-    private static AdminAreaResponse ToArea(Area area) => new(area.Id, area.City, area.Name, area.IsActive);
+    private async Task<AdminAreaResponse> ToAreaAsync(Guid id, CancellationToken cancellationToken) =>
+        await _db.Areas.AsNoTracking()
+            .Where(a => a.Id == id)
+            .Select(a => new AdminAreaResponse(
+                a.Id, a.CityId, a.City!.Name, a.City.StateId, a.City.State!.Name, a.Name, a.Pincode, a.Latitude, a.Longitude, a.IsActive))
+            .SingleAsync(cancellationToken);
 
     private static AdminStateResponse ToState(State state) =>
         new(state.Id, state.Name, state.Code, state.IsActive, state.DisplayOrder);

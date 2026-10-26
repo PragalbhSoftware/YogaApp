@@ -110,6 +110,7 @@ if (otpDemo.StartupWarning() is string demoWarning)
     app.Logger.LogWarning("{OtpDemoWarning}", demoWarning);
 
 app.UseMiddleware<CorrelationIdMiddleware>();
+app.UseMiddleware<MarketClockMiddleware>();
 app.UseForwardedHeaders();
 app.UseSecurityHeaders();
 if (productionLike)
@@ -179,6 +180,8 @@ public static class DatabaseStartup
             }
 
             await scope.ServiceProvider.GetRequiredService<DbSeeder>().SeedAsync();
+            var timeZoneId = await db.Settings.AsNoTracking().Select(s => s.TimeZoneId).SingleAsync();
+            scope.ServiceProvider.GetRequiredService<YogaMarketplace.Domain.IMarketClock>().Use(timeZoneId);
 
             var emailAlerts = await db.Settings.AsNoTracking().Select(s => (bool?)s.EmailAlertsEnabled).SingleOrDefaultAsync() ?? false;
             var smtpConfigured = scope.ServiceProvider.GetRequiredService<YogaMarketplace.Api.Services.IAlertSender>()

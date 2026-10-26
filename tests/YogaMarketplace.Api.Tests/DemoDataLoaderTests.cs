@@ -52,6 +52,7 @@ public class DemoDataLoaderTests : IClassFixture<YogaApiFactory>
             demoPayments.Select(p => p.Booking!.Status).OrderBy(s => s.ToString()).ToArray());
         var settings = await db.Settings.AsNoTracking().SingleAsync();
         Assert.All(demoPayments, p => Assert.Equal(settings.CommissionPercent, p.Booking!.CommissionPercent));
+        Assert.Equal(1, await db.Providers.CountAsync(p => p.DisplayName == "Meera Iyer"));
     }
 
     [Fact]

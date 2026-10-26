@@ -198,9 +198,12 @@ internal static class ModelConfiguration
 
     private static void ConfigureArea(EntityTypeBuilder<Area> entity)
     {
-        entity.Property(a => a.City).HasMaxLength(CatalogRules.CityMax);
         entity.Property(a => a.Name).HasMaxLength(80);
-        entity.HasIndex(a => new { a.City, a.Name }).IsUnique();
+        entity.Property(a => a.Pincode).HasMaxLength(6);
+        entity.Property(a => a.Latitude).HasPrecision(9, 6);
+        entity.Property(a => a.Longitude).HasPrecision(9, 6);
+        entity.HasOne(a => a.City).WithMany().HasForeignKey(a => a.CityId).OnDelete(DeleteBehavior.Restrict);
+        entity.HasIndex(a => new { a.CityId, a.Name }).IsUnique();
     }
 
     private static void ConfigureUser(EntityTypeBuilder<User> entity)
@@ -465,6 +468,7 @@ internal static class ModelConfiguration
         entity.ToTable("PlatformSettings");
         entity.Property(s => s.Currency).HasMaxLength(8);
         entity.Property(s => s.PolicyNote).HasMaxLength(PlatformSettingsRules.PolicyNoteMax);
+        entity.Property(s => s.TimeZoneId).HasMaxLength(MarketClock.TimeZoneIdMax).HasDefaultValue(MarketClock.DefaultTimeZoneId);
         entity.Property(s => s.CommissionPercent).HasPrecision(5, 2);
         entity.Property(s => s.ConvenienceFee).HasPrecision(10, 2).HasDefaultValue(0m);
         entity.Property(s => s.LateCancelFeeType).HasConversion<string>().HasMaxLength(16).HasDefaultValue(LateCancelFeeType.Percent);

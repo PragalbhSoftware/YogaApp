@@ -22,6 +22,7 @@ public sealed class CreditPacksMigrationTests : IAsyncLifetime
             await new DbSeeder(db, new ConfigurationBuilder()
                 .AddInMemoryCollection(new Dictionary<string, string?> { ["Seed:DemoData"] = "true" })
                 .Build(), TimeProvider.System).SeedAsync();
+            await TestWorld.SeedAsync(db, TimeProvider.System, CancellationToken.None);
             var customer = new User
             {
                 Id = Guid.NewGuid(),
@@ -83,6 +84,15 @@ public sealed class CreditPacksMigrationTests : IAsyncLifetime
                 "SELECT COUNT(*) AS Value FROM CheckoutIntents WHERE GatewayOrderId = 'order_mig_pack'").SingleAsync());
             Assert.Equal(1, await db.Database.SqlQueryRaw<int>(
                 "SELECT COUNT(*) AS Value FROM CheckoutIntents WHERE GatewayOrderId = 'order_mig_booking'").SingleAsync());
+            await db.Database.ExecuteSqlRawAsync("""
+                DELETE FROM Payments;
+                DELETE FROM Bookings;
+                DELETE FROM CheckoutIntents;
+                DELETE FROM AvailabilitySlots;
+                DELETE FROM Services;
+                DELETE FROM Providers;
+                DELETE FROM Areas;
+                """);
         }
 
         await MigrateAsync(null);

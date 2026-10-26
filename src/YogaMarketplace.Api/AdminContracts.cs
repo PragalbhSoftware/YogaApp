@@ -179,15 +179,27 @@ public record AdminPayoutResponse(
     DateTimeOffset CreatedAt,
     string BookingStatus);
 
-public record AdminAreaResponse(Guid Id, string City, string Name, bool IsActive);
+public record AdminAreaResponse(
+    Guid Id,
+    Guid CityId,
+    string CityName,
+    Guid StateId,
+    string StateName,
+    string Name,
+    string Pincode,
+    decimal? Latitude,
+    decimal? Longitude,
+    bool IsActive);
 
 public record AdminCategoryResponse(Guid Id, string Name, string Slug, bool IsActive);
 
 public class CreateAreaRequest
 {
     public string? Name { get; set; }
-    public string? City { get; set; }
-    public Guid? StateId { get; set; }
+    public Guid? CityId { get; set; }
+    public string? Pincode { get; set; }
+    public decimal? Latitude { get; set; }
+    public decimal? Longitude { get; set; }
 }
 
 public record AdminStateResponse(Guid Id, string Name, string Code, bool IsActive, int DisplayOrder);
@@ -229,6 +241,10 @@ public class PatchCityRequest
 public class PatchAreaRequest
 {
     public string? Name { get; set; }
+    public Guid? CityId { get; set; }
+    public string? Pincode { get; set; }
+    public decimal? Latitude { get; set; }
+    public decimal? Longitude { get; set; }
     public bool? IsActive { get; set; }
 }
 
@@ -287,6 +303,7 @@ public class UpdateSettingsRequest
     public int? OtpMaxSendsPerPhone { get; set; }
     public int? OtpMaxWrongCodesPerPhone { get; set; }
     public int? OtpLockMinutes { get; set; }
+    public string? TimeZoneId { get; set; }
 }
 
 public record AdminSettingsResponse(
@@ -331,7 +348,8 @@ public record AdminSettingsResponse(
     int NotificationMaxAttempts,
     int OtpMaxSendsPerPhone,
     int OtpMaxWrongCodesPerPhone,
-    int OtpLockMinutes);
+    int OtpLockMinutes,
+    string TimeZoneId);
 
 public record AdminErrorEventResponse(
     Guid Id,

@@ -15,13 +15,18 @@ public class CatalogService
         _settings = settings;
     }
 
-    public async Task<IReadOnlyList<AreaResponse>> AreasAsync(CancellationToken cancellationToken) =>
-        await _db.Areas.AsNoTracking()
-            .Where(a => a.IsActive)
-            .OrderBy(a => a.City)
+    public async Task<IReadOnlyList<AreaResponse>> AreasAsync(Guid? cityId, CancellationToken cancellationToken)
+    {
+        var query = _db.Areas.AsNoTracking()
+            .Where(a => a.IsActive && a.City!.IsActive && a.City.State!.IsActive);
+        if (cityId is Guid id && id != Guid.Empty)
+            query = query.Where(a => a.CityId == id);
+        return await query
+            .OrderBy(a => a.City!.Name)
             .ThenBy(a => a.Name)
-            .Select(a => new AreaResponse(a.Id, a.City, a.Name))
+            .Select(a => new AreaResponse(a.Id, a.CityId, a.City!.Name, a.City.StateId, a.City.State!.Name, a.Pincode, a.Name))
             .ToListAsync(cancellationToken);
+    }
 
     public async Task<IReadOnlyList<StateResponse>> StatesAsync(CancellationToken cancellationToken) =>
         await _db.States.AsNoTracking()

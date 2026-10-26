@@ -19,7 +19,7 @@ type AreaPickerProps = {
 function groupByCity(areas: Area[]) {
   const groups = new Map<string, Area[]>();
   for (const area of areas) {
-    groups.set(area.city, [...(groups.get(area.city) ?? []), area]);
+    groups.set(area.cityName, [...(groups.get(area.cityName) ?? []), area]);
   }
   return groups;
 }
@@ -78,12 +78,12 @@ export function AreaPicker({ selectedCity, selectedName, onSelect, onCancel }: A
         {neighbourhoods.length > 0 ? (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {neighbourhoods.map((area) => {
-              const selected = area.name === selectedName && area.city === selectedCity;
+              const selected = area.name === selectedName && area.cityName === selectedCity;
               return (
                 <button
                   key={area.id}
                   type="button"
-                  onClick={() => onSelect(area.city, area.name)}
+                  onClick={() => onSelect(area.cityName, area.name)}
                   aria-pressed={selected}
                   className={cn(
                     "flex items-center gap-3 rounded-2xl border bg-brand-surface px-4 py-4 text-left shadow-[0_8px_24px_rgba(37,49,39,0.04)]",

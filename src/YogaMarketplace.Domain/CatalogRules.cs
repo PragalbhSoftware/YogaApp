@@ -9,13 +9,39 @@ namespace YogaMarketplace.Domain;
 /// </summary>
 public static class CatalogRules
 {
-    public static Area CreateArea(string? city, string? name) => new()
+    public static Area CreateArea(Guid cityId, string? name, string? pincode, decimal? latitude, decimal? longitude)
     {
-        Id = Guid.NewGuid(),
-        City = NormalizeCity(city),
-        Name = NormalizeAreaName(name),
-        IsActive = true
-    };
+        if (cityId == Guid.Empty)
+            throw new DomainException("Pick an active city.");
+        var area = new Area
+        {
+            Id = Guid.NewGuid(),
+            CityId = cityId,
+            Name = NormalizeAreaName(name),
+            Pincode = NormalizePincode(pincode),
+            IsActive = true
+        };
+        SetCoordinates(area, latitude, longitude);
+        return area;
+    }
+
+    public static string NormalizePincode(string? pincode)
+    {
+        var trimmed = (pincode ?? "").Trim();
+        if (trimmed.Length != 6 || !trimmed.All(char.IsDigit))
+            throw new DomainException("PIN must be 6 digits.");
+        return trimmed;
+    }
+
+    public static void SetCoordinates(Area area, decimal? latitude, decimal? longitude)
+    {
+        if (latitude is < -90 or > 90)
+            throw new DomainException("Latitude must be between -90 and 90.");
+        if (longitude is < -180 or > 180)
+            throw new DomainException("Longitude must be between -180 and 180.");
+        area.Latitude = latitude;
+        area.Longitude = longitude;
+    }
 
     public static State CreateState(string? name, string? code, int displayOrder) => new()
     {
@@ -58,15 +84,11 @@ public static class CatalogRules
     }
 
     public const int CityMin = 2;
-    /// <summary>Matches the <c>Areas.City</c> column length.</summary>
-    public const int CityMax = 40;
-    /// <summary>City master names. Longer than an area's city text because official district names run past 40.</summary>
+    /// <summary>City master names. Longer than a short label because official district names run past 40.</summary>
     public const int CityNameMax = 80;
     public const int StateNameMax = 80;
     public const int StateCodeMax = 10;
     public const int SlugMax = StateCodeMax + 1 + CityNameMax;
-
-    public static string NormalizeCity(string? city) => NormalizePlaceName(city, CityMax, "City", official: false);
 
     /// <summary>City master name. Allows the digits and parentheses used in official district names.</summary>
     public static string NormalizeCityName(string? name) => NormalizePlaceName(name, CityNameMax, "City", official: true);

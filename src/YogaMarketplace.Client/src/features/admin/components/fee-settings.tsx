@@ -148,7 +148,7 @@ function FeeForm({ settings }: { settings: AdminSettings }) {
               ]}
             />
             <p className="text-sm text-brand-muted">
-              Cycles run Monday to Sunday, India time. Export takes payouts from closed cycles only. This cycle
+              Cycles run Monday to Sunday, market time. Export takes payouts from closed cycles only. This cycle
               started on {formatAdminDay(settings.payoutPeriodStart)}.
             </p>
           </fieldset>

@@ -37,10 +37,22 @@ export function userBlockSchema(reasonRequired: boolean) {
   });
 }
 
+const coordinate = (min: number, max: number, label: string) =>
+  z
+    .string()
+    .trim()
+    .refine(
+      (value) => value === "" || (Number.isFinite(Number(value)) && Number(value) >= min && Number(value) <= max),
+      `${label} must be between ${min} and ${max}.`,
+    );
+
 export const areaSchema = z.object({
   name: nameSchema,
   stateId: z.string().min(1, "Pick a state."),
-  city: z.string().min(1, "Pick a city."),
+  cityId: z.string().min(1, "Pick a city."),
+  pincode: z.string().trim().regex(/^\d{6}$/, "Enter a 6-digit PIN."),
+  latitude: coordinate(-90, 90, "Latitude"),
+  longitude: coordinate(-180, 180, "Longitude"),
 });
 
 const displayOrder = z.coerce
@@ -152,6 +164,7 @@ export const reconciliationLimits = {
 const marketTime = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Pick a time such as 06:00.");
 
 export const reconciliationSettingsSchema = z.object({
+  timeZoneId: z.string().trim().min(1, "Enter a time zone id.").max(64, "Enter a time zone id."),
   reconciliationTime: marketTime,
   webhookStuckMinutes: z.coerce
     .number({ invalid_type_error: "Enter a number of minutes." })

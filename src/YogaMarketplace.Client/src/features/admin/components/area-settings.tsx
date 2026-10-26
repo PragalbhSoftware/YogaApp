@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Button, FormControlLabel, MenuItem, Switch, TextField } from "@mui/material";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -15,16 +16,22 @@ import { toastError } from "@/services/http/toast-error";
 function groupByCity(areas: AdminArea[]) {
   const groups = new Map<string, AdminArea[]>();
   const sorted = [...areas].sort(
-    (a, b) => a.city.localeCompare(b.city, "en") || a.name.localeCompare(b.name, "en"),
+    (a, b) => a.stateName.localeCompare(b.stateName, "en") || a.cityName.localeCompare(b.cityName, "en") || a.name.localeCompare(b.name, "en"),
   );
   for (const area of sorted) {
-    groups.set(area.city, [...(groups.get(area.city) ?? []), area]);
+    groups.set(area.cityName, [...(groups.get(area.cityName) ?? []), area]);
   }
   return [...groups.entries()];
 }
 
 export function AreaSettings() {
   const areas = useAdminAreas();
+  const [stateId, setStateId] = useState("");
+  const [cityId, setCityId] = useState("");
+  const rows = areas.data ?? [];
+  const states = [...new Map(rows.map((area) => [area.stateId, area.stateName])).entries()];
+  const cities = [...new Map(rows.filter((area) => !stateId || area.stateId === stateId).map((area) => [area.cityId, area.cityName])).entries()];
+  const shown = rows.filter((area) => (!stateId || area.stateId === stateId) && (!cityId || area.cityId === cityId));
 
   return (
     <div className="flex flex-col gap-5">
@@ -47,11 +54,35 @@ export function AreaSettings() {
             <EmptyState title="No neighbourhoods" description="Add one so customers can pick an area." />
           </div>
         ) : null}
+        {areas.isSuccess && rows.length > 0 ? (
+          <div className="grid gap-3 border-b border-brand-border p-5 sm:grid-cols-2 sm:p-6">
+            <TextField
+              select
+              label="State"
+              value={stateId}
+              onChange={(event) => {
+                setStateId(event.target.value);
+                setCityId("");
+              }}
+            >
+              <MenuItem value="">All states</MenuItem>
+              {states.map(([id, name]) => (
+                <MenuItem key={id} value={id}>{name}</MenuItem>
+              ))}
+            </TextField>
+            <TextField select label="City" value={cityId} onChange={(event) => setCityId(event.target.value)}>
+              <MenuItem value="">All cities</MenuItem>
+              {cities.map(([id, name]) => (
+                <MenuItem key={id} value={id}>{name}</MenuItem>
+              ))}
+            </TextField>
+          </div>
+        ) : null}
         {areas.isSuccess
-          ? groupByCity(areas.data).map(([city, cityAreas]) => (
+          ? groupByCity(shown).map(([city, cityAreas]) => (
               <section key={city} aria-label={city} className="border-b border-brand-border last:border-b-0">
                 <h3 className="bg-brand-background px-5 py-3 text-[11px] font-semibold tracking-[0.18em] text-brand-muted uppercase sm:px-6">
-                  {city} · {cityAreas.length}
+                  {cityAreas[0].stateName} · {city} · {cityAreas.length}
                 </h3>
                 <ul className="divide-y divide-brand-border">
                   {cityAreas.map((area) => (
@@ -73,7 +104,7 @@ function CreateAreaRow() {
   const states = useActiveStates();
   const form = useForm<AreaFormValues>({
     resolver: zodResolver(areaSchema),
-    defaultValues: { name: "", stateId: "", city: "" },
+    defaultValues: { name: "", stateId: "", cityId: "", pincode: "", latitude: "", longitude: "" },
   });
   const stateId = form.watch("stateId");
   const cities = useActiveCities(stateId);
@@ -84,11 +115,17 @@ function CreateAreaRow() {
       className="flex flex-col gap-3"
       onSubmit={form.handleSubmit((values) => {
         createArea.mutate(
-          { name: values.name, city: values.city, stateId: values.stateId },
+          {
+            name: values.name,
+            cityId: values.cityId,
+            pincode: values.pincode,
+            latitude: values.latitude === "" ? null : Number(values.latitude),
+            longitude: values.longitude === "" ? null : Number(values.longitude),
+          },
           {
             onSuccess: (saved) => {
-              toast.success(`${saved.name} added in ${saved.city}.`);
-              form.reset({ name: "", stateId: values.stateId, city: "" });
+              toast.success(`${saved.name} added in ${saved.cityName}.`);
+              form.reset({ name: "", stateId: values.stateId, cityId: "", pincode: "", latitude: "", longitude: "" });
             },
             onError: (error) => toastError(error),
           },
@@ -107,7 +144,7 @@ function CreateAreaRow() {
               value={field.value}
               onChange={(event) => {
                 field.onChange(event.target.value);
-                form.setValue("city", "");
+                form.setValue("cityId", "");
               }}
               onBlur={field.onBlur}
               inputRef={field.ref}
@@ -130,7 +167,7 @@ function CreateAreaRow() {
           )}
         />
         <Controller
-          name="city"
+          name="cityId"
           control={form.control}
           render={({ field, fieldState }) => (
             <TextField
@@ -147,12 +184,34 @@ function CreateAreaRow() {
             >
               <MenuItem value="">Select</MenuItem>
               {(cities.data ?? []).map((city) => (
-                <MenuItem key={city.id} value={city.name}>
+                <MenuItem key={city.id} value={city.id}>
                   {city.name}
                 </MenuItem>
               ))}
             </TextField>
           )}
+        />
+        <TextField
+          label="PIN"
+          fullWidth
+          error={Boolean(form.formState.errors.pincode)}
+          helperText={form.formState.errors.pincode?.message ?? "6 digits."}
+          {...form.register("pincode")}
+          slotProps={{ htmlInput: { maxLength: 6, inputMode: "numeric" } }}
+        />
+        <TextField
+          label="Latitude"
+          fullWidth
+          error={Boolean(form.formState.errors.latitude)}
+          helperText={form.formState.errors.latitude?.message ?? "Optional. -90 to 90."}
+          {...form.register("latitude")}
+        />
+        <TextField
+          label="Longitude"
+          fullWidth
+          error={Boolean(form.formState.errors.longitude)}
+          helperText={form.formState.errors.longitude?.message ?? "Optional. -180 to 180."}
+          {...form.register("longitude")}
         />
         <TextField
           label="Neighbourhood"
@@ -200,6 +259,9 @@ function AreaRow({ area }: { area: AdminArea }) {
       className="space-y-3"
       onSubmit={form.handleSubmit((values) => save(values, "Neighbourhood saved."))}
     >
+      <p className="text-sm text-brand-muted">
+        {area.stateName} · {area.cityName} · PIN {area.pincode}
+      </p>
       <TextField
         label="Neighbourhood"
         fullWidth

@@ -23,7 +23,7 @@ export function InstructorRegisterPage() {
   const selectedArea = useAreaStore((state) => state.areaName);
   const register = useRegisterInstructor();
   const defaultAreaId =
-    areas.data?.find((area) => area.city === selectedCity && area.name === selectedArea)?.id ?? "";
+    areas.data?.find((area) => area.cityName === selectedCity && area.name === selectedArea)?.id ?? "";
 
   async function onSubmit(input: Parameters<typeof register.mutateAsync>[0]) {
     try {

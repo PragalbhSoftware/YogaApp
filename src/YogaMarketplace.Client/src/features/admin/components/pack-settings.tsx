@@ -172,7 +172,7 @@ function PackFields({ form }: { form: UseFormReturn<PackFormValues> }) {
         fullWidth
         inputMode="numeric"
         error={Boolean(errors.validityDays)}
-        helperText={errors.validityDays?.message ?? "Credits expire at midnight India time after the last day."}
+        helperText={errors.validityDays?.message ?? "Credits expire at midnight market time after the last day."}
         {...form.register("validityDays")}
       />
       <TextField

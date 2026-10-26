@@ -1,11 +1,11 @@
 import { ApiError, toUserMessage } from "@/services/http/api-error";
 import { formatInr } from "@/utils/money";
-import { formatSlotDay, formatTimeRange12 } from "@/utils/clock";
+import { formatSlotDay, formatTimeRange12, marketTimeZone } from "@/utils/clock";
 import type { AdminPayment, AdminProvider } from "@/features/admin/types";
 
 export function formatAdminWhen(value: string) {
   return new Intl.DateTimeFormat("en-IN", {
-    timeZone: "Asia/Kolkata",
+    timeZone: marketTimeZone(),
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -28,7 +28,7 @@ export function jobLabel(type: string) {
 
 export function formatAdminDay(value: string) {
   return new Intl.DateTimeFormat("en-IN", {
-    timeZone: "Asia/Kolkata",
+    timeZone: marketTimeZone(),
     weekday: "long",
     day: "numeric",
     month: "short",

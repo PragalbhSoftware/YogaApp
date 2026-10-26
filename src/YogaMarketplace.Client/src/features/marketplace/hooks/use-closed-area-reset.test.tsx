@@ -28,8 +28,8 @@ describe("useClosedAreaReset", () => {
   });
 
   it("clears a saved area that is no longer open and asks to pick again", async () => {
-    areas.mockResolvedValue([{ id: "a1", city: "Pune", name: "Baner" }]);
-    renderWithSaved("Pune", "Kothrud");
+    areas.mockResolvedValue([{ id: "a1", cityId: "c1", cityName: "Harbor", stateId: "s1", stateName: "West", pincode: "411001", name: "Baner" }]);
+    renderWithSaved("Harbor", "Kothrud");
 
     await waitFor(() => expect(useAreaStore.getState().areaName).toBeNull());
     expect(useAreaStore.getState().city).toBeNull();
@@ -37,8 +37,8 @@ describe("useClosedAreaReset", () => {
   });
 
   it("keeps a saved area that is still open, ignoring letter case", async () => {
-    areas.mockResolvedValue([{ id: "a1", city: "Pune", name: "Kothrud" }]);
-    renderWithSaved("pune", "kothrud");
+    areas.mockResolvedValue([{ id: "a1", cityId: "c1", cityName: "Harbor", stateId: "s1", stateName: "West", pincode: "411001", name: "Kothrud" }]);
+    renderWithSaved("harbor", "kothrud");
 
     await waitFor(() => expect(areas).toHaveBeenCalled());
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -48,7 +48,7 @@ describe("useClosedAreaReset", () => {
 
   it("keeps the saved area when the list fails to load", async () => {
     areas.mockRejectedValue(new Error("offline"));
-    renderWithSaved("Pune", "Kothrud");
+    renderWithSaved("Harbor", "Kothrud");
 
     await waitFor(() => expect(areas).toHaveBeenCalled());
     await new Promise((resolve) => setTimeout(resolve, 0));

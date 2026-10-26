@@ -65,7 +65,7 @@ public class AdminProviderService : IAdminProviderService
     {
         var provider = await _db.Providers
             .Include(p => p.User)
-            .Include(p => p.Area)
+            .Include(p => p.Area).ThenInclude(a => a!.City)
             .SingleOrDefaultAsync(p => p.Id == id, cancellationToken)
             ?? throw new DomainException("Instructor not found.", 404);
 
@@ -77,7 +77,7 @@ public class AdminProviderService : IAdminProviderService
     private IQueryable<Provider> Providers() =>
         _db.Providers.AsNoTracking()
             .Include(p => p.User)
-            .Include(p => p.Area);
+            .Include(p => p.Area).ThenInclude(a => a!.City);
 
     internal static AdminProviderResponse ToResponse(Provider provider)
     {
@@ -93,7 +93,7 @@ public class AdminProviderService : IAdminProviderService
             user.Phone,
             provider.AreaId,
             area.Name,
-            area.City,
+            area.City!.Name,
             provider.Status.ToString(),
             provider.OffersHome,
             provider.OffersStudio,

@@ -100,7 +100,7 @@ export function SlotForm({
               select
               label="Start"
               error={Boolean(fieldState.error)}
-              helperText={fieldState.error?.message ?? "12-hour India time"}
+              helperText={fieldState.error?.message ?? "12-hour market time"}
               slotProps={{ inputLabel: { shrink: true } }}
               sx={fieldSx}
             >

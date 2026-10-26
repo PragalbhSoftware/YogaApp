@@ -73,7 +73,10 @@ public class DemoDataLoader
     {
         var path = _config[PathKey] ?? DefaultPath;
         if (!Path.IsPathRooted(path))
-            path = Path.Combine(AppContext.BaseDirectory, path);
+        {
+            var besideDll = Path.Combine(AppContext.BaseDirectory, path);
+            path = File.Exists(besideDll) ? besideDll : Path.Combine(_environment.ContentRootPath, path);
+        }
         if (!File.Exists(path))
             throw new DomainException("Demo data file not found.", 404);
 
@@ -89,17 +92,17 @@ public class DemoDataLoader
         var areas = new Dictionary<(string, string), Area>();
         foreach (var city in cities)
         {
-            var cityName = CatalogRules.NormalizeCity(city.Name);
+            var place = await EnsureCityAsync(city.Name, cancellationToken);
             foreach (var name in city.Areas)
             {
                 var areaName = name.Trim();
-                var area = await _db.Areas.SingleOrDefaultAsync(a => a.City == cityName && a.Name == areaName, cancellationToken);
+                var area = await _db.Areas.SingleOrDefaultAsync(a => a.CityId == place.Id && a.Name == areaName, cancellationToken);
                 if (area is null)
                 {
-                    area = CatalogRules.CreateArea(cityName, areaName);
+                    area = CatalogRules.CreateArea(place.Id, areaName, city.Pin, null, null);
                     _db.Areas.Add(area);
                 }
-                areas[(cityName, area.Name)] = area;
+                areas[(place.Name, area.Name)] = area;
             }
         }
         return areas;
@@ -130,7 +133,8 @@ public class DemoDataLoader
         foreach (var item in instructors)
         {
             var user = await UpsertUserAsync(item.Phone, item.Name, item.Gender, UserRole.Provider, now, cancellationToken);
-            if (!areas.TryGetValue((CatalogRules.NormalizeCity(item.City), item.Area.Trim()), out var area))
+            var placeName = CatalogRules.NormalizeCityName(item.City);
+            if (!areas.TryGetValue((placeName, item.Area.Trim()), out var area))
                 throw new DomainException($"Instructor {item.Phone} uses an area that is not in the demo cities.");
 
             var provider = await _db.Providers.SingleOrDefaultAsync(p => p.UserId == user.Id, cancellationToken);
@@ -303,7 +307,7 @@ public class DemoDataLoader
 
     private async Task<AvailabilitySlot> SlotAsync(Guid providerId, DemoBooking item, DateTimeOffset now, CancellationToken cancellationToken)
     {
-        var date = MumbaiClock.Today(now).AddDays(item.DayOffset);
+        var date = MarketClock.Today(now).AddDays(item.DayOffset);
         var slot = await _db.AvailabilitySlots.SingleOrDefaultAsync(
             s => s.ProviderId == providerId && s.Mode == item.Mode && s.Date == date && s.StartTime == item.Start,
             cancellationToken);
@@ -353,7 +357,28 @@ public class DemoDataLoader
         List<DemoPack> Packs,
         List<DemoBooking> Bookings);
 
-    private sealed record DemoCity(string Name, List<string> Areas);
+    private async Task<City> EnsureCityAsync(string rawName, CancellationToken cancellationToken)
+    {
+        var name = CatalogRules.NormalizeCityName(rawName);
+        var existing = _db.Cities.Local.FirstOrDefault(c => c.Name == name)
+            ?? await _db.Cities.FirstOrDefaultAsync(c => c.Name == name, cancellationToken);
+        if (existing is not null)
+            return existing;
+
+        var state = _db.States.Local.FirstOrDefault(s => s.Code == "DM")
+            ?? await _db.States.FirstOrDefaultAsync(s => s.Code == "DM", cancellationToken);
+        if (state is null)
+        {
+            state = CatalogRules.CreateState("Demo region", "DM", 0);
+            _db.States.Add(state);
+        }
+
+        var city = CatalogRules.CreateCity(name, state.Id, state.Code, 0);
+        _db.Cities.Add(city);
+        return city;
+    }
+
+    private sealed record DemoCity(string Name, string Pin, List<string> Areas);
 
     private sealed record DemoCustomer(string Phone, string Name, Gender? Gender);
 

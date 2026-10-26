@@ -117,7 +117,7 @@ public class MarketplaceApiTests : IClassFixture<YogaApiFactory>
         Assert.Equal(
             new[] { "Andheri", "Bandra", "Dadar", "Juhu", "Lower Parel", "Powai", "Worli" },
             areas.Select(a => a.Name).OrderBy(n => n).ToArray());
-        Assert.All(areas, a => Assert.Equal("Mumbai", a.City));
+        Assert.All(areas, a => Assert.Equal(TestWorld.CityName, a.CityName));
 
         var categories = await client.GetFromJsonAsync<List<CategoryBody>>("/api/categories", Json);
         Assert.Contains(categories!, c => c.Slug == "yoga" && c.Name == "Yoga");
@@ -228,7 +228,7 @@ public class MarketplaceApiTests : IClassFixture<YogaApiFactory>
 
         var areas = await client.GetFromJsonAsync<List<AreaBody>>("/api/areas", Json);
         var bandra = areas!.Single(a => a.Name == "Bandra");
-        var tomorrow = MumbaiClock.Today(DateTimeOffset.UtcNow).AddDays(1);
+        var tomorrow = MarketClock.Today(DateTimeOffset.UtcNow).AddDays(1);
 
         var missingMeet = await client.PostAsJsonAsync("/api/providers/register", new
         {
@@ -293,6 +293,7 @@ public class MarketplaceApiTests : IClassFixture<YogaApiFactory>
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth.Token);
         var me = await client.GetFromJsonAsync<ProviderSelfBody>("/api/providers/me", Json);
         Assert.Equal("Verified", me!.Status);
+        Assert.Equal(TestWorld.CityName, me.City);
         Assert.Contains("meet.google.com", me.GoogleMeetLink, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -327,7 +328,7 @@ public class MarketplaceApiTests : IClassFixture<YogaApiFactory>
     private sealed record OtpBody(Guid ChallengeId, DateTimeOffset ExpiresAt, string? DevCode);
     private sealed record UserBody(Guid Id, string? Name, string Phone, string? Gender, string Role);
     private sealed record AuthBody(string Token, UserBody User);
-    private sealed record AreaBody(Guid Id, string City, string Name);
+    private sealed record AreaBody(Guid Id, string CityName, string Name);
     private sealed record CategoryBody(Guid Id, string Name, string Slug);
     private sealed record PolicyBody(string Currency, decimal CommissionPercent, decimal ConvenienceFee, int CancelFreeWindowHours);
     private sealed record BannerBody(string? Title, string? Subtitle, string? Offer);
@@ -335,6 +336,6 @@ public class MarketplaceApiTests : IClassFixture<YogaApiFactory>
     private sealed record ProviderBody(Guid Id, string DisplayName, string Area, string Status, List<ModeBody> Modes);
     private sealed record SlotBody(Guid Id, string Mode, DateOnly Date, string Start, string End);
     private sealed record SlotListBody(string Mode, DateOnly From, DateOnly To, List<SlotBody> Slots);
-    private sealed record ProviderSelfBody(Guid Id, string Status, string? GoogleMeetLink);
+    private sealed record ProviderSelfBody(Guid Id, string Status, string? GoogleMeetLink, string City);
     private sealed record RegisterBody(ProviderSelfBody Provider, string Token);
 }

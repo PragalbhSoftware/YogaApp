@@ -307,7 +307,7 @@ public class AdminTransactionService : IAdminTransactionService
         var dueIds = pending.Where(p => p.CreatedAt < cutoff).Select(p => p.Id).ToArray();
         if (dueIds.Length == 0)
         {
-            var opens = TimeZoneInfo.ConvertTime(PayoutCycleRules.NextPeriodStart(cycle, now), MumbaiClock.Zone);
+            var opens = TimeZoneInfo.ConvertTime(PayoutCycleRules.NextPeriodStart(cycle, now), MarketClock.Zone);
             throw new DomainException(
                 $"No payouts are due yet. This {cycle.ToString().ToLowerInvariant()} cycle can be exported from {opens.ToString("ddd d MMM", CultureInfo.InvariantCulture)}.",
                 409);
