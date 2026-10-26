@@ -217,7 +217,7 @@ export const adminApi = {
     return http.get<AdminArea[]>("/api/admin/areas").then((res) => res.data);
   },
 
-  createArea(input: { name: string; city: string; stateId: string }) {
+  createArea(input: { name: string; cityId: string; pincode: string; latitude?: number | null; longitude?: number | null }) {
     return http.post<AdminArea>("/api/admin/areas", input).then((res) => res.data);
   },
 

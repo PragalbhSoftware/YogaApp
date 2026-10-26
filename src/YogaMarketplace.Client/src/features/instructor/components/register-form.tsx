@@ -140,7 +140,7 @@ export function RegisterForm({
                   <MenuItem value="">Select an area</MenuItem>
                   {areas.map((area) => (
                     <MenuItem key={area.id} value={area.id}>
-                      {area.name} · {area.city}
+                      {area.name} · {area.cityName}
                     </MenuItem>
                   ))}
                 </TextField>

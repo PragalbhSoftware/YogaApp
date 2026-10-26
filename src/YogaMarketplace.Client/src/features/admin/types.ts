@@ -172,8 +172,14 @@ export type AdminPayout = {
 
 export type AdminArea = {
   id: string;
-  city: string;
+  cityId: string;
+  cityName: string;
+  stateId: string;
+  stateName: string;
   name: string;
+  pincode: string;
+  latitude: number | null;
+  longitude: number | null;
   isActive: boolean;
 };
 

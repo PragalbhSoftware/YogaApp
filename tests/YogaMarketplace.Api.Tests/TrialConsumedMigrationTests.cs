@@ -45,11 +45,24 @@ public sealed class TrialConsumedMigrationTests : IAsyncLifetime
             };
         });
 
-        await MigrateAsync(null);
+        await MigrateAsync("20261015124321_UniqueStateCode");
 
-        await using var db = NewContext();
-        var stored = await db.Bookings.Where(b => expected.Keys.Contains(b.Id)).ToDictionaryAsync(b => b.Id, b => b.TrialConsumed);
-        Assert.Equal(expected, stored);
+        await using (var db = NewContext())
+        {
+            var stored = await db.Bookings.Where(b => expected.Keys.Contains(b.Id)).ToDictionaryAsync(b => b.Id, b => b.TrialConsumed);
+            Assert.Equal(expected, stored);
+            await db.Database.ExecuteSqlRawAsync("""
+                DELETE FROM Payments;
+                DELETE FROM Bookings;
+                DELETE FROM CheckoutIntents;
+                DELETE FROM AvailabilitySlots;
+                DELETE FROM Services;
+                DELETE FROM Providers;
+                DELETE FROM Areas;
+                """);
+        }
+
+        await MigrateAsync(null);
     }
 
     [SqlServerFact]
@@ -93,6 +106,7 @@ public sealed class TrialConsumedMigrationTests : IAsyncLifetime
                 .AddInMemoryCollection(new Dictionary<string, string?> { ["Seed:DemoData"] = "true" })
                 .Build();
             await new DbSeeder(db, config, TimeProvider.System).SeedAsync();
+            await TestWorld.SeedAsync(db, TimeProvider.System, CancellationToken.None);
             var result = await seed(db);
             await db.SaveChangesAsync();
             await MigrateAsync(BeforeTrialConsumed);

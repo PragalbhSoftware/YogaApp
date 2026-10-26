@@ -118,6 +118,7 @@ public class YogaApiFactory : WebApplicationFactory<Program>
             var db = scope.ServiceProvider.GetRequiredService<YogaDbContext>();
             await _factory.CreateDatabaseAsync(db, cancellationToken);
             await scope.ServiceProvider.GetRequiredService<DbSeeder>().SeedAsync(cancellationToken);
+            await TestWorld.SeedAsync(db, scope.ServiceProvider.GetRequiredService<TimeProvider>(), cancellationToken);
             // Shared factories sign the same seeded phones in many times. OtpPhoneLimitTests sets real limits itself.
             await db.Settings.ExecuteUpdateAsync(s => s
                 .SetProperty(x => x.OtpMaxSendsPerPhone, UnlimitedOtp)

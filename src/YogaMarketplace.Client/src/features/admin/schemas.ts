@@ -37,10 +37,22 @@ export function userBlockSchema(reasonRequired: boolean) {
   });
 }
 
+const coordinate = (min: number, max: number, label: string) =>
+  z
+    .string()
+    .trim()
+    .refine(
+      (value) => value === "" || (Number.isFinite(Number(value)) && Number(value) >= min && Number(value) <= max),
+      `${label} must be between ${min} and ${max}.`,
+    );
+
 export const areaSchema = z.object({
   name: nameSchema,
   stateId: z.string().min(1, "Pick a state."),
-  city: z.string().min(1, "Pick a city."),
+  cityId: z.string().min(1, "Pick a city."),
+  pincode: z.string().trim().regex(/^\d{6}$/, "Enter a 6-digit PIN."),
+  latitude: coordinate(-90, 90, "Latitude"),
+  longitude: coordinate(-180, 180, "Longitude"),
 });
 
 const displayOrder = z.coerce

@@ -44,6 +44,7 @@ describe("Areas form", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add neighbourhood" }));
     expect(await screen.findByText("Pick a state.")).toBeInTheDocument();
     expect(screen.getByText("Pick a city.")).toBeInTheDocument();
+    expect(screen.getByText("Enter a 6-digit PIN.")).toBeInTheDocument();
 
     fireEvent.mouseDown(screen.getByRole("combobox", { name: "State" }));
     fireEvent.click(await screen.findByRole("option", { name: "Region Alpha" }));

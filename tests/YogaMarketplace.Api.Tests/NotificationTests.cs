@@ -87,8 +87,8 @@ public class NotificationTests
     {
         await using var factory = new YogaApiFactory();
         var templates = await QueryAsync(factory, db => db.NotificationTemplates.AsNoTracking().ToListAsync());
-        var areas = await QueryAsync(factory, db => db.Areas.AsNoTracking().ToListAsync());
-        var places = areas.Select(a => a.City).Concat(areas.Select(a => a.Name)).Distinct().ToList();
+        var areas = await QueryAsync(factory, db => db.Areas.Include(a => a.City).AsNoTracking().ToListAsync());
+        var places = areas.Select(a => a.City!.Name).Concat(areas.Select(a => a.Name)).Distinct().ToList();
 
         var events = typeof(NotificationEvents).GetFields().Select(f => (string)f.GetValue(null)!).ToList();
         Assert.All(events, e => Assert.Single(templates, t => t.EventKey == e && t.CategoryId is null && t.IsActive));

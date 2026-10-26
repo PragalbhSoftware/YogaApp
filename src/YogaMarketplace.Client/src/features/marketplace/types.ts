@@ -1,6 +1,10 @@
 export type Area = {
   id: string;
-  city: string;
+  cityId: string;
+  cityName: string;
+  stateId: string;
+  stateName: string;
+  pincode: string;
   name: string;
 };
 

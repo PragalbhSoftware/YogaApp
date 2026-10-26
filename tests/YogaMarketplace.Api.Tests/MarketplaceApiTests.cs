@@ -117,7 +117,7 @@ public class MarketplaceApiTests : IClassFixture<YogaApiFactory>
         Assert.Equal(
             new[] { "Andheri", "Bandra", "Dadar", "Juhu", "Lower Parel", "Powai", "Worli" },
             areas.Select(a => a.Name).OrderBy(n => n).ToArray());
-        Assert.All(areas, a => Assert.Equal("Mumbai", a.City));
+        Assert.All(areas, a => Assert.Equal(TestWorld.CityName, a.CityName));
 
         var categories = await client.GetFromJsonAsync<List<CategoryBody>>("/api/categories", Json);
         Assert.Contains(categories!, c => c.Slug == "yoga" && c.Name == "Yoga");
@@ -327,7 +327,7 @@ public class MarketplaceApiTests : IClassFixture<YogaApiFactory>
     private sealed record OtpBody(Guid ChallengeId, DateTimeOffset ExpiresAt, string? DevCode);
     private sealed record UserBody(Guid Id, string? Name, string Phone, string? Gender, string Role);
     private sealed record AuthBody(string Token, UserBody User);
-    private sealed record AreaBody(Guid Id, string City, string Name);
+    private sealed record AreaBody(Guid Id, string CityName, string Name);
     private sealed record CategoryBody(Guid Id, string Name, string Slug);
     private sealed record PolicyBody(string Currency, decimal CommissionPercent, decimal ConvenienceFee, int CancelFreeWindowHours);
     private sealed record BannerBody(string? Title, string? Subtitle, string? Offer);

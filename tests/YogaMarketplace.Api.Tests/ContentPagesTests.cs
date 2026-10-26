@@ -99,7 +99,7 @@ public class ContentPagesTests : IClassFixture<YogaApiFactory>
         Assert.DoesNotMatch(@"\d", refund.Body);
 
         using var scope = _factory.Services.CreateScope();
-        var cities = scope.ServiceProvider.GetRequiredService<YogaDbContext>().Areas.Select(a => a.City).Distinct().ToList();
+        var cities = scope.ServiceProvider.GetRequiredService<YogaDbContext>().Areas.Select(a => a.City!.Name).Distinct().ToList();
         Assert.NotEmpty(cities);
         foreach (var body in new[] { terms.Body, refund.Body, privacy!.Body })
             Assert.All(cities, city => Assert.DoesNotContain(city, body, StringComparison.OrdinalIgnoreCase));

@@ -28,7 +28,7 @@ describe("useClosedAreaReset", () => {
   });
 
   it("clears a saved area that is no longer open and asks to pick again", async () => {
-    areas.mockResolvedValue([{ id: "a1", city: "Pune", name: "Baner" }]);
+    areas.mockResolvedValue([{ id: "a1", cityId: "c1", cityName: "Pune", stateId: "s1", stateName: "West", pincode: "411001", name: "Baner" }]);
     renderWithSaved("Pune", "Kothrud");
 
     await waitFor(() => expect(useAreaStore.getState().areaName).toBeNull());
@@ -37,7 +37,7 @@ describe("useClosedAreaReset", () => {
   });
 
   it("keeps a saved area that is still open, ignoring letter case", async () => {
-    areas.mockResolvedValue([{ id: "a1", city: "Pune", name: "Kothrud" }]);
+    areas.mockResolvedValue([{ id: "a1", cityId: "c1", cityName: "Pune", stateId: "s1", stateName: "West", pincode: "411001", name: "Kothrud" }]);
     renderWithSaved("pune", "kothrud");
 
     await waitFor(() => expect(areas).toHaveBeenCalled());

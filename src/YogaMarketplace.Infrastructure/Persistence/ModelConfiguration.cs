@@ -198,9 +198,12 @@ internal static class ModelConfiguration
 
     private static void ConfigureArea(EntityTypeBuilder<Area> entity)
     {
-        entity.Property(a => a.City).HasMaxLength(CatalogRules.CityMax);
         entity.Property(a => a.Name).HasMaxLength(80);
-        entity.HasIndex(a => new { a.City, a.Name }).IsUnique();
+        entity.Property(a => a.Pincode).HasMaxLength(6);
+        entity.Property(a => a.Latitude).HasPrecision(9, 6);
+        entity.Property(a => a.Longitude).HasPrecision(9, 6);
+        entity.HasOne(a => a.City).WithMany().HasForeignKey(a => a.CityId).OnDelete(DeleteBehavior.Restrict);
+        entity.HasIndex(a => new { a.CityId, a.Name }).IsUnique();
     }
 
     private static void ConfigureUser(EntityTypeBuilder<User> entity)

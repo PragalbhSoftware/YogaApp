@@ -97,7 +97,7 @@ public class AdminUserService : IAdminUserService
     {
         var user = await _db.Users
             .Include(u => u.Provider)
-            .ThenInclude(p => p!.Area)
+            .ThenInclude(p => p!.Area).ThenInclude(a => a!.City)
             .SingleOrDefaultAsync(u => u.Id == id, cancellationToken)
             ?? throw new DomainException("User not found.", 404);
 
@@ -115,7 +115,7 @@ public class AdminUserService : IAdminUserService
     private IQueryable<User> Users() =>
         _db.Users.AsNoTracking()
             .Include(u => u.Provider)
-            .ThenInclude(p => p!.Area);
+            .ThenInclude(p => p!.Area).ThenInclude(a => a!.City);
 
     private static AdminUserSummary ToSummary(User user) => new(
         user.Id,

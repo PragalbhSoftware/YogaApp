@@ -1,7 +1,7 @@
 {
   "cities": [
-    { "name": "Mumbai", "areas": ["Bandra", "Andheri", "Powai"] },
-    { "name": "Pune", "areas": ["Koregaon Park", "Baner"] }
+    { "name": "Mumbai", "pin": "400001", "areas": ["Bandra", "Andheri", "Powai"] },
+    { "name": "Pune", "pin": "411001", "areas": ["Koregaon Park", "Baner"] }
   ],
   "customers": [
     { "phone": "+917000010001", "name": "Riya Kapoor", "gender": "Female" },

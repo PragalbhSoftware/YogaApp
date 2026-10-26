@@ -32,12 +32,22 @@ public class ProviderService
         CancellationToken cancellationToken)
     {
         var parsedMode = ParseOptionalMode(mode);
-        var query = VerifiedQuery().Where(p => p.Area!.IsActive);
+        var query = VerifiedQuery();
+        if (parsedMode == SessionMode.Online)
+            query = query.Where(p => p.OffersOnline && p.Area!.IsActive);
+        else if (parsedMode == SessionMode.Home)
+            query = PlaceOpen(query).Where(p => p.OffersHome);
+        else if (parsedMode == SessionMode.Studio)
+            query = PlaceOpen(query).Where(p => p.OffersStudio);
+        else
+            query = query.Where(p =>
+                (p.OffersOnline && p.Area!.IsActive)
+                || ((p.OffersHome || p.OffersStudio) && p.Area!.IsActive && p.Area.City!.IsActive && p.Area.City.State!.IsActive));
 
         if (!string.IsNullOrWhiteSpace(city))
         {
             var cityName = city.Trim().ToLower();
-            query = query.Where(p => p.Area!.City.ToLower() == cityName);
+            query = query.Where(p => p.Area!.City!.Name.ToLower() == cityName);
         }
 
         if (!string.IsNullOrWhiteSpace(area))
@@ -68,6 +78,8 @@ public class ProviderService
     {
         var provider = await VerifiedQuery().SingleOrDefaultAsync(p => p.Id == id, cancellationToken)
             ?? throw new DomainException("Instructor not found.", 404);
+        if (!provider.OffersOnline && !IsPlaceOpen(provider))
+            throw new DomainException("Instructor not found.", 404);
         var ratings = await LoadRatingsAsync(new[] { id }, cancellationToken);
         return ToDetail(provider, ratings);
     }
@@ -83,6 +95,14 @@ public class ProviderService
 
         var parsed = ParseRequiredMode(mode);
         var (start, end) = ResolveWindow(from, to);
+        if (parsed is SessionMode.Home or SessionMode.Studio)
+        {
+            var provider = await _db.Providers.AsNoTracking()
+                .Include(p => p.Area).ThenInclude(a => a!.City).ThenInclude(c => c!.State)
+                .SingleAsync(p => p.Id == providerId, cancellationToken);
+            if (!IsPlaceOpen(provider))
+                return new SlotListResponse(parsed.ToString(), start, end, []);
+        }
 
         var taken = _db.Bookings
             .Where(b => b.ProviderId == providerId && Occupying.Contains(b.Status))
@@ -529,12 +549,18 @@ public class ProviderService
 
     private IQueryable<Provider> VerifiedQuery() =>
         _db.Providers.AsNoTracking()
-            .Include(p => p.Area)
+            .Include(p => p.Area).ThenInclude(a => a!.City).ThenInclude(c => c!.State)
             .Include(p => p.Services).ThenInclude(s => s.Category)
             .Include(p => p.Photos)
             .Include(p => p.Certificates)
             .AsSplitQuery()
             .Where(ProviderApproval.IsListed);
+
+    private static IQueryable<Provider> PlaceOpen(IQueryable<Provider> query) =>
+        query.Where(p => p.Area!.IsActive && p.Area.City!.IsActive && p.Area.City.State!.IsActive);
+
+    private static bool IsPlaceOpen(Provider provider) =>
+        provider.Area is { IsActive: true, City: { IsActive: true, State: { IsActive: true } } };
 
     private async Task RequireListedAsync(Guid providerId, CancellationToken cancellationToken)
     {
@@ -565,7 +591,7 @@ public class ProviderService
             provider.DisplayName,
             provider.Bio,
             provider.Area!.Name,
-            provider.Area.City,
+            provider.Area.City!.Name,
             provider.Status.ToString(),
             ModesOf(provider),
             rating.Count == 0 ? null : rating.Average,
@@ -586,7 +612,7 @@ public class ProviderService
             provider.Bio,
             provider.Age,
             provider.Area!.Name,
-            provider.Area.City,
+            provider.Area.City!.Name,
             provider.Status.ToString(),
             ModesOf(provider),
             provider.StudioAddress,

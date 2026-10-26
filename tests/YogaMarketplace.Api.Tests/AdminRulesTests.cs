@@ -148,20 +148,23 @@ public class AdminRulesTests
     };
 
     [Fact]
-    public void Area_create_requires_a_city_normalises_it_and_category_rename_does_not_touch_the_slug()
+    public void Area_create_checks_the_pin_and_coordinates_and_category_rename_does_not_touch_the_slug()
     {
-        var area = CatalogRules.CreateArea(" goa ", "  Panaji  ");
-        Assert.Equal("Goa", area.City);
+        var cityId = Guid.NewGuid();
+        var area = CatalogRules.CreateArea(cityId, "  Panaji  ", " 403001 ", null, null);
+        Assert.Equal(cityId, area.CityId);
         Assert.Equal("Panaji", area.Name);
+        Assert.Equal("403001", area.Pincode);
         Assert.True(area.IsActive);
 
-        Assert.Throws<DomainException>(() => CatalogRules.CreateArea(null, "Colaba"));
-        Assert.Throws<DomainException>(() => CatalogRules.CreateArea("   ", "Colaba"));
-        Assert.Equal("Pune", CatalogRules.CreateArea(" pune ", "Kothrud").City);
-        Assert.Equal("New Delhi", CatalogRules.CreateArea("new   DELHI", "Saket").City);
-        Assert.Throws<DomainException>(() => CatalogRules.CreateArea("P", "Kothrud"));
-        Assert.Throws<DomainException>(() => CatalogRules.CreateArea("Pune1", "Kothrud"));
-        Assert.Throws<DomainException>(() => CatalogRules.CreateArea("Mumbai", " "));
+        Assert.Throws<DomainException>(() => CatalogRules.CreateArea(Guid.Empty, "Colaba", "403001", null, null));
+        Assert.Throws<DomainException>(() => CatalogRules.CreateArea(cityId, " ", "403001", null, null));
+        Assert.Throws<DomainException>(() => CatalogRules.CreateArea(cityId, "Colaba", "4030", null, null));
+        Assert.Throws<DomainException>(() => CatalogRules.CreateArea(cityId, "Colaba", "403001", 91, null));
+        Assert.Throws<DomainException>(() => CatalogRules.CreateArea(cityId, "Colaba", "403001", null, 181));
+        var edged = CatalogRules.CreateArea(cityId, "Dock", "403001", -90, 180);
+        Assert.Equal(-90, edged.Latitude);
+        Assert.Equal(180, edged.Longitude);
 
         var category = new Category { Name = "Yoga", Slug = "yoga", IsActive = true };
         CatalogRules.RenameCategory(category, " Hatha Yoga ");
@@ -183,10 +186,9 @@ public class AdminRulesTests
         Assert.Equal("New Delhi", city.Name);
         Assert.Equal(state.Id, city.StateId);
         Assert.Equal("ra-new-delhi", city.Slug);
-        Assert.Equal("ra-st-louis", CatalogRules.CitySlug(state.Code, CatalogRules.NormalizeCity("st. louis")));
+        Assert.Equal("ra-st-louis", CatalogRules.CitySlug(state.Code, CatalogRules.NormalizeCityName("st. louis")));
         Assert.Equal("Ab Area 24 (East)", CatalogRules.NormalizeCityName(" ab  area 24 (east) "));
         Assert.Equal("ab-area-24-east", CatalogRules.CitySlug("AB", CatalogRules.NormalizeCityName("area 24 (east)")));
-        Assert.Throws<DomainException>(() => CatalogRules.NormalizeCity("Area 24"));
 
         Assert.Throws<DomainException>(() => CatalogRules.CreateState("A", "RA", 0));
         Assert.Throws<DomainException>(() => CatalogRules.CreateState("Region", "R1", 0));
@@ -196,9 +198,9 @@ public class AdminRulesTests
     [Fact]
     public void City_length_matches_the_column()
     {
-        Assert.Equal(40, CatalogRules.CityMax);
-        var longest = new string('a', CatalogRules.CityMax);
-        Assert.Equal(CatalogRules.CityMax, CatalogRules.CreateArea(longest, "Centre").City.Length);
-        Assert.Throws<DomainException>(() => CatalogRules.CreateArea(longest + "a", "Centre"));
+        Assert.Equal(80, CatalogRules.CityNameMax);
+        var longest = new string('a', CatalogRules.CityNameMax);
+        Assert.Equal(CatalogRules.CityNameMax, CatalogRules.NormalizeCityName(longest).Length);
+        Assert.Throws<DomainException>(() => CatalogRules.NormalizeCityName(longest + "a"));
     }
 }

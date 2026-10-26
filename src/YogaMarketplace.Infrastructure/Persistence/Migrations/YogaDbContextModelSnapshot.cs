@@ -28,22 +28,33 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<string>("City")
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("nvarchar(40)");
+                    b.Property<Guid>("CityId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
+
+                    b.Property<decimal?>("Latitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)");
+
+                    b.Property<decimal?>("Longitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(80)
                         .HasColumnType("nvarchar(80)");
 
+                    b.Property<string>("Pincode")
+                        .IsRequired()
+                        .HasMaxLength(6)
+                        .HasColumnType("nvarchar(6)");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("City", "Name")
+                    b.HasIndex("CityId", "Name")
                         .IsUnique();
 
                     b.ToTable("Areas");
@@ -2087,6 +2098,17 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("WebhookEvents");
+                });
+
+            modelBuilder.Entity("YogaMarketplace.Domain.Area", b =>
+                {
+                    b.HasOne("YogaMarketplace.Domain.City", "City")
+                        .WithMany()
+                        .HasForeignKey("CityId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("City");
                 });
 
             modelBuilder.Entity("YogaMarketplace.Domain.AvailabilitySlot", b =>

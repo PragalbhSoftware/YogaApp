@@ -422,35 +422,37 @@ public class AdminApiTests : IClassFixture<YogaApiFactory>
             await db.SaveChangesAsync();
         }
 
-        var noCity = await admin.Client.PostAsJsonAsync("/api/admin/areas", new { name = "Colaba" });
+        var noCity = await admin.Client.PostAsJsonAsync("/api/admin/areas", new { name = "Colaba", pincode = "400001" });
         Assert.Equal(HttpStatusCode.BadRequest, noCity.StatusCode);
-        var tooLong = await admin.Client.PostAsJsonAsync("/api/admin/areas", new { name = "Colaba", city = new string('a', 41) });
-        Assert.Equal(HttpStatusCode.BadRequest, tooLong.StatusCode);
-
         var state = await PostAsync<PlaceBody>(admin.Client, "/api/admin/states", new { name = "Region Alpha", code = "ra" });
+        var badPin = await admin.Client.PostAsJsonAsync("/api/admin/areas", new { name = "Colaba", cityId = state.Id, pincode = "12" });
+        Assert.Equal(HttpStatusCode.BadRequest, badPin.StatusCode);
+
         var mumbai = await PostAsync<PlaceBody>(admin.Client, "/api/admin/cities", new { name = "Mumbai", stateId = state.Id });
-        var created = await PostAsync<AreaAdminBody>(admin.Client, "/api/admin/areas", new { name = "Colaba", city = "Mumbai", stateId = state.Id });
-        Assert.Equal("Mumbai", created.City);
-        Assert.Equal(mumbai.Name, created.City);
+        var created = await PostAsync<AreaAdminBody>(admin.Client, "/api/admin/areas", new { name = "Colaba", cityId = mumbai.Id, pincode = "400001" });
+        Assert.Equal("Mumbai", created.CityName);
+        Assert.Equal(mumbai.Id, created.CityId);
         Assert.True(created.IsActive);
         var publicAreas = await _factory.CreateClient().GetFromJsonAsync<List<AreaBody>>("/api/areas", Json);
         Assert.Contains(publicAreas!, area => area.Name == "Colaba");
 
-        var duplicate = await admin.Client.PostAsJsonAsync("/api/admin/areas", new { name = " colaba ", city = "mumbai", stateId = state.Id });
+        var duplicate = await admin.Client.PostAsJsonAsync("/api/admin/areas", new { name = " colaba ", cityId = mumbai.Id, pincode = "400001" });
         Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
-        var newCity = await admin.Client.PostAsJsonAsync("/api/admin/areas", new { name = "Kothrud", city = "Pune", stateId = state.Id });
+        var newCity = await admin.Client.PostAsJsonAsync("/api/admin/areas", new { name = "Kothrud", cityId = Guid.NewGuid(), pincode = "411001" });
         Assert.Equal(HttpStatusCode.BadRequest, newCity.StatusCode);
         Assert.Contains("active city", (await newCity.Content.ReadFromJsonAsync<ErrorBody>(Json))!.Error, StringComparison.OrdinalIgnoreCase);
 
-        await PostAsync<PlaceBody>(admin.Client, "/api/admin/cities", new { name = "Pune", stateId = state.Id });
-        var otherCity = await PostAsync<AreaAdminBody>(admin.Client, "/api/admin/areas", new { name = "Kothrud", city = "  pune ", stateId = state.Id });
-        Assert.Equal("Pune", otherCity.City);
-        var sameNameOtherCity = await PostAsync<AreaAdminBody>(admin.Client, "/api/admin/areas", new { name = "Colaba", city = "Pune", stateId = state.Id });
-        Assert.Equal("Pune", sameNameOtherCity.City);
-        var badCity = await admin.Client.PostAsJsonAsync("/api/admin/areas", new { name = "Nowhere", city = "P1" });
-        Assert.Equal(HttpStatusCode.BadRequest, badCity.StatusCode);
+        var pune = await PostAsync<PlaceBody>(admin.Client, "/api/admin/cities", new { name = "Pune", stateId = state.Id });
+        var otherCity = await PostAsync<AreaAdminBody>(admin.Client, "/api/admin/areas", new { name = "Kothrud", cityId = pune.Id, pincode = "411001" });
+        Assert.Equal("Pune", otherCity.CityName);
+        var sameNameOtherCity = await PostAsync<AreaAdminBody>(admin.Client, "/api/admin/areas", new { name = "Colaba", cityId = pune.Id, pincode = "411001" });
+        Assert.Equal("Pune", sameNameOtherCity.CityName);
+        await PatchAsync<PlaceBody>(admin.Client, $"/api/admin/cities/{pune.Id}", new { isActive = false });
+        var cityOff = await admin.Client.PostAsJsonAsync("/api/admin/areas", new { name = "Nowhere", cityId = pune.Id, pincode = "411001" });
+        Assert.Equal(HttpStatusCode.BadRequest, cityOff.StatusCode);
+        await PatchAsync<PlaceBody>(admin.Client, $"/api/admin/cities/{pune.Id}", new { isActive = true });
         var withPune = await _factory.CreateClient().GetFromJsonAsync<List<AreaBody>>("/api/areas", Json);
-        Assert.Contains(withPune!, area => area.City == "Pune" && area.Name == "Kothrud");
+        Assert.Contains(withPune!, area => area.CityName == "Pune" && area.Name == "Kothrud");
         await PatchAsync<AreaAdminBody>(admin.Client, $"/api/admin/areas/{otherCity.Id}", new { isActive = false });
         await PatchAsync<AreaAdminBody>(admin.Client, $"/api/admin/areas/{sameNameOtherCity.Id}", new { isActive = false });
 
@@ -589,7 +591,7 @@ public class AdminApiTests : IClassFixture<YogaApiFactory>
     private sealed record OtpBody(Guid ChallengeId, DateTimeOffset ExpiresAt, string? DevCode);
     private sealed record UserAuthBody(Guid Id, string? Name, string Phone, string? Gender, string Role);
     private sealed record AuthBody(string Token, UserAuthBody User);
-    private sealed record AreaBody(Guid Id, string City, string Name);
+    private sealed record AreaBody(Guid Id, Guid CityId, string CityName, Guid StateId, string StateName, string Pincode, string Name);
     private sealed record ProviderBody(Guid Id, string DisplayName, string Status);
     private sealed record RegisterProviderBody(Guid Id, string Status);
     private sealed record RegisterBody(RegisterProviderBody Provider, string Token);
@@ -615,7 +617,7 @@ public class AdminApiTests : IClassFixture<YogaApiFactory>
     private sealed record StatusCount(string Status, int Count);
     private sealed record PayoutTotals(int Count, decimal Gross, decimal Net);
     private sealed record ReportBody(List<StatusCount> BookingsByStatus, decimal GmvPaid, string Currency, PayoutTotals PendingPayouts);
-    private sealed record AreaAdminBody(Guid Id, string City, string Name, bool IsActive);
+    private sealed record AreaAdminBody(Guid Id, Guid CityId, string CityName, Guid StateId, string StateName, string Name, string Pincode, decimal? Latitude, decimal? Longitude, bool IsActive);
     private sealed record PlaceBody(Guid Id, string Name, string Code, bool IsActive, int DisplayOrder, string? Slug, Guid StateId);
     private sealed record CategoryBody(Guid Id, string Name, string Slug);
     private sealed record CategoryAdminBody(Guid Id, string Name, string Slug, bool IsActive);

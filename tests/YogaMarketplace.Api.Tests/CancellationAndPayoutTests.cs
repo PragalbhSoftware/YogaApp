@@ -430,9 +430,9 @@ public class CancellationAndPayoutTests : IClassFixture<YogaApiFactory>
         Assert.Contains(inPune!, p => p.Id == me.Id && p.City == "Pune" && p.Area == "Baner");
         Assert.DoesNotContain(inPune!, p => p.Id == SeedIds.AnanyaProviderId);
 
-        var inMumbai = await anon.GetFromJsonAsync<List<ProviderBody>>("/api/providers?city=Mumbai&area=Bandra", Json);
-        Assert.Contains(inMumbai!, p => p.Id == SeedIds.AnanyaProviderId);
-        Assert.DoesNotContain(inMumbai!, p => p.Id == me.Id);
+        var inHarbor = await anon.GetFromJsonAsync<List<ProviderBody>>($"/api/providers?city={TestWorld.CityName}&area=Bandra", Json);
+        Assert.Contains(inHarbor!, p => p.Id == SeedIds.AnanyaProviderId);
+        Assert.DoesNotContain(inHarbor!, p => p.Id == me.Id);
     }
 
     /// <summary>Moves a payout into a closed payout cycle so the export picks it up.</summary>
@@ -449,7 +449,15 @@ public class CancellationAndPayoutTests : IClassFixture<YogaApiFactory>
     {
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<YogaDbContext>();
-        var area = CatalogRules.CreateArea(city, name);
+        var state = await db.States.SingleAsync(s => s.Code == "HL");
+        var place = await db.Cities.FirstOrDefaultAsync(c => c.StateId == state.Id && c.Name == city);
+        if (place is null)
+        {
+            place = CatalogRules.CreateCity(city, state.Id, state.Code, 0);
+            db.Cities.Add(place);
+            await db.SaveChangesAsync();
+        }
+        var area = CatalogRules.CreateArea(place.Id, name, "411001", null, null);
         db.Areas.Add(area);
         await db.SaveChangesAsync();
         return area.Id;
