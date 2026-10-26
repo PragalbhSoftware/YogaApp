@@ -73,6 +73,7 @@ public class BackgroundJobRunner
     private readonly JobsOptions _options;
     private readonly ILogger<BackgroundJobRunner> _logger;
     private readonly TimeProvider _time;
+    private readonly IMarketClock _clock;
 
     public BackgroundJobRunner(
         YogaDbContext db,
@@ -80,7 +81,8 @@ public class BackgroundJobRunner
         RecurringJobScheduler recurring,
         IOptions<JobsOptions> options,
         ILogger<BackgroundJobRunner> logger,
-        TimeProvider time)
+        TimeProvider time,
+        IMarketClock clock)
     {
         _db = db;
         _scopes = scopes;
@@ -88,6 +90,7 @@ public class BackgroundJobRunner
         _options = options.Value;
         _logger = logger;
         _time = time;
+        _clock = clock;
     }
 
     public string WorkerId { get; } = Truncate($"{Environment.MachineName}:{Guid.NewGuid():N}", 80);
@@ -166,7 +169,8 @@ public class BackgroundJobRunner
                 return;
             }
 
-            await handler.RunAsync(job.Payload, cancellationToken);
+            using (MarketClock.Bind(_clock))
+                await handler.RunAsync(job.Payload, cancellationToken);
             await FinishAsync(job, BackgroundJobStatus.Succeeded, null, null, now, cancellationToken);
             _logger.LogInformation("Background job {JobId} ({JobType}) succeeded on attempt {Attempt}.", job.Id, job.Type, job.Attempts);
         }

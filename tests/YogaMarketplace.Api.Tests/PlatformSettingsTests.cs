@@ -12,6 +12,7 @@ using YogaMarketplace.Infrastructure.Persistence;
 
 namespace YogaMarketplace.Api.Tests;
 
+[Collection(MarketClockCollection.Name)]
 public class PlatformSettingsTests : IClassFixture<YogaApiFactory>
 {
     private const string KeySecret = "dev-only-not-a-live-key-secret";
@@ -36,6 +37,7 @@ public class PlatformSettingsTests : IClassFixture<YogaApiFactory>
         {
             var saved = await AdminSettingsClient.PatchAsync(admin, version => new { version, timeZoneId = "UTC" });
             Assert.Equal("UTC", saved.TimeZoneId);
+            Assert.Equal("UTC", _factory.Services.GetRequiredService<IMarketClock>().TimeZoneId);
             Assert.Equal("UTC", (await anon.GetFromJsonAsync<ConfigBody>("/api/config", Json))!.TimeZoneId);
 
             using var scope = _factory.Services.CreateScope();
@@ -47,6 +49,9 @@ public class PlatformSettingsTests : IClassFixture<YogaApiFactory>
 
             var rejected = await admin.PatchAsJsonAsync("/api/admin/settings", new { version = saved.Version, timeZoneId = "Not/AZone" });
             Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
+            var windows = await admin.PatchAsJsonAsync("/api/admin/settings", new { version = saved.Version, timeZoneId = "India Standard Time" });
+            Assert.Equal(HttpStatusCode.BadRequest, windows.StatusCode);
+            Assert.Equal("UTC", _factory.Services.GetRequiredService<IMarketClock>().TimeZoneId);
         }
         finally
         {

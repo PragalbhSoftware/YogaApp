@@ -3,7 +3,23 @@ export const defaultMarketTimeZone = "Asia/Kolkata";
 let zoneId = defaultMarketTimeZone;
 
 export function setMarketTimeZone(id: string) {
-  zoneId = id;
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: id });
+    zoneId = id;
+  } catch {
+    zoneId = defaultMarketTimeZone;
+  }
+}
+
+export async function loadMarketTimeZone(signal?: AbortSignal) {
+  try {
+    const response = await fetch("/api/config", { signal });
+    if (!response.ok) return;
+    const body = (await response.json()) as { timeZoneId?: string };
+    if (body.timeZoneId) setMarketTimeZone(body.timeZoneId);
+  } catch {
+    // The default zone stays in place when config is unreachable or the id is unusable.
+  }
 }
 
 export function marketTimeZone() {

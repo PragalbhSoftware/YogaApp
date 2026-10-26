@@ -27,27 +27,33 @@ public class RecurringJobScheduler
     private readonly BackgroundJobQueue _queue;
     private readonly IEnumerable<RecurringJob> _jobs;
     private readonly ILogger<RecurringJobScheduler> _logger;
+    private readonly IMarketClock _clock;
 
     public RecurringJobScheduler(
         YogaDbContext db,
         IPlatformSettingsService settings,
         BackgroundJobQueue queue,
         IEnumerable<RecurringJob> jobs,
-        ILogger<RecurringJobScheduler> logger)
+        ILogger<RecurringJobScheduler> logger,
+        IMarketClock clock)
     {
         _db = db;
         _settings = settings;
         _queue = queue;
         _jobs = jobs;
         _logger = logger;
+        _clock = clock;
     }
 
     /// <summary>Checks every recurring job, or only <paramref name="type"/> when given.</summary>
     public async Task EnsureAsync(DateTimeOffset now, CancellationToken cancellationToken, string? type = null)
     {
-        var terms = (await _settings.GetAsync(cancellationToken)).Jobs;
-        foreach (var job in _jobs.Where(j => type is null || j.Type == type))
-            await EnsureAsync(job, job.Schedule(terms), now, cancellationToken);
+        using (MarketClock.Bind(_clock))
+        {
+            var terms = (await _settings.GetAsync(cancellationToken)).Jobs;
+            foreach (var job in _jobs.Where(j => type is null || j.Type == type))
+                await EnsureAsync(job, job.Schedule(terms), now, cancellationToken);
+        }
     }
 
     private async Task EnsureAsync(RecurringJob job, JobSchedule schedule, DateTimeOffset now, CancellationToken cancellationToken)

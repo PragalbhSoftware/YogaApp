@@ -284,6 +284,28 @@ public class StateCityApiTests : IClassFixture<YogaApiFactory>
         Assert.Equal(new[] { harbor.Id }, keptOpen!.Select(row => row.Id).ToArray());
     }
 
+    [Fact]
+    public async Task City_with_an_area_can_be_renamed_and_turned_off()
+    {
+        var admin = await SignInAsync();
+        var state = await PostAsync<StateBody>(admin, "/api/admin/states", new { name = Word(), code = Code() });
+        var city = await PostAsync<CityBody>(admin, "/api/admin/cities", new { name = Word(), stateId = state.Id });
+        var area = await PostAsync<AreaBody>(admin, "/api/admin/areas", new { name = "Dockside", cityId = city.Id, pincode = "560001" });
+
+        var nextName = city.Name + " West";
+        var renamed = await PatchAsync<CityBody>(admin, $"/api/admin/cities/{city.Id}", new { name = nextName });
+        Assert.Equal(nextName, renamed.Name);
+        var areas = await admin.GetFromJsonAsync<List<AreaBody>>("/api/admin/areas", Json);
+        var row = areas!.Single(item => item.Id == area.Id);
+        Assert.Equal(city.Id, row.CityId);
+        Assert.Equal(nextName, row.CityName);
+
+        var off = await PatchAsync<CityBody>(admin, $"/api/admin/cities/{city.Id}", new { isActive = false });
+        Assert.False(off.IsActive);
+        var after = await admin.GetFromJsonAsync<List<AreaBody>>("/api/admin/areas", Json);
+        Assert.Contains(after!, item => item.Id == area.Id && item.CityId == city.Id);
+    }
+
     private LocationFileBody LocationFile()
     {
         var root = _factory.Services.GetRequiredService<Microsoft.AspNetCore.Hosting.IWebHostEnvironment>().ContentRootPath;
@@ -359,6 +381,7 @@ public class StateCityApiTests : IClassFixture<YogaApiFactory>
     private sealed record AuthBody(string Token, UserAuthBody User);
     private sealed record StateBody(Guid Id, string Name, string Code, bool IsActive, int DisplayOrder);
     private sealed record CityBody(Guid Id, string Name, Guid StateId, string Slug, bool IsActive, int DisplayOrder);
+    private sealed record AreaBody(Guid Id, Guid CityId, string CityName, string Name);
     private sealed record PagedBody<T>(List<T> Items, int Total, int Page, int PageSize);
     private sealed record ImportBody(int StatesAdded, int StatesSkipped, int CitiesAdded, int CitiesSkipped);
     private sealed record LocationStateBody(string Name, string Code, List<string> Cities);

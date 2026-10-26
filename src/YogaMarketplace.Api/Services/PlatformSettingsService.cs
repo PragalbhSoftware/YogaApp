@@ -78,19 +78,22 @@ public class PlatformSettingsService : IPlatformSettingsService
     private readonly ICurrentUser _current;
     private readonly ILogger<PlatformSettingsService> _logger;
     private readonly TimeProvider _time;
+    private readonly IMarketClock _clock;
 
     public PlatformSettingsService(
         YogaDbContext db,
         IMemoryCache cache,
         ICurrentUser current,
         ILogger<PlatformSettingsService> logger,
-        TimeProvider time)
+        TimeProvider time,
+        IMarketClock clock)
     {
         _db = db;
         _cache = cache;
         _current = current;
         _logger = logger;
         _time = time;
+        _clock = clock;
     }
 
     public async Task<CurrentSettings> GetAsync(CancellationToken cancellationToken)
@@ -137,7 +140,7 @@ public class PlatformSettingsService : IPlatformSettingsService
         try
         {
             await _db.SaveChangesAsync(cancellationToken);
-            MarketClock.Use(settings.TimeZoneId);
+            _clock.Use(settings.TimeZoneId);
         }
         catch (DbUpdateConcurrencyException)
         {
