@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using YogaMarketplace.Api.Security;
 using YogaMarketplace.Api.Services;
-using YogaMarketplace.Domain;
 
 namespace YogaMarketplace.Api.Controllers;
 
@@ -12,15 +11,20 @@ namespace YogaMarketplace.Api.Controllers;
 public class CatalogController : ControllerBase
 {
     private readonly CatalogService _catalog;
+    private readonly IPlatformSettingsService _settings;
 
-    public CatalogController(CatalogService catalog)
+    public CatalogController(CatalogService catalog, IPlatformSettingsService settings)
     {
         _catalog = catalog;
+        _settings = settings;
     }
 
     [HttpGet("config")]
-    public ActionResult<MarketConfigResponse> Config() =>
-        Ok(new MarketConfigResponse(MarketClock.TimeZoneId));
+    public async Task<ActionResult<MarketConfigResponse>> Config(CancellationToken cancellationToken)
+    {
+        var settings = await _settings.GetAsync(cancellationToken);
+        return Ok(new MarketConfigResponse(settings.TimeZoneId));
+    }
 
     [HttpGet("areas")]
     public async Task<ActionResult<IReadOnlyList<AreaResponse>>> Areas(

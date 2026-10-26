@@ -18,6 +18,7 @@ import {
 import type { BookingRecord, CreateReviewInput } from "@/features/bookings/types";
 import { CreditsPanel } from "@/features/credits/components/credits-panel";
 import { toUserMessage } from "@/services/http/api-error";
+import { marketTimeZone } from "@/utils/clock";
 import { formatInr } from "@/utils/money";
 import { toastError } from "@/services/http/toast-error";
 
@@ -91,7 +92,7 @@ export function BookingsPage() {
         <h1 className="font-heading text-2xl font-medium">My bookings</h1>
         <p className="text-sm leading-relaxed text-brand-muted">
           Sessions you have paid for. After the instructor accepts, you can move to another open time. After a session
-          is complete, you can leave one rating. Times are India Standard Time.
+          is complete, you can leave one rating. Times are {marketTimeZone()}.
         </p>
       </header>
 

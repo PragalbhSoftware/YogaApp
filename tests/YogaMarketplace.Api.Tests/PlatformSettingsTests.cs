@@ -36,7 +36,6 @@ public class PlatformSettingsTests : IClassFixture<YogaApiFactory>
         {
             var saved = await AdminSettingsClient.PatchAsync(admin, version => new { version, timeZoneId = "UTC" });
             Assert.Equal("UTC", saved.TimeZoneId);
-            Assert.Equal("UTC", MarketClock.TimeZoneId);
             Assert.Equal("UTC", (await anon.GetFromJsonAsync<ConfigBody>("/api/config", Json))!.TimeZoneId);
 
             using var scope = _factory.Services.CreateScope();

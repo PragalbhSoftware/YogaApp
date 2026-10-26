@@ -16,6 +16,7 @@ import {
   enumerateIsoDates,
   isIsoDate,
   kolkataToday,
+  marketTimeZone,
   monthQueryRange,
   startOfMonth,
   slotHasEnded,
@@ -104,7 +105,7 @@ export function AvailabilitySection({ instructorId, modes }: AvailabilitySection
           Open slots
         </h2>
         <p className="text-sm leading-relaxed text-brand-muted">
-          Pick a date, then a time. Times are India Standard Time.
+          Pick a date, then a time. Times are {marketTimeZone()}.
         </p>
       </div>
 

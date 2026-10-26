@@ -26,7 +26,8 @@ public sealed record CurrentSettings(
     NotificationTerms Notifications,
     OtpLimitTerms OtpLimits,
     int Version,
-    DateTimeOffset? UpdatedAt)
+    DateTimeOffset? UpdatedAt,
+    string TimeZoneId)
 {
     public static CurrentSettings From(PlatformSettings settings) => new(
         settings.Currency,
@@ -46,7 +47,8 @@ public sealed record CurrentSettings(
         PlatformSettingsRules.NotificationTermsFor(settings),
         PlatformSettingsRules.OtpLimitTermsFor(settings),
         settings.Version,
-        settings.UpdatedAt);
+        settings.UpdatedAt,
+        settings.TimeZoneId);
 }
 
 public interface IPlatformSettingsService
