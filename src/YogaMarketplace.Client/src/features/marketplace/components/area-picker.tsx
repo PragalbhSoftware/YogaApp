@@ -10,6 +10,7 @@ import { toUserMessage } from "@/services/http/api-error";
 import { cn } from "@/utils/cn";
 
 type AreaPickerProps = {
+  cityId: string;
   selectedCity?: string | null;
   selectedName?: string | null;
   onSelect: (city: string, name: string) => void;
@@ -24,8 +25,8 @@ function groupByCity(areas: Area[]) {
   return groups;
 }
 
-export function AreaPicker({ selectedCity, selectedName, onSelect, onCancel }: AreaPickerProps) {
-  const areas = useAreas();
+export function AreaPicker({ cityId, selectedCity, selectedName, onSelect, onCancel }: AreaPickerProps) {
+  const areas = useAreas(cityId);
   const groups = useMemo(() => groupByCity(areas.data ?? []), [areas.data]);
   const cities = [...groups.keys()];
   const [pickedCity, setPickedCity] = useState<string | null>(selectedCity ?? null);

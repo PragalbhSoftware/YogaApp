@@ -148,6 +148,7 @@ public record ProviderSelf(
     Guid AreaId,
     string Area,
     string City,
+    Guid CityId,
     string Status,
     bool OffersHome,
     bool OffersStudio,

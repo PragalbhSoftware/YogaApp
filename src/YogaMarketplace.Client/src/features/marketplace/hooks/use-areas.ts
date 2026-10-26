@@ -1,9 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { catalogApi } from "@/features/marketplace/api/catalog-api";
 
-export function useAreas() {
+export function useAreas(cityId: string | null) {
   return useQuery({
-    queryKey: ["areas"],
-    queryFn: catalogApi.areas,
+    queryKey: ["areas", cityId],
+    queryFn: () => catalogApi.areas(cityId ?? ""),
+    enabled: Boolean(cityId),
   });
 }

@@ -642,6 +642,7 @@ public class ProviderService
         provider.AreaId,
         provider.Area!.Name,
         provider.Area.City!.Name,
+        provider.Area.CityId,
         provider.Status.ToString(),
         provider.OffersHome,
         provider.OffersStudio,

@@ -199,8 +199,9 @@ public class StateCityApiTests : IClassFixture<YogaApiFactory>
 
         var hidden = await _factory.CreateClient().GetFromJsonAsync<List<CityBody>>($"/api/catalog/cities?stateId={first.Id}", Json);
         Assert.Empty(hidden!);
-        var noState = await _factory.CreateClient().GetAsync("/api/catalog/cities");
-        Assert.Equal(HttpStatusCode.BadRequest, noState.StatusCode);
+        var noState = await _factory.CreateClient().GetFromJsonAsync<List<CityBody>>("/api/catalog/cities", Json);
+        Assert.DoesNotContain(noState!, row => row.Id == city.Id || row.Id == renamed.Id);
+        Assert.Contains(noState!, row => row.Id == sameNameOtherState.Id);
         var unknown = await _factory.CreateClient().GetFromJsonAsync<List<CityBody>>($"/api/catalog/cities?stateId={Guid.NewGuid()}", Json);
         Assert.Empty(unknown!);
 
@@ -306,6 +307,65 @@ public class StateCityApiTests : IClassFixture<YogaApiFactory>
         Assert.Contains(after!, item => item.Id == area.Id && item.CityId == city.Id);
     }
 
+    [Fact]
+    public async Task Public_cities_without_a_state_skip_closed_places_and_follow_display_order()
+    {
+        var admin = await SignInAsync();
+        var suffix = Word();
+        var openState = await PostAsync<StateBody>(admin, "/api/admin/states", new { name = Word(), code = Code(), displayOrder = 4 });
+        var closedState = await PostAsync<StateBody>(admin, "/api/admin/states", new { name = Word(), code = Code(), displayOrder = 5 });
+        var later = await PostAsync<CityBody>(admin, "/api/admin/cities", new { name = "Zeta" + suffix, stateId = openState.Id, displayOrder = 2 });
+        var earlier = await PostAsync<CityBody>(admin, "/api/admin/cities", new { name = "Alpha" + suffix, stateId = openState.Id, displayOrder = 1 });
+        var sameOrderFirst = await PostAsync<CityBody>(admin, "/api/admin/cities", new { name = "Bravo" + suffix, stateId = openState.Id, displayOrder = 3 });
+        var sameOrderSecond = await PostAsync<CityBody>(admin, "/api/admin/cities", new { name = "Charlie" + suffix, stateId = openState.Id, displayOrder = 3 });
+        var quietCity = await PostAsync<CityBody>(admin, "/api/admin/cities", new { name = "Quiet" + suffix, stateId = openState.Id, displayOrder = 0 });
+        await PatchAsync<CityBody>(admin, $"/api/admin/cities/{quietCity.Id}", new { isActive = false });
+        var buried = await PostAsync<CityBody>(admin, "/api/admin/cities", new { name = "Buried" + suffix, stateId = closedState.Id, displayOrder = 0 });
+        await PatchAsync<CityBody>(admin, $"/api/admin/cities/{buried.Id}", new { isActive = false });
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<YogaDbContext>();
+            var state = await db.States.SingleAsync(s => s.Id == closedState.Id);
+            state.IsActive = false;
+            var city = await db.Cities.SingleAsync(c => c.Id == buried.Id);
+            city.IsActive = true;
+            await db.SaveChangesAsync();
+        }
+
+        var listed = await _factory.CreateClient().GetFromJsonAsync<List<CityBody>>("/api/catalog/cities", Json);
+        var mine = listed!.Where(row => row.StateId == openState.Id).Select(row => row.Id).ToArray();
+        Assert.Equal(new[] { earlier.Id, later.Id, sameOrderFirst.Id, sameOrderSecond.Id }, mine);
+        Assert.DoesNotContain(listed!, row => row.Id == quietCity.Id || row.Id == buried.Id);
+    }
+
+    [Fact]
+    public async Task Nearest_city_uses_active_areas_that_have_both_coordinates()
+    {
+        var anon = _factory.CreateClient();
+        var before = await anon.GetAsync("/api/catalog/cities/nearest?lat=0&lng=0");
+        Assert.Equal(HttpStatusCode.NoContent, before.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await anon.GetAsync("/api/catalog/cities/nearest")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await anon.GetAsync("/api/catalog/cities/nearest?lat=0")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await anon.GetAsync("/api/catalog/cities/nearest?lng=0")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await anon.GetAsync("/api/catalog/cities/nearest?lat=91&lng=0")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await anon.GetAsync("/api/catalog/cities/nearest?lat=0&lng=181")).StatusCode);
+
+        var admin = await SignInAsync();
+        var state = await PostAsync<StateBody>(admin, "/api/admin/states", new { name = Word(), code = Code() });
+        var near = await PostAsync<CityBody>(admin, "/api/admin/cities", new { name = Word(), stateId = state.Id, displayOrder = 1 });
+        var far = await PostAsync<CityBody>(admin, "/api/admin/cities", new { name = Word(), stateId = state.Id, displayOrder = 2 });
+        var partial = await PostAsync<CityBody>(admin, "/api/admin/cities", new { name = Word(), stateId = state.Id, displayOrder = 0 });
+        await PostAsync<AreaBody>(admin, "/api/admin/areas", new { name = "Nearpoint", cityId = near.Id, pincode = "560001", latitude = 19.1m, longitude = 72.8m });
+        await PostAsync<AreaBody>(admin, "/api/admin/areas", new { name = "Farpoint", cityId = far.Id, pincode = "560002", latitude = 28.6m, longitude = 77.2m });
+        var closed = await PostAsync<AreaBody>(admin, "/api/admin/areas", new { name = "Closedpoint", cityId = far.Id, pincode = "560003", latitude = 19.1m, longitude = 72.8m });
+        await PatchAsync<AreaBody>(admin, $"/api/admin/areas/{closed.Id}", new { isActive = false });
+        await PostAsync<AreaBody>(admin, "/api/admin/areas", new { name = "Halflat", cityId = partial.Id, pincode = "560004", latitude = 19.1m });
+
+        var found = await anon.GetFromJsonAsync<CityBody>($"/api/catalog/cities/nearest?lat=19.1&lng=72.8", Json);
+        Assert.Equal(near.Id, found!.Id);
+    }
+
     private LocationFileBody LocationFile()
     {
         var root = _factory.Services.GetRequiredService<Microsoft.AspNetCore.Hosting.IWebHostEnvironment>().ContentRootPath;
@@ -381,7 +441,7 @@ public class StateCityApiTests : IClassFixture<YogaApiFactory>
     private sealed record AuthBody(string Token, UserAuthBody User);
     private sealed record StateBody(Guid Id, string Name, string Code, bool IsActive, int DisplayOrder);
     private sealed record CityBody(Guid Id, string Name, Guid StateId, string Slug, bool IsActive, int DisplayOrder);
-    private sealed record AreaBody(Guid Id, Guid CityId, string CityName, string Name);
+    private sealed record AreaBody(Guid Id, Guid CityId, string CityName, string Name, bool IsActive);
     private sealed record PagedBody<T>(List<T> Items, int Total, int Page, int PageSize);
     private sealed record ImportBody(int StatesAdded, int StatesSkipped, int CitiesAdded, int CitiesSkipped);
     private sealed record LocationStateBody(string Name, string Code, List<string> Cities);

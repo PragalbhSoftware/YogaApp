@@ -81,7 +81,7 @@ public static class MarketClock
     public static string Normalize(string? timeZoneId)
     {
         var id = (timeZoneId ?? "").Trim();
-        if (id.Length is < 1 or > TimeZoneIdMax || !IsIana(id))
+        if (id.Length is < 1 or > TimeZoneIdMax || (!IsIana(id) && !string.Equals(id, DefaultTimeZoneId, StringComparison.Ordinal)))
             throw new DomainException($"Use a known time zone id, for example {DefaultTimeZoneId}.");
         return id;
     }

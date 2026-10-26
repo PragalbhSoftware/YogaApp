@@ -7,10 +7,12 @@ import { HomeHero } from "@/features/marketplace/components/home-hero";
 import { InstructorList } from "@/features/marketplace/components/instructor-list";
 import { ModeFilter } from "@/features/marketplace/components/mode-filter";
 import { useClosedAreaReset } from "@/features/marketplace/hooks/use-closed-area-reset";
+import { useCities } from "@/features/marketplace/hooks/use-cities";
 import { useInstructors } from "@/features/marketplace/hooks/use-instructors";
 import { useSiteBanner } from "@/features/marketplace/hooks/use-site";
 import { usePageTitle } from "@/hooks/use-page-title";
 import { useAreaStore } from "@/stores/area-store";
+import { useCityStore } from "@/stores/city-store";
 
 function readMode(value: string | null): SessionModeFilter {
   if (value && sessionModes.includes(value as (typeof sessionModes)[number])) {
@@ -27,32 +29,46 @@ function useAreaHydrated() {
   );
 }
 
+function useCityHydrated() {
+  return useSyncExternalStore(
+    (onChange) => useCityStore.persist.onFinishHydration(onChange),
+    () => useCityStore.persist.hasHydrated(),
+    () => false,
+  );
+}
+
 export function HomePage() {
-  const city = useAreaStore((state) => state.city);
+  const cityId = useCityStore((state) => state.cityId);
   const areaName = useAreaStore((state) => state.areaName);
   const setArea = useAreaStore((state) => state.setArea);
-  const hydrated = useAreaHydrated();
+  const areaHydrated = useAreaHydrated();
+  const cityHydrated = useCityHydrated();
+  const cities = useCities();
+  const city = cities.data?.find((item) => item.id === cityId)?.name ?? null;
   const [changingArea, setChangingArea] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const mode = readMode(searchParams.get("mode"));
-  const pickingArea = Boolean(hydrated && (!city || !areaName || changingArea));
+  const hydrated = areaHydrated && cityHydrated;
+  const pickingArea = Boolean(hydrated && cityId && city && (!areaName || changingArea));
   const instructors = useInstructors(pickingArea ? null : city, pickingArea ? null : areaName, mode);
   const banner = useSiteBanner();
-  useClosedAreaReset(hydrated ? city : null, hydrated ? areaName : null);
-  usePageTitle(city && !pickingArea ? `Instructors in ${city}` : null);
+  useClosedAreaReset(hydrated ? cityId : null, hydrated ? city : null, hydrated ? areaName : null);
+  usePageTitle(city && areaName && !pickingArea ? `Instructors in ${city}` : null);
 
-  if (!hydrated) return <PageLoader />;
+  if (!hydrated || (cityId && cities.isLoading)) return <PageLoader />;
 
-  if (!city || !areaName || changingArea) {
+  if (!cityId || !city || !areaName || changingArea) {
+    if (!cityId || !city) return <PageLoader />;
     return (
       <AreaPicker
+        cityId={cityId}
         selectedCity={city}
         selectedName={areaName}
-        onSelect={(nextCity, name) => {
-          setArea(nextCity, name);
+        onSelect={(_nextCity, name) => {
+          setArea(name);
           setChangingArea(false);
         }}
-        onCancel={city && areaName ? () => setChangingArea(false) : undefined}
+        onCancel={areaName ? () => setChangingArea(false) : undefined}
       />
     );
   }
