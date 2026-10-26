@@ -13,7 +13,7 @@ public sealed class TrialConsumedMigrationTests : IAsyncLifetime
     private const string BeforeTrialConsumed = "20261012060558_AddContentPages";
 
     private readonly string _connection = SqlServerFactAttribute.ConnectionFor($"YogaMigTest_{Guid.NewGuid():N}");
-    private readonly DateOnly _day = MumbaiClock.Today(DateTimeOffset.UtcNow).AddDays(2);
+    private readonly DateOnly _day = MarketClock.Today(DateTimeOffset.UtcNow).AddDays(2);
     private int _slotHour = 5;
 
     [SqlServerFact]

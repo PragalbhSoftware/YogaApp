@@ -468,6 +468,7 @@ internal static class ModelConfiguration
         entity.ToTable("PlatformSettings");
         entity.Property(s => s.Currency).HasMaxLength(8);
         entity.Property(s => s.PolicyNote).HasMaxLength(PlatformSettingsRules.PolicyNoteMax);
+        entity.Property(s => s.TimeZoneId).HasMaxLength(MarketClock.TimeZoneIdMax).HasDefaultValue(MarketClock.DefaultTimeZoneId);
         entity.Property(s => s.CommissionPercent).HasPrecision(5, 2);
         entity.Property(s => s.ConvenienceFee).HasPrecision(10, 2).HasDefaultValue(0m);
         entity.Property(s => s.LateCancelFeeType).HasConversion<string>().HasMaxLength(16).HasDefaultValue(LateCancelFeeType.Percent);

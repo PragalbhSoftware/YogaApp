@@ -247,6 +247,7 @@ export type CreditSettings = {
 
 /** Daily Razorpay reconciliation. `reconciliationTime` is HH:mm on the market clock. */
 export type ReconciliationSettings = {
+  timeZoneId: string;
   reconciliationTime: string;
   webhookStuckMinutes: number;
   refundPendingHours: number;

@@ -34,7 +34,7 @@ public class RecurringJobsTests
             var run = Assert.Single(queued, j => j.Type == type);
             Assert.Equal((BackgroundJobStatus.Pending, type), (run.Status, run.RecurringType));
         }
-        var nextMidnight = MumbaiClock.SessionStart(MumbaiClock.Today(now).AddDays(1), TimeOnly.MinValue);
+        var nextMidnight = MarketClock.SessionStart(MarketClock.Today(now).AddDays(1), TimeOnly.MinValue);
         Assert.Equal(nextMidnight, queued.Single(j => j.Type == CreditExpiryJob.JobType).RunAt);
         Assert.Equal(nextMidnight, queued.Single(j => j.Type == WebhookPayloadCleanupJob.JobType).RunAt);
         Assert.Equal(JobSchedule.Daily(new TimeOnly(6, 0)).NextRunAfter(now), queued.Single(j => j.Type == ReconciliationJob.JobType).RunAt);
@@ -181,7 +181,7 @@ public class RecurringJobsTests
         Assert.Throws<DomainException>(() => PlatformSettingsRules.Apply(new PlatformSettings(), new PlatformSettingsChanges(CreditExpiryTime: new TimeOnly(2, 0, 30))));
     }
 
-    private static TimeOnly MarketTime(DateTimeOffset at) => TimeOnly.FromDateTime(TimeZoneInfo.ConvertTime(at, MumbaiClock.Zone).DateTime);
+    private static TimeOnly MarketTime(DateTimeOffset at) => TimeOnly.FromDateTime(TimeZoneInfo.ConvertTime(at, MarketClock.Zone).DateTime);
 
     private static async Task EnsureAsync(WebApplicationFactory<Program> host, DateTimeOffset now)
     {

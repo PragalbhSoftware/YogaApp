@@ -135,7 +135,7 @@ public class ProviderService
         if (!request.OffersHome && !request.OffersStudio && !request.OffersOnline)
             throw new DomainException("Choose at least one session mode: Home, Studio, or Online.");
 
-        var area = await _db.Areas.SingleOrDefaultAsync(a => a.Id == request.AreaId && a.IsActive, cancellationToken)
+        var area = await _db.Areas.Include(a => a.City).SingleOrDefaultAsync(a => a.Id == request.AreaId && a.IsActive, cancellationToken)
             ?? throw new DomainException("Choose an open area.");
 
         var category = request.CategoryId is Guid categoryId
@@ -195,7 +195,7 @@ public class ProviderService
         });
         await _db.SaveChangesAsync(cancellationToken);
 
-        return new RegisterProviderResponse(ToSelf(provider, user, area.Name), _tokens.Create(user));
+        return new RegisterProviderResponse(ToSelf(provider, user), _tokens.Create(user));
     }
 
     public async Task<ProviderSelf> GetMineAsync(CancellationToken cancellationToken)
@@ -203,18 +203,18 @@ public class ProviderService
         var provider = await _db.Providers
             .AsNoTracking()
             .Include(p => p.User)
-            .Include(p => p.Area)
+            .Include(p => p.Area).ThenInclude(a => a!.City)
             .SingleOrDefaultAsync(p => p.UserId == _current.UserId, cancellationToken)
             ?? throw new DomainException("Register as an instructor first.", 404);
 
-        return ToSelf(provider, provider.User!, provider.Area!.Name);
+        return ToSelf(provider, provider.User!);
     }
 
     public async Task<ProviderSelf> UpdateRatesAsync(UpdateProviderRatesRequest request, CancellationToken cancellationToken)
     {
         var provider = await _db.Providers
             .Include(p => p.User)
-            .Include(p => p.Area)
+            .Include(p => p.Area).ThenInclude(a => a!.City)
             .SingleOrDefaultAsync(p => p.UserId == _current.UserId, cancellationToken)
             ?? throw new DomainException("Register as an instructor first.", 404);
 
@@ -243,14 +243,14 @@ public class ProviderService
         }
 
         await _db.SaveChangesAsync(cancellationToken);
-        return ToSelf(provider, provider.User!, provider.Area!.Name);
+        return ToSelf(provider, provider.User!);
     }
 
     public async Task<ProviderSelf> UpdateProfileAsync(UpdateProviderProfileRequest request, CancellationToken cancellationToken)
     {
         var provider = await _db.Providers
             .Include(p => p.User)
-            .Include(p => p.Area)
+            .Include(p => p.Area).ThenInclude(a => a!.City)
             .SingleOrDefaultAsync(p => p.UserId == _current.UserId, cancellationToken)
             ?? throw new DomainException("Register as an instructor first.", 404);
 
@@ -263,7 +263,7 @@ public class ProviderService
         if (!request.OffersHome && !request.OffersStudio && !request.OffersOnline)
             throw new DomainException("Choose at least one session mode: Home, Studio, or Online.");
 
-        var area = await _db.Areas.SingleOrDefaultAsync(a => a.Id == request.AreaId && a.IsActive, cancellationToken)
+        var area = await _db.Areas.Include(a => a.City).SingleOrDefaultAsync(a => a.Id == request.AreaId && a.IsActive, cancellationToken)
             ?? throw new DomainException("Choose an open area.");
 
         if (provider.OffersHome && !request.OffersHome
@@ -309,7 +309,7 @@ public class ProviderService
         user.Name = displayName;
 
         await _db.SaveChangesAsync(cancellationToken);
-        return ToSelf(provider, user, area.Name);
+        return ToSelf(provider, user);
     }
 
     public async Task<IReadOnlyList<InstructorPayoutResponse>> ListMyPayoutsAsync(
@@ -383,7 +383,7 @@ public class ProviderService
         if (request.Slots.Count > 40)
             throw new DomainException("Add at most 40 slots at a time.");
 
-        var today = MumbaiClock.Today(_time.GetUtcNow());
+        var today = MarketClock.Today(_time.GetUtcNow());
         var created = new List<AvailabilitySlot>();
         foreach (var input in request.Slots)
         {
@@ -450,7 +450,7 @@ public class ProviderService
         if (!TimeOnly.TryParseExact(request.End, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var end))
             throw new DomainException("End time must be HH:mm.");
 
-        AvailabilityRules.Update(slot, taken, MumbaiClock.Today(_time.GetUtcNow()), request.Date, start, end);
+        AvailabilityRules.Update(slot, taken, MarketClock.Today(_time.GetUtcNow()), request.Date, start, end);
 
         var clash = await _db.AvailabilitySlots.AnyAsync(
             s => s.Id != slot.Id
@@ -470,7 +470,7 @@ public class ProviderService
     {
         var slot = await RequireOwnedSlotAsync(slotId, cancellationToken);
         var taken = await SlotIsOccupiedAsync(slot.Id, cancellationToken);
-        AvailabilityRules.Block(slot, taken, MumbaiClock.Today(_time.GetUtcNow()));
+        AvailabilityRules.Block(slot, taken, MarketClock.Today(_time.GetUtcNow()));
         await _db.SaveChangesAsync(cancellationToken);
         return ToOwnedSlot(slot);
     }
@@ -479,7 +479,7 @@ public class ProviderService
     {
         var slot = await RequireOwnedSlotAsync(slotId, cancellationToken);
         var taken = await SlotIsOccupiedAsync(slot.Id, cancellationToken);
-        AvailabilityRules.Unblock(slot, taken, MumbaiClock.Today(_time.GetUtcNow()));
+        AvailabilityRules.Unblock(slot, taken, MarketClock.Today(_time.GetUtcNow()));
         await _db.SaveChangesAsync(cancellationToken);
         return ToOwnedSlot(slot);
     }
@@ -540,7 +540,7 @@ public class ProviderService
 
     private (DateOnly Start, DateOnly End) ResolveWindow(DateOnly? from, DateOnly? to)
     {
-        var start = from ?? MumbaiClock.Today(_time.GetUtcNow());
+        var start = from ?? MarketClock.Today(_time.GetUtcNow());
         var end = to ?? start.AddDays(6);
         if (end < start)
             throw new DomainException("The end date is before the start date.");
@@ -632,7 +632,7 @@ public class ProviderService
                 .FirstOrDefault());
     }
 
-    private static ProviderSelf ToSelf(Provider provider, User user, string areaName) => new(
+    private static ProviderSelf ToSelf(Provider provider, User user) => new(
         provider.Id,
         provider.UserId,
         provider.DisplayName,
@@ -640,8 +640,8 @@ public class ProviderService
         provider.Age,
         user.Email,
         provider.AreaId,
-        areaName,
-        "Mumbai",
+        provider.Area!.Name,
+        provider.Area.City!.Name,
         provider.Status.ToString(),
         provider.OffersHome,
         provider.OffersStudio,

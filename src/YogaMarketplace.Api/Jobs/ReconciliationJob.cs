@@ -21,7 +21,7 @@ public class ReconciliationJob : IBackgroundJobHandler
     public static readonly RecurringJob Recurring = new(
         JobType,
         terms => terms.Reconciliation,
-        runAt => MumbaiClock.Today(runAt).AddDays(-1).ToString(DateFormat, CultureInfo.InvariantCulture));
+        runAt => MarketClock.Today(runAt).AddDays(-1).ToString(DateFormat, CultureInfo.InvariantCulture));
 
     private readonly YogaDbContext _db;
     private readonly IRazorpayClient _razorpay;

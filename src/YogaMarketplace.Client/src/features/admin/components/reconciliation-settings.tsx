@@ -8,6 +8,7 @@ import { useAdminSettings, useUpdateSettings } from "@/features/admin/hooks/use-
 import { reconciliationSettingsSchema, type ReconciliationSettingsValues } from "@/features/admin/schemas";
 import type { AdminSettings } from "@/features/admin/types";
 import { changedFields } from "@/features/admin/utils";
+import { defaultMarketTimeZone } from "@/utils/clock";
 import { keepUnsavedEdits, settingsSaveHandlers } from "@/features/admin/settings-form";
 import { toUserMessage } from "@/services/http/api-error";
 
@@ -16,6 +17,7 @@ function toFormValues(settings: AdminSettings): ReconciliationSettingsValues {
     reconciliationTime: settings.reconciliationTime,
     webhookStuckMinutes: settings.webhookStuckMinutes,
     refundPendingHours: settings.refundPendingHours,
+    timeZoneId: settings.timeZoneId,
   };
 }
 
@@ -59,7 +61,7 @@ function ReconciliationForm({ settings }: { settings: AdminSettings }) {
               fullWidth
               slotProps={{ inputLabel: { shrink: true } }}
               error={Boolean(errors.reconciliationTime)}
-              helperText={errors.reconciliationTime?.message ?? "India time. A change moves the next check within a minute or two."}
+              helperText={errors.reconciliationTime?.message ?? "Market time. A change moves the next check within a minute or two."}
               {...form.register("reconciliationTime")}
             />
             <TextField
@@ -77,6 +79,13 @@ function ReconciliationForm({ settings }: { settings: AdminSettings }) {
               error={Boolean(errors.refundPendingHours)}
               helperText={errors.refundPendingHours?.message ?? "A refund Razorpay hasn’t confirmed by then is listed."}
               {...form.register("refundPendingHours")}
+            />
+            <TextField
+              label="Time zone"
+              fullWidth
+              error={Boolean(errors.timeZoneId)}
+              helperText={errors.timeZoneId?.message ?? `IANA id. The default is ${defaultMarketTimeZone}.`}
+              {...form.register("timeZoneId")}
             />
           </div>
 

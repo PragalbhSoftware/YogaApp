@@ -25,6 +25,37 @@ public class PlatformSettingsTests : IClassFixture<YogaApiFactory>
     }
 
     [Fact]
+    public async Task Time_zone_is_public_and_a_change_is_audited()
+    {
+        var anon = _factory.CreateClient();
+        var config = await anon.GetFromJsonAsync<ConfigBody>("/api/config", Json);
+        Assert.Equal(MarketClock.DefaultTimeZoneId, config!.TimeZoneId);
+
+        var admin = await SignInAsync(SeedIds.AdminPhone);
+        try
+        {
+            var saved = await AdminSettingsClient.PatchAsync(admin, version => new { version, timeZoneId = "UTC" });
+            Assert.Equal("UTC", saved.TimeZoneId);
+            Assert.Equal("UTC", MarketClock.TimeZoneId);
+            Assert.Equal("UTC", (await anon.GetFromJsonAsync<ConfigBody>("/api/config", Json))!.TimeZoneId);
+
+            using var scope = _factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<YogaDbContext>();
+            var audits = await db.SettingsAudits.Where(a => a.Field == nameof(PlatformSettings.TimeZoneId)).ToListAsync();
+            var audit = audits.OrderByDescending(a => a.ChangedAt).First();
+            Assert.Equal(MarketClock.DefaultTimeZoneId, audit.OldValue);
+            Assert.Equal("UTC", audit.NewValue);
+
+            var rejected = await admin.PatchAsJsonAsync("/api/admin/settings", new { version = saved.Version, timeZoneId = "Not/AZone" });
+            Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
+        }
+        finally
+        {
+            await AdminSettingsClient.PatchAsync(admin, version => new { version, timeZoneId = MarketClock.DefaultTimeZoneId });
+        }
+    }
+
+    [Fact]
     public async Task Settings_changes_apply_to_new_bookings_only()
     {
         var admin = await SignInAsync(SeedIds.AdminPhone);
@@ -300,7 +331,7 @@ public class PlatformSettingsTests : IClassFixture<YogaApiFactory>
 
     private static async Task<Guid> TomorrowSlotAsync(HttpClient instructor, string start)
     {
-        var day = MumbaiClock.Today(DateTimeOffset.UtcNow).AddDays(1);
+        var day = MarketClock.Today(DateTimeOffset.UtcNow).AddDays(1);
         var end = TimeOnly.Parse(start).AddMinutes(30).ToString("HH:mm");
         var created = await PostAsync<List<SlotBody>>(instructor, "/api/providers/me/slots", new
         {
@@ -382,6 +413,7 @@ public class PlatformSettingsTests : IClassFixture<YogaApiFactory>
     private sealed record AreaBody(Guid Id, string City, string Name);
     private sealed record ProviderBody(Guid Id, string DisplayName);
     private sealed record ProviderDetailBody(Guid Id, bool AreaOpen);
+    private sealed record ConfigBody(string TimeZoneId);
     private sealed record PriceQuoteBody(decimal SessionAmount, decimal ConvenienceFee, decimal Total);
     private sealed record CheckoutBody(string OrderId, decimal Amount, decimal SessionAmount, decimal ConvenienceFee);
     private sealed record BookingBody(

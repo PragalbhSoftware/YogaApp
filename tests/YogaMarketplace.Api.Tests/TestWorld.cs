@@ -88,7 +88,7 @@ internal static class TestWorld
 
     private static async Task AddWeekAsync(YogaDbContext db, TimeProvider time, CancellationToken cancellationToken)
     {
-        var today = MumbaiClock.Today(time.GetUtcNow());
+        var today = MarketClock.Today(time.GetUtcNow());
         var next = today.AddMonths(1);
         var last = new DateOnly(next.Year, next.Month, DateTime.DaysInMonth(next.Year, next.Month));
         for (var date = today; date <= last; date = date.AddDays(1))

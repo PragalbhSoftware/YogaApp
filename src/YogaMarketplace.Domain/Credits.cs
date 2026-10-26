@@ -113,7 +113,7 @@ public static class CreditPackRules
 }
 
 /// <summary>
-/// Credit rules. Credits are used from the batch that expires first. A batch expires at midnight India time after its
+/// Credit rules. Credits are used from the batch that expires first. A batch expires at midnight market time after its
 /// validity days, counting the purchase day as day 1. A trial can never be paid with a credit.
 /// </summary>
 public static class CreditRules
@@ -123,10 +123,10 @@ public static class CreditRules
     public const string BlockedMessage = "Your account can't buy packs or use credits right now.";
 
     public static DateTimeOffset ExpiresAt(DateTimeOffset purchasedAt, int validityDays) =>
-        MumbaiClock.SessionStart(MumbaiClock.Today(purchasedAt).AddDays(validityDays), TimeOnly.MinValue);
+        MarketClock.SessionStart(MarketClock.Today(purchasedAt).AddDays(validityDays), TimeOnly.MinValue);
 
     /// <summary>The last India date a credit from this batch can be used on.</summary>
-    public static DateOnly LastDay(CreditBatch batch) => MumbaiClock.Today(batch.ExpiresAt).AddDays(-1);
+    public static DateOnly LastDay(CreditBatch batch) => MarketClock.Today(batch.ExpiresAt).AddDays(-1);
 
     public static decimal PerSessionValue(CreditBatch batch) =>
         decimal.Round(batch.Price / batch.Sessions, 2, MidpointRounding.AwayFromZero);

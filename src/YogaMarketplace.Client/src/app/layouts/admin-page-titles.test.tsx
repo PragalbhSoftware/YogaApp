@@ -49,6 +49,7 @@ const { adminApi, adminCreditsApi, contentApi } = vi.hoisted(() => {
     bannerOffer: "",
     policyVersion: 1,
     webhookPayloadRetentionDays: 30,
+    timeZoneId: "UTC",
     reconciliationTime: "02:00",
     webhookStuckMinutes: 30,
     refundPendingHours: 24,

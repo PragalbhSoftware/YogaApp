@@ -46,7 +46,7 @@ export function PacksPage() {
         <h1 className="font-heading text-3xl font-medium">Practise more, pay less</h1>
         <p className="text-sm leading-relaxed text-brand-muted">
           Buy a pack of credits once. Each credit books one session with any instructor, at home, in a studio or online.
-          Credits expire at midnight India time after the last day shown.
+          Credits expire at midnight market time after the last day shown.
         </p>
       </header>
 

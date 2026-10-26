@@ -125,7 +125,7 @@ public class CustomerVisitAddressTests : IClassFixture<YogaApiFactory>
             Id = id,
             ProviderId = SeedIds.AnanyaProviderId,
             Mode = SessionMode.Home,
-            Date = MumbaiClock.Today(DateTimeOffset.UtcNow).AddDays(6),
+            Date = MarketClock.Today(DateTimeOffset.UtcNow).AddDays(6),
             StartTime = start,
             EndTime = start.AddHours(1)
         });

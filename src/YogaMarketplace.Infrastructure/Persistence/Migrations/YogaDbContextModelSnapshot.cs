@@ -1430,6 +1430,13 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                     b.Property<int>("RescheduleFreeWindowHours")
                         .HasColumnType("int");
 
+                    b.Property<string>("TimeZoneId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .HasDefaultValue("Asia/Kolkata");
+
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .HasColumnType("datetimeoffset");
 

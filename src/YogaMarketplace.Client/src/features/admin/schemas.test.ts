@@ -93,7 +93,7 @@ describe("credit settings form", () => {
 });
 
 describe("reconciliation settings form", () => {
-  const recon = { reconciliationTime: "06:00", webhookStuckMinutes: 60, refundPendingHours: 48 };
+  const recon = { timeZoneId: "UTC", reconciliationTime: "06:00", webhookStuckMinutes: 60, refundPendingHours: 48 };
   const reconErrors = (input: Record<string, unknown>) => {
     const result = reconciliationSettingsSchema.safeParse({ ...recon, ...input });
     return result.success ? [] : result.error.issues.map((issue) => issue.path.join("."));

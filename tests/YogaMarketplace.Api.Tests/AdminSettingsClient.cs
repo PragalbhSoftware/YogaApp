@@ -54,4 +54,5 @@ internal sealed record SettingsBody(
     string? BannerTitle,
     string? BannerSubtitle,
     string? BannerOffer,
-    DateTimeOffset? UpdatedAt);
+    DateTimeOffset? UpdatedAt,
+    string TimeZoneId);

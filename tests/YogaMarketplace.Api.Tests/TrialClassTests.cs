@@ -244,7 +244,7 @@ public class TrialClassTests : IClassFixture<YogaApiFactory>
 
     private static async Task<Guid> TomorrowSlotAsync(HttpClient instructor, string start)
     {
-        var day = MumbaiClock.Today(DateTimeOffset.UtcNow).AddDays(1);
+        var day = MarketClock.Today(DateTimeOffset.UtcNow).AddDays(1);
         var end = TimeOnly.Parse(start).AddMinutes(30).ToString("HH:mm");
         var created = await PostAsync<List<SlotBody>>(instructor, "/api/providers/me/slots", new
         {

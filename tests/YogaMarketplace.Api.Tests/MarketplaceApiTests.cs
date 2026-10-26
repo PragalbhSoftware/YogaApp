@@ -228,7 +228,7 @@ public class MarketplaceApiTests : IClassFixture<YogaApiFactory>
 
         var areas = await client.GetFromJsonAsync<List<AreaBody>>("/api/areas", Json);
         var bandra = areas!.Single(a => a.Name == "Bandra");
-        var tomorrow = MumbaiClock.Today(DateTimeOffset.UtcNow).AddDays(1);
+        var tomorrow = MarketClock.Today(DateTimeOffset.UtcNow).AddDays(1);
 
         var missingMeet = await client.PostAsJsonAsync("/api/providers/register", new
         {
@@ -293,6 +293,7 @@ public class MarketplaceApiTests : IClassFixture<YogaApiFactory>
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth.Token);
         var me = await client.GetFromJsonAsync<ProviderSelfBody>("/api/providers/me", Json);
         Assert.Equal("Verified", me!.Status);
+        Assert.Equal(TestWorld.CityName, me.City);
         Assert.Contains("meet.google.com", me.GoogleMeetLink, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -335,6 +336,6 @@ public class MarketplaceApiTests : IClassFixture<YogaApiFactory>
     private sealed record ProviderBody(Guid Id, string DisplayName, string Area, string Status, List<ModeBody> Modes);
     private sealed record SlotBody(Guid Id, string Mode, DateOnly Date, string Start, string End);
     private sealed record SlotListBody(string Mode, DateOnly From, DateOnly To, List<SlotBody> Slots);
-    private sealed record ProviderSelfBody(Guid Id, string Status, string? GoogleMeetLink);
+    private sealed record ProviderSelfBody(Guid Id, string Status, string? GoogleMeetLink, string City);
     private sealed record RegisterBody(ProviderSelfBody Provider, string Token);
 }

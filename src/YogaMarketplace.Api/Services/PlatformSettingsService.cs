@@ -135,6 +135,7 @@ public class PlatformSettingsService : IPlatformSettingsService
         try
         {
             await _db.SaveChangesAsync(cancellationToken);
+            MarketClock.Use(settings.TimeZoneId);
         }
         catch (DbUpdateConcurrencyException)
         {
@@ -211,7 +212,8 @@ public class PlatformSettingsService : IPlatformSettingsService
         request.NotificationMaxAttempts,
         request.OtpMaxSendsPerPhone,
         request.OtpMaxWrongCodesPerPhone,
-        request.OtpLockMinutes);
+        request.OtpLockMinutes,
+        request.TimeZoneId);
 
     private static TimeOnly? ParseTime(string? value, string label)
     {
@@ -266,5 +268,6 @@ public class PlatformSettingsService : IPlatformSettingsService
         settings.NotificationMaxAttempts,
         settings.OtpMaxSendsPerPhone,
         settings.OtpMaxWrongCodesPerPhone,
-        settings.OtpLockMinutes);
+        settings.OtpLockMinutes,
+        settings.TimeZoneId);
 }

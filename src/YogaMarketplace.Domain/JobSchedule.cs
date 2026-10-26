@@ -26,9 +26,9 @@ public sealed record JobSchedule
     {
         if (DailyAt is TimeOnly at)
         {
-            var today = MumbaiClock.Today(now);
-            var run = MumbaiClock.SessionStart(today, at);
-            return run > now ? run : MumbaiClock.SessionStart(today.AddDays(1), at);
+            var today = MarketClock.Today(now);
+            var run = MarketClock.SessionStart(today, at);
+            return run > now ? run : MarketClock.SessionStart(today.AddDays(1), at);
         }
         if (EveryMinutes is int minutes)
             return now.AddMinutes(minutes);

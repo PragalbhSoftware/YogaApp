@@ -7,11 +7,11 @@ describe("saved area migration", () => {
   });
 
   it("keeps a complete pick", () => {
-    expect(migrateArea({ city: "Pune", areaName: "Kothrud" }, 1)).toEqual({ city: "Pune", areaName: "Kothrud" });
+    expect(migrateArea({ city: "Harbor", areaName: "Kothrud" }, 1)).toEqual({ city: "Harbor", areaName: "Kothrud" });
   });
 
   it("clears a half-saved pick", () => {
-    expect(migrateArea({ city: "Pune", areaName: null }, 1)).toEqual({ city: null, areaName: null });
+    expect(migrateArea({ city: "Harbor", areaName: null }, 1)).toEqual({ city: null, areaName: null });
     expect(migrateArea(undefined, 1)).toEqual({ city: null, areaName: null });
   });
 });

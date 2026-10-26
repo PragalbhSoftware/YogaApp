@@ -303,6 +303,7 @@ public class UpdateSettingsRequest
     public int? OtpMaxSendsPerPhone { get; set; }
     public int? OtpMaxWrongCodesPerPhone { get; set; }
     public int? OtpLockMinutes { get; set; }
+    public string? TimeZoneId { get; set; }
 }
 
 public record AdminSettingsResponse(
@@ -347,7 +348,8 @@ public record AdminSettingsResponse(
     int NotificationMaxAttempts,
     int OtpMaxSendsPerPhone,
     int OtpMaxWrongCodesPerPhone,
-    int OtpLockMinutes);
+    int OtpLockMinutes,
+    string TimeZoneId);
 
 public record AdminErrorEventResponse(
     Guid Id,

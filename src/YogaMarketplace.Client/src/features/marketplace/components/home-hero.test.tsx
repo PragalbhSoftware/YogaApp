@@ -6,7 +6,7 @@ import { HomeHero } from "@/features/marketplace/components/home-hero";
 
 function renderHero(props: Partial<Parameters<typeof HomeHero>[0]> = {}) {
   return render(
-    <HomeHero city="Pune" areaName="Kothrud" banner={undefined} bannerLoading={false} onChangeArea={vi.fn()} {...props} />,
+    <HomeHero city="Harbor" areaName="Kothrud" banner={undefined} bannerLoading={false} onChangeArea={vi.fn()} {...props} />,
   );
 }
 

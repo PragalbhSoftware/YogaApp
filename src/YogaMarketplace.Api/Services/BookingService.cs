@@ -387,7 +387,7 @@ public partial class BookingService : IBookingService, IBookingHandshake, IRazor
             var originalStart = SessionStartOf(booking);
             BookingRules.Reschedule(booking, newSlot, _time.GetUtcNow());
             BookingRules.EnsureOutsideLateWindow(booking, originalStart, _time.GetUtcNow());
-            if (MumbaiClock.SessionStart(newSlot.Date, newSlot.EndTime) <= _time.GetUtcNow())
+            if (MarketClock.SessionStart(newSlot.Date, newSlot.EndTime) <= _time.GetUtcNow())
                 throw new DomainException("That slot has already ended.", 409);
             if (await SlotIsTakenAsync(newSlot.Id, cancellationToken, booking.Id))
                 throw new DomainException("That slot is no longer available.", 409);
@@ -650,7 +650,7 @@ public partial class BookingService : IBookingService, IBookingHandshake, IRazor
         if (!ProviderApproval.IsListedNow(provider) || slot.IsBlocked || !provider.Offers(slot.Mode))
             throw new DomainException("That slot is no longer available.", 409);
         EnsureAreaOpen(provider);
-        if (MumbaiClock.SessionStart(slot.Date, slot.EndTime) <= _time.GetUtcNow())
+        if (MarketClock.SessionStart(slot.Date, slot.EndTime) <= _time.GetUtcNow())
             throw new DomainException("That slot has already ended.", 409);
         if (await SlotIsTakenAsync(slot.Id, cancellationToken))
             throw new DomainException("That slot was just booked.", 409);
@@ -680,7 +680,7 @@ public partial class BookingService : IBookingService, IBookingHandshake, IRazor
         EnsureAreaOpen(provider);
         if (slot.IsBlocked || !provider.Offers(slot.Mode))
             throw new DomainException("That slot is no longer available.", 409);
-        if (MumbaiClock.SessionStart(slot.Date, slot.EndTime) <= _time.GetUtcNow())
+        if (MarketClock.SessionStart(slot.Date, slot.EndTime) <= _time.GetUtcNow())
             throw new DomainException("That slot has already ended.", 409);
         if (await SlotIsTakenAsync(slot.Id, cancellationToken))
             throw new DomainException("That slot is no longer available.", 409);
@@ -889,7 +889,7 @@ public partial class BookingService : IBookingService, IBookingHandshake, IRazor
     private static DateTimeOffset SessionStartOf(Booking booking)
     {
         var slot = booking.Slot ?? throw new InvalidOperationException("Slot was not loaded.");
-        return MumbaiClock.SessionStart(slot.Date, slot.StartTime);
+        return MarketClock.SessionStart(slot.Date, slot.StartTime);
     }
 
     private async Task<LoadedBooking?> LoadByPaymentIdAsync(string paymentId, CancellationToken cancellationToken)

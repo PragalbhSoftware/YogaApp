@@ -75,7 +75,7 @@ public static class ReconciliationRules
 
     /// <summary>The run on <paramref name="marketDate"/> covers that whole market day, midnight to midnight.</summary>
     public static (DateTimeOffset Start, DateTimeOffset End) WindowFor(DateOnly marketDate) =>
-        (MumbaiClock.SessionStart(marketDate, TimeOnly.MinValue), MumbaiClock.SessionStart(marketDate.AddDays(1), TimeOnly.MinValue));
+        (MarketClock.SessionStart(marketDate, TimeOnly.MinValue), MarketClock.SessionStart(marketDate.AddDays(1), TimeOnly.MinValue));
 
     /// <summary>
     /// Whether an item means money or a booking may be wrong and someone must look now. A refund still pending at

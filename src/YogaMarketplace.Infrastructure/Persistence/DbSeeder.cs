@@ -43,7 +43,8 @@ public class DbSeeder
                 LateCancelFeeType = LateCancelFeeType.Percent,
                 LateCancelFeeValue = 50m,
                 PayoutCycle = PayoutCycle.Weekly,
-                PolicyNote = "Platform fee, cancel window, and reschedule window are TBD defaults for the Mumbai launch. Confirm with ops before taking live payments."
+                PolicyNote = "Platform fee, cancel window, and reschedule window are launch defaults. Confirm with ops before taking live payments.",
+                TimeZoneId = MarketClock.DefaultTimeZoneId
             });
         }
 
@@ -63,7 +64,7 @@ public class DbSeeder
             Id = SeedIds.AdminUserId,
             Phone = SeedIds.AdminPhone,
             Name = "Marketplace Admin",
-            Email = "admin@yogamumbai.in",
+            Email = "admin@example.com",
             Role = UserRole.Admin,
             CreatedAt = _time.GetUtcNow()
         });

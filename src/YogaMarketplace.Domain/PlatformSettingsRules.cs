@@ -49,7 +49,8 @@ public sealed record PlatformSettingsChanges(
     int? NotificationMaxAttempts = null,
     int? OtpMaxSendsPerPhone = null,
     int? OtpMaxWrongCodesPerPhone = null,
-    int? OtpLockMinutes = null);
+    int? OtpLockMinutes = null,
+    string? TimeZoneId = null);
 
 /// <summary>When the daily reconciliation runs and how long a webhook or refund may wait before it is reported.</summary>
 public sealed record ReconciliationTerms(TimeOnly RunAt, int WebhookStuckMinutes, int RefundPendingHours);
@@ -193,6 +194,7 @@ public static class PlatformSettingsRules
         var otpSends = changes.OtpMaxSendsPerPhone is int os ? Between(os, MaxOtpMaxSendsPerPhone, "Codes per phone", "codes") : settings.OtpMaxSendsPerPhone;
         var otpWrong = changes.OtpMaxWrongCodesPerPhone is int ow ? Between(ow, MaxOtpMaxWrongCodesPerPhone, "Wrong codes per phone", "tries") : settings.OtpMaxWrongCodesPerPhone;
         var otpLock = changes.OtpLockMinutes is int ol ? Between(ol, MaxOtpLockMinutes, "Phone lock", "minutes") : settings.OtpLockMinutes;
+        var timeZoneId = changes.TimeZoneId is null ? settings.TimeZoneId : MarketClock.Normalize(changes.TimeZoneId);
 
         var log = new List<SettingChange>();
         Set(log, nameof(settings.CommissionPercent), settings.CommissionPercent, commission, v => settings.CommissionPercent = v);
@@ -233,6 +235,7 @@ public static class PlatformSettingsRules
         Set(log, nameof(settings.OtpMaxSendsPerPhone), settings.OtpMaxSendsPerPhone, otpSends, v => settings.OtpMaxSendsPerPhone = v);
         Set(log, nameof(settings.OtpMaxWrongCodesPerPhone), settings.OtpMaxWrongCodesPerPhone, otpWrong, v => settings.OtpMaxWrongCodesPerPhone = v);
         Set(log, nameof(settings.OtpLockMinutes), settings.OtpLockMinutes, otpLock, v => settings.OtpLockMinutes = v);
+        Set(log, nameof(settings.TimeZoneId), settings.TimeZoneId, timeZoneId, v => settings.TimeZoneId = v);
         return log;
     }
 
@@ -332,7 +335,7 @@ public static class PlatformSettingsRules
 }
 
 /// <summary>
-/// Payout periods in India time. Weekly runs Monday to Sunday. Biweekly runs in 14-day blocks
+/// Payout periods in market time. Weekly runs Monday to Sunday. Biweekly runs in 14-day blocks
 /// counted from <see cref="BiweeklyAnchor"/>. Only payouts created before the current period starts are due.
 /// </summary>
 public static class PayoutCycleRules
@@ -341,7 +344,7 @@ public static class PayoutCycleRules
 
     public static DateTimeOffset CurrentPeriodStart(PayoutCycle cycle, DateTimeOffset now)
     {
-        var today = MumbaiClock.Today(now);
+        var today = MarketClock.Today(now);
         var monday = today.AddDays(-(((int)today.DayOfWeek + 6) % 7));
         if (cycle == PayoutCycle.Biweekly)
         {
@@ -349,7 +352,7 @@ public static class PayoutCycleRules
             if (((weeks % 2) + 2) % 2 == 1)
                 monday = monday.AddDays(-7);
         }
-        return MumbaiClock.SessionStart(monday, TimeOnly.MinValue);
+        return MarketClock.SessionStart(monday, TimeOnly.MinValue);
     }
 
     public static DateTimeOffset NextPeriodStart(PayoutCycle cycle, DateTimeOffset now) =>

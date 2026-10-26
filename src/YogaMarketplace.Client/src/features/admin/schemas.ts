@@ -164,6 +164,7 @@ export const reconciliationLimits = {
 const marketTime = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Pick a time such as 06:00.");
 
 export const reconciliationSettingsSchema = z.object({
+  timeZoneId: z.string().trim().min(1, "Enter a time zone id.").max(64, "Enter a time zone id."),
   reconciliationTime: marketTime,
   webhookStuckMinutes: z.coerce
     .number({ invalid_type_error: "Enter a number of minutes." })

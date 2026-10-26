@@ -307,7 +307,7 @@ public class DemoDataLoader
 
     private async Task<AvailabilitySlot> SlotAsync(Guid providerId, DemoBooking item, DateTimeOffset now, CancellationToken cancellationToken)
     {
-        var date = MumbaiClock.Today(now).AddDays(item.DayOffset);
+        var date = MarketClock.Today(now).AddDays(item.DayOffset);
         var slot = await _db.AvailabilitySlots.SingleOrDefaultAsync(
             s => s.ProviderId == providerId && s.Mode == item.Mode && s.Date == date && s.StartTime == item.Start,
             cancellationToken);

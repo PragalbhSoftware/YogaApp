@@ -64,6 +64,8 @@ public class ResendOtpRequest
 
 public record AreaResponse(Guid Id, Guid CityId, string CityName, Guid StateId, string StateName, string Pincode, string Name);
 
+public record MarketConfigResponse(string TimeZoneId);
+
 public record StateResponse(Guid Id, string Name, string Code, int DisplayOrder);
 
 public record CityResponse(Guid Id, string Name, Guid StateId, string Slug, int DisplayOrder);

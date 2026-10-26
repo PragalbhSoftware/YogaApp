@@ -48,7 +48,7 @@ function JobScheduleForm({ settings }: { settings: AdminSettings }) {
     <div className="space-y-5">
       <SettingsIntro
         title="Schedules"
-        lead="Daily jobs run at these India times. A change moves the next run within a minute or two. Turning a job off stops it until you turn it back on."
+        lead="Daily jobs run at these market times. A change moves the next run within a minute or two. Turning a job off stops it until you turn it back on."
       />
       <SettingsCard>
         <form
@@ -78,7 +78,7 @@ function JobScheduleForm({ settings }: { settings: AdminSettings }) {
               type="time"
               slotProps={{ inputLabel: { shrink: true } }}
               error={Boolean(errors.creditExpiryTime)}
-              helperText={errors.creditExpiryTime?.message ?? "India time"}
+              helperText={errors.creditExpiryTime?.message ?? "market time"}
               {...form.register("creditExpiryTime")}
             />
           </ScheduleRow>
@@ -93,7 +93,7 @@ function JobScheduleForm({ settings }: { settings: AdminSettings }) {
               type="time"
               slotProps={{ inputLabel: { shrink: true } }}
               error={Boolean(errors.webhookCleanupTime)}
-              helperText={errors.webhookCleanupTime?.message ?? "India time"}
+              helperText={errors.webhookCleanupTime?.message ?? "market time"}
               {...form.register("webhookCleanupTime")}
             />
           </ScheduleRow>
