@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { User } from "@/features/auth/types";
+import { useCityStore } from "@/stores/city-store";
 
 /** Where older builds persisted the session, token included. */
 const LEGACY_STORAGE_KEY = "ym.auth";
@@ -44,6 +45,7 @@ export const useAuthStore = create<AuthState>()((set) => ({
   },
   signOut: () => {
     rememberSignedIn(false);
+    useCityStore.getState().clearPreferredCitySyncPending();
     set({ token: null, user: null });
   },
 }));

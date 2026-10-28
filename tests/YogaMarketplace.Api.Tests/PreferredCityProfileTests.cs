@@ -17,6 +17,14 @@ public class PreferredCityProfileTests : IClassFixture<YogaApiFactory>
     }
 
     [Fact]
+    public async Task Preferred_city_requires_sign_in()
+    {
+        var client = _factory.CreateClient();
+        var response = await client.PutAsJsonAsync("/api/profile/preferred-city", new { preferredCityId = TestWorld.CityId });
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Preferred_city_can_be_saved_and_cleared()
     {
         var client = await SignUpAsync();
@@ -56,6 +64,33 @@ public class PreferredCityProfileTests : IClassFixture<YogaApiFactory>
     }
 
     [Fact]
+    public async Task Preferred_city_rejects_an_active_city_in_an_inactive_state()
+    {
+        var client = await SignUpAsync();
+        var admin = await SignInAdminAsync();
+
+        var tag = (char)('A' + Random.Shared.Next(26));
+        var state = await PostAsync<StateBody>(admin, "/api/admin/states", new
+        {
+            name = "Dim State " + tag,
+            code = "Z" + tag + (char)('A' + Random.Shared.Next(26))
+        });
+        var city = await PostAsync<CityBody>(admin, "/api/admin/cities", new
+        {
+            name = "Lamp City " + tag,
+            stateId = state.Id,
+            displayOrder = 1
+        });
+        await PatchAsync<CityBody>(admin, $"/api/admin/cities/{city.Id}", new { isActive = false });
+        await PatchAsync<StateBody>(admin, $"/api/admin/states/{state.Id}", new { isActive = false });
+        await PatchAsync<CityBody>(admin, $"/api/admin/cities/{city.Id}", new { isActive = true });
+
+        var response = await client.PutAsJsonAsync("/api/profile/preferred-city", new { preferredCityId = city.Id });
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("not available", await response.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Deleting_a_city_customers_prefer_is_blocked()
     {
         var admin = await SignInAdminAsync();
@@ -71,11 +106,41 @@ public class PreferredCityProfileTests : IClassFixture<YogaApiFactory>
 
         var blocked = await admin.DeleteAsync($"/api/admin/cities/{city.Id}");
         Assert.Equal(HttpStatusCode.Conflict, blocked.StatusCode);
-        Assert.Contains("preferred city", await blocked.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("in use", await blocked.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
 
         await PutAsync<ProfileBody>(customer, "/api/profile/preferred-city", new { preferredCityId = (Guid?)null });
         var gone = await admin.DeleteAsync($"/api/admin/cities/{city.Id}");
         Assert.Equal(HttpStatusCode.NoContent, gone.StatusCode);
+    }
+
+    [Fact]
+    public async Task Deleting_a_city_requires_admin_and_blocks_unknown_or_linked_rows()
+    {
+        var anon = _factory.CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anon.DeleteAsync($"/api/admin/cities/{Guid.NewGuid()}")).StatusCode);
+
+        var customer = await SignUpAsync();
+        Assert.Equal(HttpStatusCode.Forbidden, (await customer.DeleteAsync($"/api/admin/cities/{Guid.NewGuid()}")).StatusCode);
+
+        var admin = await SignInAdminAsync();
+        Assert.Equal(HttpStatusCode.NotFound, (await admin.DeleteAsync($"/api/admin/cities/{Guid.NewGuid()}")).StatusCode);
+
+        var city = await PostAsync<CityBody>(admin, "/api/admin/cities", new
+        {
+            name = "Busy" + Guid.NewGuid().ToString("N")[..6],
+            stateId = TestWorld.StateId,
+            displayOrder = 7
+        });
+        await PostAsync<AreaBody>(admin, "/api/admin/areas", new
+        {
+            name = "Dock" + Guid.NewGuid().ToString("N")[..4],
+            cityId = city.Id,
+            pincode = "560099"
+        });
+
+        var blocked = await admin.DeleteAsync($"/api/admin/cities/{city.Id}");
+        Assert.Equal(HttpStatusCode.Conflict, blocked.StatusCode);
+        Assert.Contains("neighbourhood", await blocked.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task<HttpClient> SignUpAsync()
@@ -131,6 +196,8 @@ public class PreferredCityProfileTests : IClassFixture<YogaApiFactory>
     private sealed record OtpBody(Guid ChallengeId, DateTimeOffset ExpiresAt, string? DevCode);
     private sealed record UserAuthBody(string Role);
     private sealed record AuthBody(string Token, UserAuthBody User);
+    private sealed record StateBody(Guid Id, string Name, bool IsActive);
     private sealed record CityBody(Guid Id, string Name, Guid StateId, bool IsActive);
+    private sealed record AreaBody(Guid Id);
     private sealed record ProfileBody(Guid Id, string? Name, string Role, Guid? PreferredCityId);
 }

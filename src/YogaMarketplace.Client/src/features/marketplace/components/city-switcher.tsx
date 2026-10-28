@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@mui/material";
 import { MapPin } from "lucide-react";
 import { CityPickerDialog } from "@/features/marketplace/components/city-picker-dialog";
@@ -13,6 +14,7 @@ type CitySwitcherProps = {
 export function CitySwitcher({ compact = false }: CitySwitcherProps) {
   const cityId = useCityStore((state) => state.cityId);
   const cities = useCities();
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const city = cities.data?.find((item) => item.id === cityId);
   if (!city) return null;
@@ -40,7 +42,7 @@ export function CitySwitcher({ compact = false }: CitySwitcherProps) {
         cities={cities.data ?? []}
         onDismiss={() => setOpen(false)}
         onSelect={(id) => {
-          void chooseCity(id).finally(() => setOpen(false));
+          void chooseCity(id, queryClient).finally(() => setOpen(false));
         }}
       />
     </>

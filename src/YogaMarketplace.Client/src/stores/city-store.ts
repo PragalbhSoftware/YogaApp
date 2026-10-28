@@ -3,11 +3,11 @@ import { persist } from "zustand/middleware";
 
 type CityState = {
   cityId: string | null;
-  /** True when a signed-in city switch saved locally but the profile PUT failed — push on next login. */
-  preferredCitySyncPending: boolean;
+  /** Signed-in user id whose preferred-city PUT failed — push on that user's next login only. */
+  preferredCitySyncPending: string | null;
   setCityId: (cityId: string) => void;
   clearCity: () => void;
-  markPreferredCitySyncPending: () => void;
+  markPreferredCitySyncPending: (userId: string) => void;
   clearPreferredCitySyncPending: () => void;
 };
 
@@ -15,17 +15,20 @@ type PersistedCity = Pick<CityState, "cityId" | "preferredCitySyncPending">;
 
 export const useCityStore = create<CityState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       cityId: null,
-      preferredCitySyncPending: false,
+      preferredCitySyncPending: null,
       setCityId: (cityId) => set({ cityId }),
       clearCity: () => set({ cityId: null }),
-      markPreferredCitySyncPending: () => set({ preferredCitySyncPending: true }),
-      clearPreferredCitySyncPending: () => set({ preferredCitySyncPending: false }),
+      markPreferredCitySyncPending: (userId) => set({ preferredCitySyncPending: userId }),
+      clearPreferredCitySyncPending: () => {
+        if (get().preferredCitySyncPending === null) return;
+        set({ preferredCitySyncPending: null });
+      },
     }),
     {
       name: "ym.city",
-      version: 2,
+      version: 1,
       partialize: (state): PersistedCity => ({
         cityId: state.cityId,
         preferredCitySyncPending: state.preferredCitySyncPending,

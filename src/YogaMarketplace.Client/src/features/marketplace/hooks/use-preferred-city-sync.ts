@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/features/auth/hooks/use-auth";
 import { useCities } from "@/features/marketplace/hooks/use-cities";
 import { syncPreferredCity } from "@/features/marketplace/utils/sync-preferred-city";
-import { profileQueryKey, useCustomerProfile } from "@/features/profile/hooks/use-profile";
+import { useCustomerProfile } from "@/features/profile/hooks/use-profile";
 import { useCityHydrated } from "@/hooks/use-city-hydrated";
 import { useCityStore } from "@/stores/city-store";
 
@@ -25,8 +25,6 @@ export function usePreferredCitySync() {
     if (!hydrated || !cities.isSuccess || !profile.isSuccess) return;
     if (ranForUser.current === user.id) return;
     ranForUser.current = user.id;
-    void syncPreferredCity(profile.data.preferredCityId, cities.data, cityId).then(() => {
-      void queryClient.invalidateQueries({ queryKey: profileQueryKey });
-    });
+    void syncPreferredCity(profile.data.preferredCityId, cities.data, cityId, user.id, queryClient);
   }, [isAuthenticated, user, hydrated, cities.isSuccess, cities.data, profile.isSuccess, profile.data, cityId, queryClient]);
 }

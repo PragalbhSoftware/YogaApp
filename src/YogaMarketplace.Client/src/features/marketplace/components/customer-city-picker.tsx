@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { CustomerCityPickerBody } from "@/features/marketplace/components/customer-city-picker-body";
 import { useCities } from "@/features/marketplace/hooks/use-cities";
 import { chooseCity } from "@/features/marketplace/utils/choose-city";
@@ -12,6 +13,7 @@ export function CustomerCityPicker() {
   const clearCity = useCityStore((state) => state.clearCity);
   const clearArea = useAreaStore((state) => state.clearArea);
   const cities = useCities();
+  const queryClient = useQueryClient();
   const clearSaved = useCallback(() => {
     clearCity();
     clearArea();
@@ -24,7 +26,7 @@ export function CustomerCityPicker() {
       cities={cities.data}
       citiesLoaded={cities.isSuccess}
       onClear={clearSaved}
-      onSelect={(id) => void chooseCity(id)}
+      onSelect={(id) => void chooseCity(id, queryClient)}
     />
   );
 }

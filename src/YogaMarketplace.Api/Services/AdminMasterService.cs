@@ -320,13 +320,20 @@ public class AdminMasterService : IAdminMasterService
             ?? throw new DomainException("City not found.", 404);
 
         if (await _db.Users.AnyAsync(u => u.PreferredCityId == id, cancellationToken))
-            throw new DomainException("Turn the city off instead. Customers still have it as their preferred city.", 409);
+            throw new DomainException("This city is in use. Turn it off instead of deleting it.", 409);
 
         if (await _db.Areas.AnyAsync(a => a.CityId == id, cancellationToken))
             throw new DomainException("Remove or move this city's neighbourhoods before deleting it.", 409);
 
         _db.Cities.Remove(city);
-        await _db.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex) when (ForeignKeyViolation.Is(ex))
+        {
+            throw new DomainException("This city is in use. Turn it off instead of deleting it.", 409);
+        }
     }
 
     public async Task<IReadOnlyList<AdminCategoryResponse>> ListCategoriesAsync(CancellationToken cancellationToken) =>

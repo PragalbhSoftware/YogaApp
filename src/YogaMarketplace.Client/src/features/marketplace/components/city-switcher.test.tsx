@@ -1,4 +1,6 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CitySwitcher } from "@/features/marketplace/components/city-switcher";
 import { profileApi } from "@/features/profile/api/profile-api";
@@ -20,17 +22,22 @@ vi.mock("@/features/profile/api/profile-api", () => ({
   profileApi: { savePreferredCity: vi.fn() },
 }));
 
+function wrap(ui: ReactNode) {
+  return <QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>;
+}
+
 describe("CitySwitcher", () => {
   beforeEach(() => {
     vi.mocked(profileApi.savePreferredCity).mockReset();
     vi.mocked(profileApi.savePreferredCity).mockResolvedValue({} as never);
     useCityStore.getState().setCityId("c1");
+    useCityStore.getState().clearPreferredCitySyncPending();
     useAreaStore.getState().setArea("Harbour");
     useAuthStore.getState().signOut();
   });
 
   it("clears the neighbourhood when the city changes", async () => {
-    render(<CitySwitcher />);
+    render(wrap(<CitySwitcher />));
     fireEvent.click(screen.getByRole("button", { name: /Change city. Currently North/i }));
     fireEvent.click(await screen.findByRole("button", { name: "South" }));
 
@@ -49,12 +56,12 @@ describe("CitySwitcher", () => {
     });
     vi.mocked(profileApi.savePreferredCity).mockRejectedValue(new Error("offline"));
 
-    render(<CitySwitcher />);
+    render(wrap(<CitySwitcher />));
     fireEvent.click(screen.getByRole("button", { name: /Change city. Currently North/i }));
     fireEvent.click(await screen.findByRole("button", { name: "South" }));
 
     await waitFor(() => expect(useCityStore.getState().cityId).toBe("c2"));
     expect(useAreaStore.getState().areaName).toBeNull();
-    expect(useCityStore.getState().preferredCitySyncPending).toBe(true);
+    expect(useCityStore.getState().preferredCitySyncPending).toBe("u1");
   });
 });
