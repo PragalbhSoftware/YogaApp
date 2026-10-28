@@ -40,12 +40,17 @@ export function InstructorList({
   const onlineOnly = list.filter((item) => item.isOutOfCity);
 
   if (list.length === 0) {
+    const showOnlineAction = mode !== "Online";
     return (
       <EmptyState
         title={`No instructors in ${cityName} yet`}
-        description={`Nothing listed for ${modeLabel}. Try Online sessions from instructors in other cities.`}
-        actionLabel="Show Online"
-        onAction={onShowOnline}
+        description={
+          showOnlineAction
+            ? `Nothing listed for ${modeLabel}. Try Online sessions from instructors in other cities.`
+            : `Nothing listed for Online in ${cityName} yet.`
+        }
+        actionLabel={showOnlineAction ? "Show Online" : undefined}
+        onAction={showOnlineAction ? onShowOnline : undefined}
       />
     );
   }

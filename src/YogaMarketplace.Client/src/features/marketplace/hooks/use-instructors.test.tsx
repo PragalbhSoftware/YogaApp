@@ -37,4 +37,30 @@ describe("useInstructors", () => {
     rerender({ cityId: "c2" });
     await waitFor(() => expect(instructorsApi.browse).toHaveBeenCalledWith("c2", null, "", 1));
   });
+
+  it("keeps placeholder data only when the page changes", async () => {
+    const first = [{ id: "p1" }];
+    const second = [{ id: "p2" }];
+    vi.mocked(instructorsApi.browse)
+      .mockResolvedValueOnce(first as never)
+      .mockResolvedValueOnce(second as never)
+      .mockResolvedValue([] as never);
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result, rerender } = renderHook(
+      ({ page, mode }: { page: number; mode: "" | "Online" }) => useInstructors("c1", null, mode, page),
+      { wrapper: wrap(client), initialProps: { page: 1, mode: "" as "" | "Online" } },
+    );
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual(first);
+
+    rerender({ page: 2, mode: "" });
+    expect(result.current.isPlaceholderData).toBe(true);
+    expect(result.current.data).toEqual(first);
+    await waitFor(() => expect(result.current.isPlaceholderData).toBe(false));
+    expect(result.current.data).toEqual(second);
+
+    rerender({ page: 2, mode: "Online" });
+    expect(result.current.isPlaceholderData).toBe(false);
+  });
 });

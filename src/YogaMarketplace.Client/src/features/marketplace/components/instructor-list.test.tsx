@@ -39,6 +39,26 @@ describe("InstructorList empty states", () => {
     expect(screen.getByRole("button", { name: "Show Online" })).toBeInTheDocument();
   });
 
+  it("hides Show Online when already filtering Online", () => {
+    render(
+      <MemoryRouter>
+        <InstructorList
+          cityName="Harbor"
+          mode="Online"
+          modeLabel="Online"
+          instructors={[]}
+          isLoading={false}
+          isError={false}
+          error={null}
+          onRetry={vi.fn()}
+          onShowOnline={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText("No instructors in Harbor yet")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Show Online" })).not.toBeInTheDocument();
+  });
+
   it("shows the in-person empty note above online-only results", () => {
     render(
       <MemoryRouter>
