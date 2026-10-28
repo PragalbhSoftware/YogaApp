@@ -57,8 +57,10 @@ public class CatalogService
     {
         if (latitude is not double lat || longitude is not double lng)
             throw new DomainException("Enter a latitude and a longitude.");
-        if (lat is < -90 or > 90 || lng is < -180 or > 180)
+        if (!double.IsFinite(lat) || !double.IsFinite(lng) || lat is < -90 or > 90 || lng is < -180 or > 180)
             throw new DomainException("Latitude must be between -90 and 90, and longitude between -180 and 180.");
+
+        var maxKm = (double)(await _settings.GetAsync(cancellationToken)).NearestCityMaxKm;
 
         var areas = await _db.Areas.AsNoTracking()
             .Where(a => a.IsActive && a.Latitude != null && a.Longitude != null && a.City!.IsActive && a.City.State!.IsActive)
@@ -88,6 +90,8 @@ public class CatalogService
             nearest = new CityResponse(sample.CityId, sample.Name, sample.StateId, sample.Slug, sample.DisplayOrder);
         }
 
+        if (nearest is null || best > maxKm)
+            return null;
         return nearest;
     }
 

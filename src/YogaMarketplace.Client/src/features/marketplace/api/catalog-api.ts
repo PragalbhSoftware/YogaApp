@@ -12,7 +12,8 @@ export const catalogApi = {
 
   nearestCity(lat: number, lng: number) {
     return http.get<CatalogCity | "">("/api/catalog/cities/nearest", { params: { lat, lng } }).then((res) => {
-      if (res.status === 204 || !res.data) return null;
+      // Axios represents a 204 body as an empty string.
+      if (res.status === 204 || res.data === "" || res.data == null) return null;
       return res.data;
     });
   },

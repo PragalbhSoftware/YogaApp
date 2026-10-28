@@ -251,6 +251,7 @@ export type ReconciliationSettings = {
   reconciliationTime: string;
   webhookStuckMinutes: number;
   refundPendingHours: number;
+  nearestCityMaxKm: number;
 };
 
 /** Raising `policyVersion` asks every user to accept Terms and Privacy again once. */

@@ -18,6 +18,7 @@ function toFormValues(settings: AdminSettings): ReconciliationSettingsValues {
     webhookStuckMinutes: settings.webhookStuckMinutes,
     refundPendingHours: settings.refundPendingHours,
     timeZoneId: settings.timeZoneId,
+    nearestCityMaxKm: settings.nearestCityMaxKm,
   };
 }
 
@@ -86,6 +87,14 @@ function ReconciliationForm({ settings }: { settings: AdminSettings }) {
               error={Boolean(errors.timeZoneId)}
               helperText={errors.timeZoneId?.message ?? `IANA id. The default is ${defaultMarketTimeZone}.`}
               {...form.register("timeZoneId")}
+            />
+            <TextField
+              label="Furthest city (km)"
+              fullWidth
+              inputMode="decimal"
+              error={Boolean(errors.nearestCityMaxKm)}
+              helperText={errors.nearestCityMaxKm?.message ?? "Use my location ignores a city farther than this."}
+              {...form.register("nearestCityMaxKm")}
             />
           </div>
 

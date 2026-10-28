@@ -1,7 +1,8 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CityPickerDialog } from "@/features/marketplace/components/city-picker-dialog";
-import { CustomerCityPickerBody } from "@/features/marketplace/components/customer-city-picker";
+import { CustomerCityPickerBody } from "@/features/marketplace/components/customer-city-picker-body";
+import { showCityPicker } from "@/features/marketplace/components/show-city-picker";
 import type { CatalogCity } from "@/features/marketplace/types";
 import { catalogApi } from "@/features/marketplace/api/catalog-api";
 import { useAreaStore } from "@/stores/area-store";
@@ -15,6 +16,13 @@ const cities: CatalogCity[] = [
   { id: "c1", name: "North", stateId: "s1", slug: "n", displayOrder: 1 },
   { id: "c2", name: "South", stateId: "s1", slug: "s", displayOrder: 2 },
 ];
+
+describe("showCityPicker", () => {
+  it("stays hidden when no city is open", () => {
+    expect(showCityPicker(true, true, null, [])).toBe(false);
+    expect(showCityPicker(true, true, "missing", [])).toBe(false);
+  });
+});
 
 describe("city picker", () => {
   beforeEach(() => {
@@ -97,18 +105,31 @@ describe("Use my location", () => {
   it("selects the nearest city when location is allowed", async () => {
     const onSelect = vi.fn();
     vi.mocked(catalogApi.nearestCity).mockResolvedValue(cities[1]);
+    let options: PositionOptions | undefined;
     vi.stubGlobal("navigator", {
       geolocation: {
-        getCurrentPosition: (success: PositionCallback) =>
-          success({ coords: { latitude: 1, longitude: 2 } } as GeolocationPosition),
+        getCurrentPosition: (success: PositionCallback, _error?: PositionErrorCallback, next?: PositionOptions) => {
+          options = next;
+          success({ coords: { latitude: 1, longitude: 2 } } as GeolocationPosition);
+        },
       },
     });
 
     render(<CityPickerDialog open cities={cities} onSelect={onSelect} />);
+    expect(screen.queryByText("You can change it later")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Use my location" }));
 
     await waitFor(() => expect(onSelect).toHaveBeenCalledWith("c2"));
+    expect(options).toEqual({ timeout: 10000, maximumAge: 600000 });
     expect(catalogApi.nearestCity).toHaveBeenCalledWith(1, 2);
+    vi.unstubAllGlobals();
+  });
+
+  it("hides Use my location when the browser has no geolocation", () => {
+    vi.stubGlobal("navigator", {});
+    render(<CityPickerDialog open cities={cities} onSelect={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: "Use my location" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "North" })).toBeInTheDocument();
     vi.unstubAllGlobals();
   });
 
@@ -124,9 +145,27 @@ describe("Use my location", () => {
     render(<CityPickerDialog open cities={cities} onSelect={onSelect} />);
     fireEvent.click(screen.getByRole("button", { name: "Use my location" }));
 
-    await waitFor(() => expect(screen.getByRole("button", { name: "North" })).toBeInTheDocument());
+    expect(await screen.findByText("Couldn't find your city. Pick it from the list.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "North" })).toBeInTheDocument();
     expect(onSelect).not.toHaveBeenCalled();
     expect(catalogApi.nearestCity).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps the list when no city is close enough", async () => {
+    vi.mocked(catalogApi.nearestCity).mockResolvedValue(null);
+    vi.stubGlobal("navigator", {
+      geolocation: {
+        getCurrentPosition: (success: PositionCallback) =>
+          success({ coords: { latitude: 1, longitude: 2 } } as GeolocationPosition),
+      },
+    });
+
+    render(<CityPickerDialog open cities={cities} onSelect={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Use my location" }));
+
+    expect(await screen.findByText("Couldn't find your city. Pick it from the list.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "South" })).toBeInTheDocument();
     vi.unstubAllGlobals();
   });
 });

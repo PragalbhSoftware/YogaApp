@@ -27,7 +27,8 @@ public sealed record CurrentSettings(
     OtpLimitTerms OtpLimits,
     int Version,
     DateTimeOffset? UpdatedAt,
-    string TimeZoneId)
+    string TimeZoneId,
+    decimal NearestCityMaxKm)
 {
     public static CurrentSettings From(PlatformSettings settings) => new(
         settings.Currency,
@@ -48,7 +49,8 @@ public sealed record CurrentSettings(
         PlatformSettingsRules.OtpLimitTermsFor(settings),
         settings.Version,
         settings.UpdatedAt,
-        settings.TimeZoneId);
+        settings.TimeZoneId,
+        settings.NearestCityMaxKm);
 }
 
 public interface IPlatformSettingsService
@@ -218,7 +220,8 @@ public class PlatformSettingsService : IPlatformSettingsService
         request.OtpMaxSendsPerPhone,
         request.OtpMaxWrongCodesPerPhone,
         request.OtpLockMinutes,
-        request.TimeZoneId);
+        request.TimeZoneId,
+        request.NearestCityMaxKm);
 
     private static TimeOnly? ParseTime(string? value, string label)
     {
@@ -274,5 +277,6 @@ public class PlatformSettingsService : IPlatformSettingsService
         settings.OtpMaxSendsPerPhone,
         settings.OtpMaxWrongCodesPerPhone,
         settings.OtpLockMinutes,
-        settings.TimeZoneId);
+        settings.TimeZoneId,
+        settings.NearestCityMaxKm);
 }

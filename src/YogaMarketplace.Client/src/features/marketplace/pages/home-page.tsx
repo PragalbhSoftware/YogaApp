@@ -1,6 +1,8 @@
 import { useState, useSyncExternalStore } from "react";
 import { useSearchParams } from "react-router-dom";
 import { sessionModes, type SessionModeFilter } from "@/constants/catalog";
+import { EmptyState } from "@/components/common/empty-state";
+import { ErrorState } from "@/components/common/error-state";
 import { PageLoader } from "@/components/common/page-loader";
 import { AreaPicker } from "@/features/marketplace/components/area-picker";
 import { HomeHero } from "@/features/marketplace/components/home-hero";
@@ -10,7 +12,9 @@ import { useClosedAreaReset } from "@/features/marketplace/hooks/use-closed-area
 import { useCities } from "@/features/marketplace/hooks/use-cities";
 import { useInstructors } from "@/features/marketplace/hooks/use-instructors";
 import { useSiteBanner } from "@/features/marketplace/hooks/use-site";
+import { useCityHydrated } from "@/hooks/use-city-hydrated";
 import { usePageTitle } from "@/hooks/use-page-title";
+import { toUserMessage } from "@/services/http/api-error";
 import { useAreaStore } from "@/stores/area-store";
 import { useCityStore } from "@/stores/city-store";
 
@@ -25,14 +29,6 @@ function useAreaHydrated() {
   return useSyncExternalStore(
     (onChange) => useAreaStore.persist.onFinishHydration(onChange),
     () => useAreaStore.persist.hasHydrated(),
-    () => false,
-  );
-}
-
-function useCityHydrated() {
-  return useSyncExternalStore(
-    (onChange) => useCityStore.persist.onFinishHydration(onChange),
-    () => useCityStore.persist.hasHydrated(),
     () => false,
   );
 }
@@ -55,7 +51,24 @@ export function HomePage() {
   useClosedAreaReset(hydrated ? cityId : null, hydrated ? city : null, hydrated ? areaName : null);
   usePageTitle(city && areaName && !pickingArea ? `Instructors in ${city}` : null);
 
-  if (!hydrated || (cityId && cities.isLoading)) return <PageLoader />;
+  if (!hydrated || cities.isLoading) return <PageLoader />;
+  if (cities.isError) {
+    return (
+      <main className="mx-auto max-w-3xl px-4 py-8 sm:px-8">
+        <ErrorState message={toUserMessage(cities.error)} onRetry={() => void cities.refetch()} />
+      </main>
+    );
+  }
+  if (!cities.data?.length) {
+    return (
+      <main className="mx-auto max-w-3xl px-4 py-8 sm:px-8">
+        <EmptyState
+          title="We're not live in any city yet"
+          description="Cities will show up here once the marketplace lists them."
+        />
+      </main>
+    );
+  }
 
   if (!cityId || !city || !areaName || changingArea) {
     if (!cityId || !city) return <PageLoader />;

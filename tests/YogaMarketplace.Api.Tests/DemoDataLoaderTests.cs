@@ -70,6 +70,26 @@ public class DemoDataLoaderTests : IClassFixture<YogaApiFactory>
     }
 
     [Fact]
+    public async Task Demo_areas_store_the_coordinates_from_the_file()
+    {
+        using var factory = new YogaApiFactory();
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<YogaDbContext>();
+        var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+        var loader = new DemoDataLoader(db, config, new StubEnvironment(Environments.Staging), TimeProvider.System);
+
+        await loader.LoadAsync(testPayments: false);
+
+        var bandra = await db.Areas.AsNoTracking().Include(a => a.City)
+            .SingleAsync(a => a.Name == "Bandra" && a.City!.Name == "Mumbai");
+        Assert.Equal(19.0596m, bandra.Latitude);
+        Assert.Equal(72.8295m, bandra.Longitude);
+        var baner = await db.Areas.AsNoTracking().SingleAsync(a => a.Name == "Baner");
+        Assert.Equal(18.5590m, baner.Latitude);
+        Assert.Equal(73.7868m, baner.Longitude);
+    }
+
+    [Fact]
     public async Task Loader_runs_on_Staging()
     {
         using var factory = new YogaApiFactory();

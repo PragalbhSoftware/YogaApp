@@ -44,7 +44,8 @@ public class DbSeeder
                 LateCancelFeeValue = 50m,
                 PayoutCycle = PayoutCycle.Weekly,
                 PolicyNote = "Platform fee, cancel window, and reschedule window are launch defaults. Confirm with ops before taking live payments.",
-                TimeZoneId = MarketClock.DefaultTimeZoneId
+                TimeZoneId = MarketClock.DefaultTimeZoneId,
+                NearestCityMaxKm = PlatformSettingsRules.DefaultNearestCityMaxKm
             });
         }
 

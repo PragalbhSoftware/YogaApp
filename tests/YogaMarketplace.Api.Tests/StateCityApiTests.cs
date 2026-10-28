@@ -343,8 +343,6 @@ public class StateCityApiTests : IClassFixture<YogaApiFactory>
     public async Task Nearest_city_uses_active_areas_that_have_both_coordinates()
     {
         var anon = _factory.CreateClient();
-        var before = await anon.GetAsync("/api/catalog/cities/nearest?lat=0&lng=0");
-        Assert.Equal(HttpStatusCode.NoContent, before.StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await anon.GetAsync("/api/catalog/cities/nearest")).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await anon.GetAsync("/api/catalog/cities/nearest?lat=0")).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await anon.GetAsync("/api/catalog/cities/nearest?lng=0")).StatusCode);
@@ -364,6 +362,30 @@ public class StateCityApiTests : IClassFixture<YogaApiFactory>
 
         var found = await anon.GetFromJsonAsync<CityBody>($"/api/catalog/cities/nearest?lat=19.1&lng=72.8", Json);
         Assert.Equal(near.Id, found!.Id);
+    }
+
+    [Fact]
+    public async Task Nearest_city_is_empty_past_the_configured_distance()
+    {
+        var admin = await SignInAsync();
+        var state = await PostAsync<StateBody>(admin, "/api/admin/states", new { name = Word(), code = Code() });
+        var city = await PostAsync<CityBody>(admin, "/api/admin/cities", new { name = Word(), stateId = state.Id, displayOrder = 1 });
+        await PostAsync<AreaBody>(admin, "/api/admin/areas", new { name = "Pinpoint", cityId = city.Id, pincode = "560010", latitude = 19.0m, longitude = 72.0m });
+
+        var anon = _factory.CreateClient();
+        Assert.Equal(HttpStatusCode.NoContent, (await anon.GetAsync("/api/catalog/cities/nearest?lat=20.5&lng=72")).StatusCode);
+        var close = await anon.GetFromJsonAsync<CityBody>("/api/catalog/cities/nearest?lat=19&lng=72", Json);
+        Assert.Equal(city.Id, close!.Id);
+
+        using var current = JsonDocument.Parse(await admin.GetStringAsync("/api/admin/settings"));
+        var version = current.RootElement.GetProperty("version").GetInt32();
+        var rejected = await admin.PatchAsJsonAsync("/api/admin/settings", new { version, nearestCityMaxKm = 0 });
+        Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
+        var widened = await admin.PatchAsJsonAsync("/api/admin/settings", new { version, nearestCityMaxKm = 1000 });
+        Assert.True(widened.IsSuccessStatusCode, await widened.Content.ReadAsStringAsync());
+
+        var farther = await anon.GetFromJsonAsync<CityBody>("/api/catalog/cities/nearest?lat=20.5&lng=72", Json);
+        Assert.Equal(city.Id, farther!.Id);
     }
 
     private LocationFileBody LocationFile()

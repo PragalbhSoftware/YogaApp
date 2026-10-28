@@ -304,6 +304,9 @@ public class UpdateSettingsRequest
     public int? OtpMaxWrongCodesPerPhone { get; set; }
     public int? OtpLockMinutes { get; set; }
     public string? TimeZoneId { get; set; }
+
+    /// <summary>Furthest city "Use my location" will pick, in kilometres.</summary>
+    public decimal? NearestCityMaxKm { get; set; }
 }
 
 public record AdminSettingsResponse(
@@ -349,7 +352,8 @@ public record AdminSettingsResponse(
     int OtpMaxSendsPerPhone,
     int OtpMaxWrongCodesPerPhone,
     int OtpLockMinutes,
-    string TimeZoneId);
+    string TimeZoneId,
+    decimal NearestCityMaxKm);
 
 public record AdminErrorEventResponse(
     Guid Id,

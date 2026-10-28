@@ -93,13 +93,13 @@ public class DemoDataLoader
         foreach (var city in cities)
         {
             var place = await EnsureCityAsync(city.Name, cancellationToken);
-            foreach (var name in city.Areas)
+            foreach (var item in city.Areas)
             {
-                var areaName = name.Trim();
+                var areaName = item.Name.Trim();
                 var area = await _db.Areas.SingleOrDefaultAsync(a => a.CityId == place.Id && a.Name == areaName, cancellationToken);
                 if (area is null)
                 {
-                    area = CatalogRules.CreateArea(place.Id, areaName, city.Pin, null, null);
+                    area = CatalogRules.CreateArea(place.Id, areaName, city.Pin, item.Latitude, item.Longitude);
                     _db.Areas.Add(area);
                 }
                 areas[(place.Name, area.Name)] = area;
@@ -378,7 +378,9 @@ public class DemoDataLoader
         return city;
     }
 
-    private sealed record DemoCity(string Name, string Pin, List<string> Areas);
+    private sealed record DemoArea(string Name, decimal? Latitude, decimal? Longitude);
+
+    private sealed record DemoCity(string Name, string Pin, List<DemoArea> Areas);
 
     private sealed record DemoCustomer(string Phone, string Name, Gender? Gender);
 

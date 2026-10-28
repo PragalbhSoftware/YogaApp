@@ -50,7 +50,8 @@ public sealed record PlatformSettingsChanges(
     int? OtpMaxSendsPerPhone = null,
     int? OtpMaxWrongCodesPerPhone = null,
     int? OtpLockMinutes = null,
-    string? TimeZoneId = null);
+    string? TimeZoneId = null,
+    decimal? NearestCityMaxKm = null);
 
 /// <summary>When the daily reconciliation runs and how long a webhook or refund may wait before it is reported.</summary>
 public sealed record ReconciliationTerms(TimeOnly RunAt, int WebhookStuckMinutes, int RefundPendingHours);
@@ -95,6 +96,8 @@ public static class PlatformSettingsRules
     public const int MaxOtpMaxWrongCodesPerPhone = 50;
     public const int DefaultOtpLockMinutes = 30;
     public const int MaxOtpLockMinutes = 24 * 60;
+    public const decimal DefaultNearestCityMaxKm = 100m;
+    public const decimal MaxNearestCityMaxKm = 20_000m;
 
     public static NotificationTerms NotificationTermsFor(PlatformSettings settings) => new(
         settings.EmailNotificationsEnabled,
@@ -195,6 +198,7 @@ public static class PlatformSettingsRules
         var otpWrong = changes.OtpMaxWrongCodesPerPhone is int ow ? Between(ow, MaxOtpMaxWrongCodesPerPhone, "Wrong codes per phone", "tries") : settings.OtpMaxWrongCodesPerPhone;
         var otpLock = changes.OtpLockMinutes is int ol ? Between(ol, MaxOtpLockMinutes, "Phone lock", "minutes") : settings.OtpLockMinutes;
         var timeZoneId = changes.TimeZoneId is null ? settings.TimeZoneId : MarketClock.Normalize(changes.TimeZoneId);
+        var nearestKm = changes.NearestCityMaxKm is decimal km ? Kilometres(km) : settings.NearestCityMaxKm;
 
         var log = new List<SettingChange>();
         Set(log, nameof(settings.CommissionPercent), settings.CommissionPercent, commission, v => settings.CommissionPercent = v);
@@ -236,6 +240,7 @@ public static class PlatformSettingsRules
         Set(log, nameof(settings.OtpMaxWrongCodesPerPhone), settings.OtpMaxWrongCodesPerPhone, otpWrong, v => settings.OtpMaxWrongCodesPerPhone = v);
         Set(log, nameof(settings.OtpLockMinutes), settings.OtpLockMinutes, otpLock, v => settings.OtpLockMinutes = v);
         Set(log, nameof(settings.TimeZoneId), settings.TimeZoneId, timeZoneId, v => settings.TimeZoneId = v);
+        Set(log, nameof(settings.NearestCityMaxKm), settings.NearestCityMaxKm, nearestKm, v => settings.NearestCityMaxKm = v);
         return log;
     }
 
@@ -302,6 +307,13 @@ public static class PlatformSettingsRules
         if (value is < 0 or > 100)
             throw new DomainException($"{label} must be between 0 and 100 percent.");
         return TwoDecimals(value, label);
+    }
+
+    private static decimal Kilometres(decimal value)
+    {
+        if (value < 1 || value > MaxNearestCityMaxKm)
+            throw new DomainException($"Furthest city must be between 1 and {MaxNearestCityMaxKm:0} km.");
+        return TwoDecimals(value, "Furthest city");
     }
 
     private static decimal Flat(decimal value, string label)
