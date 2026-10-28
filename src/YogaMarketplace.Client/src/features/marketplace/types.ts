@@ -51,6 +51,8 @@ export type InstructorSummary = {
   photoUrl?: string | null;
   /** True once admin has approved at least one certificate. */
   isVerified: boolean;
+  /** True when this row is Online from another city for the selected city. */
+  isOutOfCity?: boolean;
 };
 
 export type InstructorDetail = Omit<InstructorSummary, "photoUrl"> & {

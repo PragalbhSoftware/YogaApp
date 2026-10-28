@@ -1,5 +1,5 @@
-import { Link, useNavigate, useParams } from "react-router-dom";
-import { Button } from "@mui/material";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Button, Chip } from "@mui/material";
 import { ArrowLeft, CalendarDays } from "lucide-react";
 import { routes } from "@/constants/routes";
 import { EmptyState } from "@/components/common/empty-state";
@@ -29,9 +29,14 @@ function isNotFound(error: unknown) {
 export function TeacherPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const remoteOnly = searchParams.get("remote") === "1";
   const instructor = useInstructor(id);
   const reviews = useInstructorReviews(id);
   usePageTitle(instructor.data?.displayName ?? "Instructor");
+  const modes = remoteOnly
+    ? (instructor.data?.modes ?? []).filter((item) => item.mode === "Online")
+    : (instructor.data?.modes ?? []);
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-6 sm:px-8">
@@ -70,7 +75,15 @@ export function TeacherPage() {
                 <h1 className="font-heading text-2xl font-medium">{instructor.data.displayName}</h1>
                 {instructor.data.isVerified ? <VerifiedBadge /> : null}
               </div>
-              <p className="text-sm text-brand-muted">{instructor.data.area}</p>
+              {remoteOnly ? (
+                <Chip
+                  label={`Online · ${instructor.data.city}`}
+                  size="small"
+                  sx={{ fontWeight: 600, height: 24 }}
+                />
+              ) : (
+                <p className="text-sm text-brand-muted">{instructor.data.area}</p>
+              )}
               {instructor.data.reviewCount > 0 && instructor.data.ratingAverage != null ? (
                 <p className="text-sm">
                   {instructor.data.ratingAverage.toFixed(1)} · {instructor.data.reviewCount}{" "}
@@ -112,12 +125,12 @@ export function TeacherPage() {
               className="scroll-mt-6 space-y-5 rounded-3xl border border-brand-border bg-brand-surface p-5 lg:sticky lg:top-20 lg:max-h-[calc(100svh-6rem)] lg:overflow-y-auto"
             >
               <h2 className="font-heading text-xl font-medium">Book a session</h2>
-              <ModeRateList modes={instructor.data.modes ?? []} heading="Session fees" />
-              {instructor.data.areaOpen && instructor.data.trial ? (
+              <ModeRateList modes={modes} heading="Session fees" />
+              {(remoteOnly || instructor.data.areaOpen) && instructor.data.trial ? (
                 <TrialOfferNote name={instructor.data.displayName} trial={instructor.data.trial} />
               ) : null}
-              {instructor.data.areaOpen ? (
-                <AvailabilitySection instructorId={instructor.data.id} modes={instructor.data.modes ?? []} />
+              {remoteOnly || instructor.data.areaOpen ? (
+                <AvailabilitySection instructorId={instructor.data.id} modes={modes} />
               ) : (
                 <EmptyState
                   title={areaClosedTitle}

@@ -7,7 +7,7 @@ import type { InstructorSummary } from "@/features/marketplace/types";
 import { toUserMessage } from "@/services/http/api-error";
 
 type InstructorListProps = {
-  areaName: string;
+  cityName: string;
   mode: SessionModeFilter;
   modeLabel: string;
   instructors: InstructorSummary[] | undefined;
@@ -15,11 +15,11 @@ type InstructorListProps = {
   isError: boolean;
   error: unknown;
   onRetry: () => void;
-  onChangeArea: () => void;
+  onShowOnline: () => void;
 };
 
 export function InstructorList({
-  areaName,
+  cityName,
   mode,
   modeLabel,
   instructors,
@@ -27,7 +27,7 @@ export function InstructorList({
   isError,
   error,
   onRetry,
-  onChangeArea,
+  onShowOnline,
 }: InstructorListProps) {
   if (isLoading) return <InstructorListSkeleton />;
 
@@ -36,22 +36,29 @@ export function InstructorList({
   }
 
   const list = instructors ?? [];
+  const inPerson = list.filter((item) => !item.isOutOfCity);
+  const onlineOnly = list.filter((item) => item.isOutOfCity);
+
   if (list.length === 0) {
     return (
       <EmptyState
-        title={`No instructors in ${areaName} yet`}
-        description={`Nothing listed for ${modeLabel}. Try another neighbourhood or session type.`}
-        actionLabel="Change area"
-        onAction={onChangeArea}
+        title={`No instructors in ${cityName} yet`}
+        description={`Nothing listed for ${modeLabel}. Try Online sessions from instructors in other cities.`}
+        actionLabel="Show Online"
+        onAction={onShowOnline}
       />
     );
   }
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-brand-muted">
-        {list.length === 1 ? "1 instructor" : `${list.length} instructors`}
-      </p>
+      {inPerson.length === 0 && onlineOnly.length > 0 ? (
+        <p className="text-sm text-brand-muted">No in-person instructors in this city yet</p>
+      ) : (
+        <p className="text-sm text-brand-muted">
+          {list.length === 1 ? "1 instructor" : `${list.length} instructors`}
+        </p>
+      )}
       <div className="grid gap-4 sm:grid-cols-2">
         {list.map((instructor) => (
           <InstructorCard key={instructor.id} instructor={instructor} mode={mode} />

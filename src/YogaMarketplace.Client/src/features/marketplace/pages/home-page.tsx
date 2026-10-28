@@ -1,4 +1,4 @@
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { useSearchParams } from "react-router-dom";
 import { sessionModes, type SessionModeFilter } from "@/constants/catalog";
 import { EmptyState } from "@/components/common/empty-state";
@@ -8,13 +8,14 @@ import { AreaPicker } from "@/features/marketplace/components/area-picker";
 import { HomeHero } from "@/features/marketplace/components/home-hero";
 import { InstructorList } from "@/features/marketplace/components/instructor-list";
 import { ModeFilter } from "@/features/marketplace/components/mode-filter";
+import { useAreas } from "@/features/marketplace/hooks/use-areas";
 import { useClosedAreaReset } from "@/features/marketplace/hooks/use-closed-area-reset";
 import { useCities } from "@/features/marketplace/hooks/use-cities";
 import { useInstructors } from "@/features/marketplace/hooks/use-instructors";
 import { useSiteBanner } from "@/features/marketplace/hooks/use-site";
 import { useCityHydrated } from "@/hooks/use-city-hydrated";
 import { usePageTitle } from "@/hooks/use-page-title";
-import { toUserMessage } from "@/services/http/api-error";
+import { ApiError, toUserMessage } from "@/services/http/api-error";
 import { useAreaStore } from "@/stores/area-store";
 import { useCityStore } from "@/stores/city-store";
 
@@ -35,21 +36,31 @@ function useAreaHydrated() {
 
 export function HomePage() {
   const cityId = useCityStore((state) => state.cityId);
+  const clearCity = useCityStore((state) => state.clearCity);
   const areaName = useAreaStore((state) => state.areaName);
   const setArea = useAreaStore((state) => state.setArea);
+  const clearArea = useAreaStore((state) => state.clearArea);
   const areaHydrated = useAreaHydrated();
   const cityHydrated = useCityHydrated();
   const cities = useCities();
   const city = cities.data?.find((item) => item.id === cityId)?.name ?? null;
+  const areas = useAreas(cityId);
+  const areaId = areas.data?.find((item) => item.name === areaName)?.id ?? null;
   const [changingArea, setChangingArea] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const mode = readMode(searchParams.get("mode"));
   const hydrated = areaHydrated && cityHydrated;
   const pickingArea = Boolean(hydrated && cityId && city && (!areaName || changingArea));
-  const instructors = useInstructors(pickingArea ? null : city, pickingArea ? null : areaName, mode);
+  const instructors = useInstructors(pickingArea ? null : cityId, pickingArea ? null : areaId, mode);
   const banner = useSiteBanner();
   useClosedAreaReset(hydrated ? cityId : null, hydrated ? city : null, hydrated ? areaName : null);
   usePageTitle(city && areaName && !pickingArea ? `Instructors in ${city}` : null);
+
+  useEffect(() => {
+    if (!(instructors.error instanceof ApiError) || instructors.error.status !== 400) return;
+    clearCity();
+    clearArea();
+  }, [instructors.error, clearCity, clearArea]);
 
   if (!hydrated || cities.isLoading) return <PageLoader />;
   if (cities.isError) {
@@ -108,7 +119,7 @@ export function HomePage() {
           }}
         />
         <InstructorList
-          areaName={areaName}
+          cityName={city}
           mode={mode}
           modeLabel={modeLabel}
           instructors={instructors.data}
@@ -116,7 +127,11 @@ export function HomePage() {
           isError={instructors.isError}
           error={instructors.error}
           onRetry={() => void instructors.refetch()}
-          onChangeArea={() => setChangingArea(true)}
+          onShowOnline={() => {
+            const nextParams = new URLSearchParams(searchParams);
+            nextParams.set("mode", "Online");
+            setSearchParams(nextParams, { replace: true });
+          }}
         />
       </section>
     </main>

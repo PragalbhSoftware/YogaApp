@@ -60,12 +60,17 @@ export function BookPage() {
   const { providerId, slotId } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const instructor = useInstructor(providerId);
-  const allowed = instructor.data ? offeredSessionModes(instructor.data.modes) : [...sessionModes];
-  const mode = readMode(searchParams.get("mode"), allowed);
+  const remoteOnly = searchParams.get("remote") === "1";
+  const allowedModes: SessionMode[] = instructor.data
+    ? offeredSessionModes(instructor.data.modes).filter((item) => !remoteOnly || item === "Online")
+    : remoteOnly
+      ? ["Online"]
+      : [...sessionModes];
+  const mode = readMode(searchParams.get("mode"), allowedModes);
   const today = kolkataToday();
   const slotsFrom = startOfMonth(today);
   const slotsTo = endOfMonth(addMonths(today, 2));
-  const areaOpen = instructor.data?.areaOpen ?? false;
+  const areaOpen = remoteOnly || (instructor.data?.areaOpen ?? false);
   const slotsQuery = useInstructorOpenSlots(providerId, mode, slotsFrom, slotsTo, instructor.isSuccess && areaOpen);
   const profile = useCustomerProfile();
   const saveAddress = useSaveVisitAddress();
@@ -237,7 +242,7 @@ export function BookPage() {
     <main className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-8">
       <Button
         component={Link}
-        to={`${teacherPath(providerId)}?mode=${mode}`}
+        to={`${teacherPath(providerId)}?mode=${mode}${remoteOnly ? "&remote=1" : ""}`}
         variant="text"
         startIcon={<ArrowLeft className="size-4" />}
         sx={{ px: 0 }}

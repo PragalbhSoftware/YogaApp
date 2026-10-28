@@ -22,10 +22,14 @@ public class ProvidersController : ControllerBase
     public async Task<ActionResult<IReadOnlyList<ProviderSummary>>> Browse(
         [FromQuery] string? city,
         [FromQuery] string? area,
+        [FromQuery] Guid? cityId,
+        [FromQuery] Guid? areaId,
         [FromQuery] string? mode,
         [FromQuery] string? category,
+        [FromQuery] int? page,
+        [FromQuery] int? pageSize,
         CancellationToken cancellationToken) =>
-        Ok(await _providers.BrowseAsync(city, area, mode, category, cancellationToken));
+        Ok(await _providers.BrowseAsync(city, area, cityId, areaId, mode, category, page, pageSize, cancellationToken));
 
     [Authorize]
     [HttpPost("register")]

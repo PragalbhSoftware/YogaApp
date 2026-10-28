@@ -2,11 +2,21 @@ import { useQuery } from "@tanstack/react-query";
 import type { SessionMode, SessionModeFilter } from "@/constants/catalog";
 import { instructorsApi } from "@/features/marketplace/api/instructors-api";
 
-export function useInstructors(city: string | null, areaName: string | null, mode: SessionModeFilter) {
+export function useInstructors(
+  cityId: string | null,
+  areaId: string | null,
+  mode: SessionModeFilter,
+  page = 1,
+) {
   return useQuery({
-    queryKey: ["instructors", city, areaName, mode],
-    queryFn: () => instructorsApi.browse(city ?? "", areaName ?? "", mode),
-    enabled: Boolean(city && areaName),
+    queryKey: ["instructors", cityId, areaId ?? null, mode, page],
+    queryFn: () => instructorsApi.browse(cityId ?? "", areaId, mode, page),
+    enabled: Boolean(cityId),
+    placeholderData: (previousData, previousQuery) => {
+      const previousCity = previousQuery?.queryKey[1];
+      if (previousCity === cityId) return previousData;
+      return undefined;
+    },
   });
 }
 

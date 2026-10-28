@@ -1,0 +1,61 @@
+import { render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+import { describe, expect, it, vi } from "vitest";
+import { InstructorList } from "@/features/marketplace/components/instructor-list";
+import type { InstructorSummary } from "@/features/marketplace/types";
+
+const online: InstructorSummary = {
+  id: "p1",
+  displayName: "Asha",
+  bio: null,
+  area: "Elsewhere",
+  city: "Other",
+  status: "Verified",
+  modes: [{ mode: "Online", rate: 499 }],
+  ratingAverage: null,
+  reviewCount: 0,
+  isVerified: true,
+  isOutOfCity: true,
+};
+
+describe("InstructorList empty states", () => {
+  it("shows a city empty state with an Online action when nothing is listed", () => {
+    render(
+      <MemoryRouter>
+        <InstructorList
+          cityName="Harbor"
+          mode=""
+          modeLabel="any mode"
+          instructors={[]}
+          isLoading={false}
+          isError={false}
+          error={null}
+          onRetry={vi.fn()}
+          onShowOnline={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText("No instructors in Harbor yet")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Show Online" })).toBeInTheDocument();
+  });
+
+  it("shows the in-person empty note above online-only results", () => {
+    render(
+      <MemoryRouter>
+        <InstructorList
+          cityName="Harbor"
+          mode=""
+          modeLabel="any mode"
+          instructors={[online]}
+          isLoading={false}
+          isError={false}
+          error={null}
+          onRetry={vi.fn()}
+          onShowOnline={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText("No in-person instructors in this city yet")).toBeInTheDocument();
+    expect(screen.getByText("Online · Other")).toBeInTheDocument();
+  });
+});

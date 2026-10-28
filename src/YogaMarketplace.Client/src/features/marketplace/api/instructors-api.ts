@@ -3,14 +3,16 @@ import { categorySlug, type SessionMode, type SessionModeFilter } from "@/consta
 import type { InstructorDetail, InstructorSummary, OpenSlotList, PublicReview } from "@/features/marketplace/types";
 
 export const instructorsApi = {
-  browse(city: string, area: string, mode: SessionModeFilter) {
+  browse(cityId: string, areaId: string | null, mode: SessionModeFilter, page?: number, pageSize?: number) {
     return http
       .get<InstructorSummary[]>("/api/providers", {
         params: {
-          city,
-          area,
+          cityId,
+          ...(areaId ? { areaId } : {}),
           category: categorySlug,
           ...(mode ? { mode } : {}),
+          ...(page ? { page } : {}),
+          ...(pageSize ? { pageSize } : {}),
         },
       })
       .then((res) => res.data);
