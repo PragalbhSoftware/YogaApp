@@ -4,6 +4,7 @@ import { AreaSettings } from "@/features/admin/components/area-settings";
 import { BannerSettings } from "@/features/admin/components/banner-settings";
 import { CategorySettings } from "@/features/admin/components/category-settings";
 import { CitySettings } from "@/features/admin/components/city-settings";
+import { NearestCitySettings } from "@/features/admin/components/nearest-city-settings";
 import { CreditRulesSettings } from "@/features/admin/components/credit-rules-settings";
 import { ErrorAlertSettings } from "@/features/admin/components/error-alert-settings";
 import { FeeSettings } from "@/features/admin/components/fee-settings";
@@ -40,11 +41,20 @@ export const StatesPage = section(
   "Add a state before its cities. A state stays on until every city in it is turned off.",
   StateSettings,
 );
+function CitiesBody() {
+  return (
+    <div className="space-y-8">
+      <NearestCitySettings />
+      <CitySettings />
+    </div>
+  );
+}
+
 export const CitiesPage = section(
   "Locations",
   "Cities",
-  "Every city belongs to a state. Pick a state to see its cities, and to add another.",
-  CitySettings,
+  "Every city belongs to a state. Pick a state to see its cities, and to add another. Furthest city limits Use my location.",
+  CitiesBody,
 );
 export const AreasPage = section(
   "Locations",

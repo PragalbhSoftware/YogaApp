@@ -102,6 +102,13 @@ public class AdminMastersController : AdminControllerBase
         return Ok(await _masters.UpdateCityAsync(id, request, cancellationToken));
     }
 
+    [HttpDelete("cities/{id:guid}")]
+    public async Task<IActionResult> DeleteCity(Guid id, CancellationToken cancellationToken)
+    {
+        await _masters.DeleteCityAsync(id, cancellationToken);
+        return NoContent();
+    }
+
     [HttpGet("categories")]
     public async Task<ActionResult<IReadOnlyList<AdminCategoryResponse>>> Categories(CancellationToken cancellationToken) =>
         Ok(await _masters.ListCategoriesAsync(cancellationToken));

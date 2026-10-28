@@ -251,6 +251,9 @@ export type ReconciliationSettings = {
   reconciliationTime: string;
   webhookStuckMinutes: number;
   refundPendingHours: number;
+};
+
+export type NearestCitySettings = {
   nearestCityMaxKm: number;
 };
 
@@ -294,6 +297,7 @@ export type SignInLimitSettings = {
 export type AdminSettings = CreditSettings &
   SignInLimitSettings &
   ReconciliationSettings &
+  NearestCitySettings &
   PrivacySettings &
   JobScheduleSettings &
   ErrorAlertSettings &
@@ -328,6 +332,7 @@ export type UpdateSettingsInput = Partial<
     | "policyNote"
     | keyof CreditSettings
     | keyof ReconciliationSettings
+    | keyof NearestCitySettings
     | keyof PrivacySettings
     | keyof JobScheduleSettings
     | Exclude<keyof ErrorAlertSettings, "errorAlertEmail">

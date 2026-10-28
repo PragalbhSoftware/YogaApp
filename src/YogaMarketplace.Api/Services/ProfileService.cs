@@ -42,6 +42,33 @@ public class ProfileService
         return ToResponse(user);
     }
 
+    public async Task<CustomerProfileResponse> UpdatePreferredCityAsync(
+        UpdatePreferredCityRequest request,
+        CancellationToken cancellationToken)
+    {
+        var user = await _db.Users.SingleOrDefaultAsync(u => u.Id == _current.UserId, cancellationToken)
+            ?? throw new DomainException("Sign in required.", 401);
+
+        if (request.PreferredCityId is null)
+        {
+            user.PreferredCityId = null;
+        }
+        else
+        {
+            var city = await _db.Cities.AsNoTracking()
+                .Include(c => c.State)
+                .SingleOrDefaultAsync(c => c.Id == request.PreferredCityId, cancellationToken);
+            if (city is null)
+                throw new DomainException("Pick a city from the list.");
+            if (!city.IsActive || city.State is not { IsActive: true })
+                throw new DomainException("That city is not available right now.");
+            user.PreferredCityId = city.Id;
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
+        return ToResponse(user);
+    }
+
     public async Task<CustomerProfileResponse> UpdateVisitAddressAsync(
         UpdateVisitAddressRequest request,
         CancellationToken cancellationToken)
@@ -71,5 +98,6 @@ public class ProfileService
                     user.HomePin!.Trim(),
                     user.HomeLandmark!.Trim(),
                     VisitAddressRules.Compose(user.HomeLine1, user.HomeArea, user.HomeCity, user.HomePin))
-                : null);
+                : null,
+            user.PreferredCityId);
 }

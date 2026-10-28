@@ -2013,6 +2013,9 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                         .HasMaxLength(16)
                         .HasColumnType("nvarchar(16)");
 
+                    b.Property<Guid?>("PreferredCityId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("Role")
                         .IsRequired()
                         .HasMaxLength(16)
@@ -2022,6 +2025,8 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("Phone")
                         .IsUnique();
+
+                    b.HasIndex("PreferredCityId");
 
                     b.ToTable("Users");
                 });
@@ -2441,6 +2446,16 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                         .HasForeignKey("AdminUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("YogaMarketplace.Domain.User", b =>
+                {
+                    b.HasOne("YogaMarketplace.Domain.City", "PreferredCity")
+                        .WithMany()
+                        .HasForeignKey("PreferredCityId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("PreferredCity");
                 });
 
             modelBuilder.Entity("YogaMarketplace.Domain.UserBlockEvent", b =>

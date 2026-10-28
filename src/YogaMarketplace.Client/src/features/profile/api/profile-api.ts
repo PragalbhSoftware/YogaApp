@@ -10,6 +10,10 @@ export const profileApi = {
     return http.patch<CustomerProfile>("/api/profile", input).then((res) => res.data);
   },
 
+  savePreferredCity(preferredCityId: string | null) {
+    return http.put<CustomerProfile>("/api/profile/preferred-city", { preferredCityId }).then((res) => res.data);
+  },
+
   saveVisitAddress(input: VisitAddressInput) {
     return http.put<CustomerProfile>("/api/profile/visit-address", input).then((res) => res.data);
   },

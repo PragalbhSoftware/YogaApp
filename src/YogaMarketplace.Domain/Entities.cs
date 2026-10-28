@@ -33,6 +33,11 @@ public class User
     public string? HomeCity { get; set; }
     public string? HomePin { get; set; }
     public string? HomeLandmark { get; set; }
+
+    /// <summary>Marketplace city the customer last chose. Separate from the visit-address city text.</summary>
+    public Guid? PreferredCityId { get; set; }
+    public City? PreferredCity { get; set; }
+
     public bool IsBlocked { get; set; }
     public DateTimeOffset? BlockedAt { get; set; }
     public string? BlockedReason { get; set; }

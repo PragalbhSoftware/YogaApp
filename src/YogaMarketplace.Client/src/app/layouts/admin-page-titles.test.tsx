@@ -158,7 +158,7 @@ const pages: { title: string; lead: string; Page: ComponentType }[] = [
   },
   {
     title: "Cities",
-    lead: "Every city belongs to a state. Pick a state to see its cities, and to add another.",
+    lead: "Every city belongs to a state. Pick a state to see its cities, and to add another. Furthest city limits Use my location.",
     Page: CitiesPage,
   },
   {

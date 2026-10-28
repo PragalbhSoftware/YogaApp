@@ -14,6 +14,7 @@ export type CustomerProfile = {
   gender: string | null;
   role: string;
   visitAddress: VisitAddress | null;
+  preferredCityId: string | null;
 };
 
 export type VisitAddressInput = {
