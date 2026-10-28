@@ -30,13 +30,14 @@ export function TeacherPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const remoteOnly = searchParams.get("remote") === "1";
+  const remoteHint = searchParams.get("remote") === "1";
   const instructor = useInstructor(id);
   const reviews = useInstructorReviews(id);
   usePageTitle(instructor.data?.displayName ?? "Instructor");
-  const modes = remoteOnly
-    ? (instructor.data?.modes ?? []).filter((item) => item.mode === "Online")
-    : (instructor.data?.modes ?? []);
+  const offered = instructor.data?.modes ?? [];
+  const onlineOnlyFromData = offered.length > 0 && offered.every((item) => item.mode === "Online");
+  const remoteOnly = remoteHint || onlineOnlyFromData;
+  const modes = remoteOnly ? offered.filter((item) => item.mode === "Online") : offered;
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-6 sm:px-8">

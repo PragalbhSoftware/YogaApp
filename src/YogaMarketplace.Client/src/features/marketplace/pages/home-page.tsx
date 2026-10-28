@@ -50,14 +50,21 @@ export function HomePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const mode = readMode(searchParams.get("mode"));
   const hydrated = areaHydrated && cityHydrated;
-  const pickingArea = Boolean(hydrated && cityId && city && (!areaName || changingArea));
-  const instructors = useInstructors(pickingArea ? null : cityId, pickingArea ? null : areaId, mode);
+  // Wait for areas when a neighbourhood is saved so we don't fetch city-wide then re-fetch narrowed.
+  const areaFilterReady = !areaName || areas.isSuccess || areas.isError;
+  const listing = Boolean(hydrated && cityId && city && !changingArea && areaFilterReady);
+  const instructors = useInstructors(listing ? cityId : null, listing && areaName ? areaId : null, mode);
   const banner = useSiteBanner();
   useClosedAreaReset(hydrated ? cityId : null, hydrated ? city : null, hydrated ? areaName : null);
-  usePageTitle(city && areaName && !pickingArea ? `Instructors in ${city}` : null);
+  usePageTitle(listing && city ? `Instructors in ${city}` : null);
 
   useEffect(() => {
     if (!(instructors.error instanceof ApiError) || instructors.error.status !== 400) return;
+    const message = instructors.error.message;
+    if (/neighbourhood/i.test(message)) {
+      clearArea();
+      return;
+    }
     clearCity();
     clearArea();
   }, [instructors.error, clearCity, clearArea]);
@@ -81,8 +88,9 @@ export function HomePage() {
     );
   }
 
-  if (!cityId || !city || !areaName || changingArea) {
-    if (!cityId || !city) return <PageLoader />;
+  if (!cityId || !city) return <PageLoader />;
+
+  if (changingArea) {
     return (
       <AreaPicker
         cityId={cityId}
@@ -92,7 +100,7 @@ export function HomePage() {
           setArea(name);
           setChangingArea(false);
         }}
-        onCancel={areaName ? () => setChangingArea(false) : undefined}
+        onCancel={() => setChangingArea(false)}
       />
     );
   }
@@ -123,7 +131,7 @@ export function HomePage() {
           mode={mode}
           modeLabel={modeLabel}
           instructors={instructors.data}
-          isLoading={instructors.isLoading}
+          isLoading={instructors.isLoading || !areaFilterReady}
           isError={instructors.isError}
           error={instructors.error}
           onRetry={() => void instructors.refetch()}
