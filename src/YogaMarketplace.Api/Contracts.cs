@@ -23,7 +23,8 @@ public record CustomerProfileResponse(
     string Phone,
     string? Gender,
     string Role,
-    VisitAddressResponse? VisitAddress);
+    VisitAddressResponse? VisitAddress,
+    Guid? PreferredCityId);
 
 public class UpdateVisitAddressRequest
 {

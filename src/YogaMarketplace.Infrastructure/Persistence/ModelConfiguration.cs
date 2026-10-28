@@ -218,9 +218,11 @@ internal static class ModelConfiguration
         entity.Property(u => u.HomeCity).HasMaxLength(60);
         entity.Property(u => u.HomePin).HasMaxLength(6);
         entity.Property(u => u.HomeLandmark).HasMaxLength(160);
+        entity.HasOne(u => u.PreferredCity).WithMany().HasForeignKey(u => u.PreferredCityId).OnDelete(DeleteBehavior.Restrict);
         entity.Property(u => u.IsBlocked).HasDefaultValue(false).IsConcurrencyToken();
         entity.Property(u => u.BlockedReason).HasMaxLength(UserBlocking.ReasonMax);
         entity.HasIndex(u => u.Phone).IsUnique();
+        entity.HasIndex(u => u.PreferredCityId);
     }
 
     private static void ConfigureUserBlockEvent(EntityTypeBuilder<UserBlockEvent> entity)

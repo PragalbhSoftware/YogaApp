@@ -50,7 +50,11 @@ public sealed record CurrentSettings(
         settings.Version,
         settings.UpdatedAt,
         settings.TimeZoneId,
-        settings.NearestCityMaxKm);
+        ClampNearestCityMaxKm(settings.NearestCityMaxKm));
+
+    /// <summary>Older rows may sit above the current admin maximum; nearest and admin forms use the capped value.</summary>
+    private static decimal ClampNearestCityMaxKm(decimal value) =>
+        value > PlatformSettingsRules.MaxNearestCityMaxKm ? PlatformSettingsRules.MaxNearestCityMaxKm : value;
 }
 
 public interface IPlatformSettingsService
@@ -278,5 +282,5 @@ public class PlatformSettingsService : IPlatformSettingsService
         settings.OtpMaxWrongCodesPerPhone,
         settings.OtpLockMinutes,
         settings.TimeZoneId,
-        settings.NearestCityMaxKm);
+        CurrentSettings.From(settings).NearestCityMaxKm);
 }

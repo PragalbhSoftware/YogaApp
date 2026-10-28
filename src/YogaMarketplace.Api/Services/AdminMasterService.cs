@@ -28,6 +28,8 @@ public interface IAdminMasterService
 
     Task<AdminCityResponse> UpdateCityAsync(Guid id, PatchCityRequest request, CancellationToken cancellationToken);
 
+    Task DeleteCityAsync(Guid id, CancellationToken cancellationToken);
+
     Task<IReadOnlyList<AdminCategoryResponse>> ListCategoriesAsync(CancellationToken cancellationToken);
 
     Task<AdminCategoryResponse> UpdateCategoryAsync(Guid id, PatchCategoryRequest request, CancellationToken cancellationToken);
@@ -310,6 +312,28 @@ public class AdminMasterService : IAdminMasterService
 
         await _db.SaveChangesAsync(cancellationToken);
         return ToCity(city);
+    }
+
+    public async Task DeleteCityAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var city = await _db.Cities.SingleOrDefaultAsync(c => c.Id == id, cancellationToken)
+            ?? throw new DomainException("City not found.", 404);
+
+        if (await _db.Users.AnyAsync(u => u.PreferredCityId == id, cancellationToken))
+            throw new DomainException("This city is in use. Turn it off instead of deleting it.", 409);
+
+        if (await _db.Areas.AnyAsync(a => a.CityId == id, cancellationToken))
+            throw new DomainException("Remove or move this city's neighbourhoods before deleting it.", 409);
+
+        _db.Cities.Remove(city);
+        try
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex) when (ForeignKeyViolation.Is(ex))
+        {
+            throw new DomainException("This city is in use. Turn it off instead of deleting it.", 409);
+        }
     }
 
     public async Task<IReadOnlyList<AdminCategoryResponse>> ListCategoriesAsync(CancellationToken cancellationToken) =>

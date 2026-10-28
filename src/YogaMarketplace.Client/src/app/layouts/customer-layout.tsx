@@ -5,7 +5,9 @@ import { PageLoader } from "@/components/common/page-loader";
 import { SiteFooter } from "@/components/common/site-footer";
 import { routes } from "@/constants/routes";
 import { useAuth } from "@/features/auth/hooks/use-auth";
+import { CitySwitcher } from "@/features/marketplace/components/city-switcher";
 import { CustomerCityPicker } from "@/features/marketplace/components/customer-city-picker";
+import { usePreferredCitySync } from "@/features/marketplace/hooks/use-preferred-city-sync";
 import { cn } from "@/utils/cn";
 
 const signedInNav = [
@@ -41,31 +43,40 @@ export function CustomerLayout() {
   const { pathname } = useLocation();
   const { isAuthenticated } = useAuth();
   const navItems = isAuthenticated ? signedInNav : guestNav;
+  usePreferredCitySync();
 
   return (
     <div className="min-h-svh bg-brand-background">
       <header className="sticky top-0 z-20 hidden border-b border-brand-border bg-brand-background/95 px-8 py-3 backdrop-blur md:block">
-        <div className="mx-auto flex max-w-5xl items-center justify-between">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4">
           <p className="font-heading text-lg text-brand-primary">Yoga Marketplace</p>
-          <nav aria-label="Customer" className="flex items-center gap-2">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const active = isNavActive(pathname, item.to);
-              return (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.to === routes.home}
-                  aria-current={pathname === item.to ? "page" : undefined}
-                  className={itemClass(active, false)}
-                >
-                  <Icon className="size-5" aria-hidden="true" />
-                  {item.label}
-                </NavLink>
-              );
-            })}
-          </nav>
+          <div className="flex items-center gap-2">
+            <CitySwitcher />
+            <nav aria-label="Customer" className="flex items-center gap-2">
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                const active = isNavActive(pathname, item.to);
+                return (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    end={item.to === routes.home}
+                    aria-current={pathname === item.to ? "page" : undefined}
+                    className={itemClass(active, false)}
+                  >
+                    <Icon className="size-5" aria-hidden="true" />
+                    {item.label}
+                  </NavLink>
+                );
+              })}
+            </nav>
+          </div>
         </div>
+      </header>
+
+      <header className="sticky top-0 z-20 flex items-center justify-between border-b border-brand-border bg-brand-background/95 px-4 py-2 backdrop-blur md:hidden">
+        <p className="font-heading text-base text-brand-primary">Yoga Marketplace</p>
+        <CitySwitcher compact />
       </header>
 
       <div className="pb-[calc(4.75rem+env(safe-area-inset-bottom))] md:pb-0">

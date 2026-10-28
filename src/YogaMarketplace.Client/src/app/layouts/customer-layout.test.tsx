@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CustomerLayout } from "@/app/layouts/customer-layout";
 
 vi.mock("@/features/marketplace/components/customer-city-picker", () => ({ CustomerCityPicker: () => null }));
+vi.mock("@/features/marketplace/components/city-switcher", () => ({ CitySwitcher: () => null }));
+vi.mock("@/features/marketplace/hooks/use-preferred-city-sync", () => ({ usePreferredCitySync: () => undefined }));
 import { routes } from "@/constants/routes";
 import { useAuthStore } from "@/stores/auth-store";
 

@@ -93,7 +93,7 @@ describe("credit settings form", () => {
 });
 
 describe("reconciliation settings form", () => {
-  const recon = { timeZoneId: "UTC", reconciliationTime: "06:00", webhookStuckMinutes: 60, refundPendingHours: 48, nearestCityMaxKm: 100 };
+  const recon = { timeZoneId: "UTC", reconciliationTime: "06:00", webhookStuckMinutes: 60, refundPendingHours: 48 };
   const reconErrors = (input: Record<string, unknown>) => {
     const result = reconciliationSettingsSchema.safeParse({ ...recon, ...input });
     return result.success ? [] : result.error.issues.map((issue) => issue.path.join("."));
@@ -109,6 +109,15 @@ describe("reconciliation settings form", () => {
     expect(reconErrors({ webhookStuckMinutes: 0 })).toEqual(["webhookStuckMinutes"]);
     expect(reconErrors({ refundPendingHours: 721 })).toEqual(["refundPendingHours"]);
     expect(reconErrors({ refundPendingHours: 1.5 })).toEqual(["refundPendingHours"]);
+  });
+});
+
+describe("furthest city settings form", () => {
+  it("accepts up to 500 km and rejects above that", async () => {
+    const { nearestCitySettingsSchema } = await import("@/features/admin/schemas");
+    expect(nearestCitySettingsSchema.safeParse({ nearestCityMaxKm: 500 }).success).toBe(true);
+    expect(nearestCitySettingsSchema.safeParse({ nearestCityMaxKm: 501 }).success).toBe(false);
+    expect(nearestCitySettingsSchema.safeParse({ nearestCityMaxKm: 0 }).success).toBe(false);
   });
 });
 

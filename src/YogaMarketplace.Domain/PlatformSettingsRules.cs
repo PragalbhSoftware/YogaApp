@@ -97,7 +97,7 @@ public static class PlatformSettingsRules
     public const int DefaultOtpLockMinutes = 30;
     public const int MaxOtpLockMinutes = 24 * 60;
     public const decimal DefaultNearestCityMaxKm = 100m;
-    public const decimal MaxNearestCityMaxKm = 20_000m;
+    public const decimal MaxNearestCityMaxKm = 500m;
 
     public static NotificationTerms NotificationTermsFor(PlatformSettings settings) => new(
         settings.EmailNotificationsEnabled,

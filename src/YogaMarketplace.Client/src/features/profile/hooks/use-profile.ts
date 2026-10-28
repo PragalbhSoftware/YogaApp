@@ -6,9 +6,11 @@ import { useAuthStore } from "@/stores/auth-store";
 export const profileQueryKey = ["profile"] as const;
 
 export function useCustomerProfile() {
+  const token = useAuthStore((state) => state.token);
   return useQuery({
     queryKey: profileQueryKey,
     queryFn: profileApi.me,
+    enabled: Boolean(token),
   });
 }
 

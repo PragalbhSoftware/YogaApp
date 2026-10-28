@@ -8,8 +8,8 @@ namespace YogaMarketplace.Api.Tests;
 internal static class TestWorld
 {
     public const string CityName = "Harbor";
-    private static readonly Guid StateId = Guid.Parse("c0000001-0000-4000-8000-000000000001");
-    private static readonly Guid CityId = Guid.Parse("c0000001-0000-4000-8000-000000000002");
+    public static readonly Guid StateId = Guid.Parse("c0000001-0000-4000-8000-000000000001");
+    public static readonly Guid CityId = Guid.Parse("c0000001-0000-4000-8000-000000000002");
 
     public static async Task SeedAsync(YogaDbContext db, TimeProvider time, CancellationToken cancellationToken)
     {

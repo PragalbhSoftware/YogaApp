@@ -158,7 +158,7 @@ export const creditSettingsSchema = z.object({
 export const reconciliationLimits = {
   maxWebhookStuckMinutes: 7 * 24 * 60,
   maxRefundPendingHours: 30 * 24,
-  maxNearestCityKm: 20_000,
+  maxNearestCityKm: 500,
   noteMax: 500,
 } as const;
 
@@ -177,6 +177,9 @@ export const reconciliationSettingsSchema = z.object({
     .int("Enter a whole number of hours.")
     .min(1, `Must be between 1 and ${reconciliationLimits.maxRefundPendingHours} hours.`)
     .max(reconciliationLimits.maxRefundPendingHours, `Must be between 1 and ${reconciliationLimits.maxRefundPendingHours} hours.`),
+});
+
+export const nearestCitySettingsSchema = z.object({
   nearestCityMaxKm: z.coerce
     .number({ invalid_type_error: "Enter a distance in kilometres." })
     .min(1, `Must be between 1 and ${reconciliationLimits.maxNearestCityKm} km.`)
@@ -326,6 +329,7 @@ export type BannerValues = z.infer<typeof bannerSchema>;
 export type CreditSettingsValues = z.infer<typeof creditSettingsSchema>;
 export type PackFormValues = z.infer<typeof packSchema>;
 export type ReconciliationSettingsValues = z.infer<typeof reconciliationSettingsSchema>;
+export type NearestCitySettingsValues = z.infer<typeof nearestCitySettingsSchema>;
 export type JobScheduleSettingsValues = z.infer<typeof jobScheduleSettingsSchema>;
 export type ErrorAlertSettingsValues = z.infer<typeof errorAlertSettingsSchema>;
 export type NotificationSettingsValues = z.infer<typeof notificationSettingsSchema>;

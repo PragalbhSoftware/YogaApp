@@ -30,6 +30,16 @@ public class ProfileController : ControllerBase
         return Ok(await _profile.UpdateAccountAsync(request, cancellationToken));
     }
 
+    [HttpPut("preferred-city")]
+    public async Task<ActionResult<CustomerProfileResponse>> UpdatePreferredCity(
+        [FromBody] UpdatePreferredCityRequest? request,
+        CancellationToken cancellationToken)
+    {
+        if (request is null)
+            return BadRequest(new { error = "Invalid request." });
+        return Ok(await _profile.UpdatePreferredCityAsync(request, cancellationToken));
+    }
+
     [HttpPut("visit-address")]
     public async Task<ActionResult<CustomerProfileResponse>> UpdateVisitAddress(
         [FromBody] UpdateVisitAddressRequest? request,

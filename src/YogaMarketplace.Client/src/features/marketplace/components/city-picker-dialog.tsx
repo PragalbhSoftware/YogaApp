@@ -10,9 +10,11 @@ type CityPickerDialogProps = {
   open: boolean;
   cities: CatalogCity[];
   onSelect: (cityId: string) => void;
+  /** When set, backdrop and Escape close the dialog (header switcher). First-time pick stays required. */
+  onDismiss?: () => void;
 };
 
-export function CityPickerDialog({ open, cities, onSelect }: CityPickerDialogProps) {
+export function CityPickerDialog({ open, cities, onSelect, onDismiss }: CityPickerDialogProps) {
   const [locating, setLocating] = useState(false);
   const [locationNote, setLocationNote] = useState<string | null>(null);
   const canLocate = typeof navigator !== "undefined" && Boolean(navigator.geolocation);
@@ -41,7 +43,16 @@ export function CityPickerDialog({ open, cities, onSelect }: CityPickerDialogPro
   }
 
   return (
-    <Dialog open={open} fullWidth maxWidth="xs" onClose={() => undefined} aria-labelledby="city-picker-title">
+    <Dialog
+      open={open}
+      fullWidth
+      maxWidth="xs"
+      onClose={(_event, reason) => {
+        if (!onDismiss) return;
+        if (reason === "backdropClick" || reason === "escapeKeyDown") onDismiss();
+      }}
+      aria-labelledby="city-picker-title"
+    >
       <DialogTitle id="city-picker-title">Choose your city</DialogTitle>
       <DialogContent className="space-y-3">
         <p className="text-sm leading-relaxed text-brand-muted">Neighbourhoods and instructors follow the city you pick.</p>
