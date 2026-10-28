@@ -23,6 +23,7 @@ public partial class BookingService
 
         var slot = await LoadBookableSlotAsync(request.SlotId, cancellationToken);
         var provider = slot.Provider!;
+        EnsureHomeCityMatches(customer, slot);
         var (homeAddress, landmark) = ResolveLocation(customer, slot, request);
         var service = await ResolveServiceAsync(provider.Id, request.ServiceId, cancellationToken);
         var settings = await _settings.GetAsync(cancellationToken);
