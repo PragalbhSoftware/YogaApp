@@ -114,6 +114,35 @@ public class PreferredCityProfileTests : IClassFixture<YogaApiFactory>
     }
 
     [Fact]
+    public async Task Home_booking_rejects_instructor_outside_preferred_city()
+    {
+        var admin = await SignInAdminAsync();
+        var otherCity = await PostAsync<CityBody>(admin, "/api/admin/cities", new
+        {
+            name = "Elsewhere" + Guid.NewGuid().ToString("N")[..6],
+            stateId = TestWorld.StateId,
+            displayOrder = 6
+        });
+
+        var client = await SignUpAsync();
+        await PutAsync<ProfileBody>(client, "/api/profile/preferred-city", new { preferredCityId = otherCity.Id });
+
+        var slots = await client.GetFromJsonAsync<SlotListBody>(
+            $"/api/providers/{SeedIds.AnanyaProviderId}/slots?mode=Home", Json);
+        var slot = slots!.Slots.OrderByDescending(s => s.Date).ThenByDescending(s => s.Start).FirstOrDefault();
+        Assert.NotNull(slot);
+
+        var response = await client.PostAsJsonAsync("/api/bookings/orders", new
+        {
+            slotId = slot!.Id,
+            homeAddress = "14th Road",
+            landmark = "Near the station"
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("preferred city", await response.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Deleting_a_city_requires_admin_and_blocks_unknown_or_linked_rows()
     {
         var anon = _factory.CreateClient();
@@ -200,4 +229,6 @@ public class PreferredCityProfileTests : IClassFixture<YogaApiFactory>
     private sealed record CityBody(Guid Id, string Name, Guid StateId, bool IsActive);
     private sealed record AreaBody(Guid Id);
     private sealed record ProfileBody(Guid Id, string? Name, string Role, Guid? PreferredCityId);
+    private sealed record SlotBody(Guid Id, string Mode, DateOnly Date, string Start, string End);
+    private sealed record SlotListBody(string Mode, DateOnly From, DateOnly To, List<SlotBody> Slots);
 }
