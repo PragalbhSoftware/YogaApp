@@ -54,9 +54,6 @@ public class ProviderBrowseCityTests : IClassFixture<YogaApiFactory>
         Assert.Equal(HttpStatusCode.BadRequest, wrongArea.StatusCode);
 
         var areaAlone = await anon.GetAsync($"/api/providers?areaId={SeedIds.AreaBandra}");
-        Assert.Equal(HttpStatusCode.BadRequest, wrongArea.StatusCode);
-
-        var areaAlone2 = await anon.GetAsync($"/api/providers?areaId={SeedIds.AreaBandra}");
         Assert.Equal(HttpStatusCode.BadRequest, areaAlone.StatusCode);
         Assert.Contains("Pick a city", await areaAlone.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
 
