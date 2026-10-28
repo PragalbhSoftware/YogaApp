@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using YogaMarketplace.Api.Security;
 using YogaMarketplace.Domain;
@@ -37,6 +38,9 @@ public class ProviderService
     {
         if (cityId is Guid id && id != Guid.Empty)
             return await BrowseByCityAsync(id, areaId, mode, category, page, pageSize, cancellationToken);
+
+        if (areaId is Guid onlyArea && onlyArea != Guid.Empty)
+            throw new DomainException("Pick a city first.");
 
         var parsedMode = ParseOptionalMode(mode);
         var query = VerifiedQuery();
@@ -87,6 +91,49 @@ public class ProviderService
         return providers.Select(p => ToSummary(p, ratings, outOfCity: false)).ToList();
     }
 
+    /// <summary>Listed Online with a rate and an active service; inactive place stays out.</summary>
+    private static readonly Expression<Func<Provider, bool>> IsOnlineEligible = p =>
+        p.OffersOnline
+        && p.OnlineRate != null
+        && p.Services.Any(s => s.IsActive)
+        && p.Area!.IsActive
+        && p.Area.City!.IsActive
+        && p.Area.City.State!.IsActive;
+
+    private static Expression<Func<Provider, bool>> IsInCity(Guid cityId) => p =>
+        p.Area!.CityId == cityId
+        && p.Area.IsActive
+        && p.Area.City!.IsActive
+        && p.Area.City.State!.IsActive;
+
+    private static Expression<Func<Provider, bool>> InCityOrOnline(Guid cityId, Guid? areaId) =>
+        areaId is Guid neighbourhood
+            ? p =>
+                (p.Area!.CityId == cityId
+                    && p.AreaId == neighbourhood
+                    && p.Area.IsActive
+                    && p.Area.City!.IsActive
+                    && p.Area.City.State!.IsActive
+                    && (p.OffersHome || p.OffersStudio || (p.OffersOnline && p.OnlineRate != null && p.Services.Any(s => s.IsActive))))
+                || (p.OffersOnline
+                    && p.OnlineRate != null
+                    && p.Services.Any(s => s.IsActive)
+                    && p.Area!.IsActive
+                    && p.Area.City!.IsActive
+                    && p.Area.City.State!.IsActive)
+            : p =>
+                (p.Area!.CityId == cityId
+                    && p.Area.IsActive
+                    && p.Area.City!.IsActive
+                    && p.Area.City.State!.IsActive
+                    && (p.OffersHome || p.OffersStudio || (p.OffersOnline && p.OnlineRate != null && p.Services.Any(s => s.IsActive))))
+                || (p.OffersOnline
+                    && p.OnlineRate != null
+                    && p.Services.Any(s => s.IsActive)
+                    && p.Area!.IsActive
+                    && p.Area.City!.IsActive
+                    && p.Area.City.State!.IsActive);
+
     private async Task<IReadOnlyList<ProviderSummary>> BrowseByCityAsync(
         Guid cityId,
         Guid? areaId,
@@ -112,64 +159,25 @@ public class ProviderService
         var parsedMode = ParseOptionalMode(mode);
         var query = VerifiedQuery();
 
-        // Online = listed + OffersOnline + rate + active service; inactive place stays out everywhere.
-        var online = query.Where(p =>
-            p.OffersOnline
-            && p.OnlineRate != null
-            && p.Services.Any(s => s.IsActive)
-            && p.Area!.IsActive
-            && p.Area.City!.IsActive
-            && p.Area.City.State!.IsActive);
-
-        var inCity = PlaceOpen(query).Where(p => p.Area!.CityId == cityId);
-
         if (parsedMode == SessionMode.Online)
         {
-            query = online;
+            query = query.Where(IsOnlineEligible);
         }
         else if (parsedMode == SessionMode.Home)
         {
-            query = inCity.Where(p => p.OffersHome);
+            query = query.Where(IsInCity(cityId)).Where(p => p.OffersHome);
             if (areaId is Guid homeArea)
                 query = query.Where(p => p.AreaId == homeArea);
         }
         else if (parsedMode == SessionMode.Studio)
         {
-            query = inCity.Where(p => p.OffersStudio);
+            query = query.Where(IsInCity(cityId)).Where(p => p.OffersStudio);
             if (areaId is Guid studioArea)
                 query = query.Where(p => p.AreaId == studioArea);
         }
-        else if (areaId is Guid neighbourhood)
-        {
-            // Neighbourhood narrows in-city only; online (including out-of-city) stays.
-            query = query.Where(p =>
-                (p.Area!.CityId == cityId
-                    && p.AreaId == neighbourhood
-                    && p.Area.IsActive
-                    && p.Area.City!.IsActive
-                    && p.Area.City.State!.IsActive
-                    && (p.OffersHome || p.OffersStudio || (p.OffersOnline && p.OnlineRate != null && p.Services.Any(s => s.IsActive))))
-                || (p.OffersOnline
-                    && p.OnlineRate != null
-                    && p.Services.Any(s => s.IsActive)
-                    && p.Area!.IsActive
-                    && p.Area.City!.IsActive
-                    && p.Area.City.State!.IsActive));
-        }
         else
         {
-            query = query.Where(p =>
-                (p.Area!.CityId == cityId
-                    && p.Area.IsActive
-                    && p.Area.City!.IsActive
-                    && p.Area.City.State!.IsActive
-                    && (p.OffersHome || p.OffersStudio || (p.OffersOnline && p.OnlineRate != null && p.Services.Any(s => s.IsActive))))
-                || (p.OffersOnline
-                    && p.OnlineRate != null
-                    && p.Services.Any(s => s.IsActive)
-                    && p.Area!.IsActive
-                    && p.Area.City!.IsActive
-                    && p.Area.City.State!.IsActive));
+            query = query.Where(InCityOrOnline(cityId, areaId is Guid n && n != Guid.Empty ? n : null));
         }
 
         if (!string.IsNullOrWhiteSpace(category))
