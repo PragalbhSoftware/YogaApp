@@ -1,7 +1,9 @@
 import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CustomerLayout } from "@/app/layouts/customer-layout";
+
+vi.mock("@/features/marketplace/components/customer-city-picker", () => ({ CustomerCityPicker: () => null }));
 import { routes } from "@/constants/routes";
 import { useAuthStore } from "@/stores/auth-store";
 

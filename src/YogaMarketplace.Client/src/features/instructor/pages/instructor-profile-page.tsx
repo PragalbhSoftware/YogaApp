@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Avatar, Button, Chip } from "@mui/material";
 import { LogOut } from "lucide-react";
 import { toast } from "sonner";
@@ -13,25 +14,34 @@ import { useInstructorProfile, useUpdateInstructorProfile } from "@/features/ins
 import { profileFormFromInstructor } from "@/features/instructor/schemas";
 import type { InstructorProfile } from "@/features/instructor/types";
 import { useAreas } from "@/features/marketplace/hooks/use-areas";
+import { useCities } from "@/features/marketplace/hooks/use-cities";
 import { toUserMessage } from "@/services/http/api-error";
 import { toastError } from "@/services/http/toast-error";
 
 export function InstructorProfilePage() {
   usePageTitle("Instructor profile");
   const profile = useInstructorProfile();
-  const areas = useAreas();
+  const cities = useCities();
+  const [chosenCityId, setChosenCityId] = useState<string | null>(null);
+  const savedCityId =
+    profile.data && cities.data?.some((city) => city.id === profile.data.cityId) ? profile.data.cityId : "";
+  const cityId = chosenCityId ?? savedCityId;
+  const areas = useAreas(cityId || null);
   const updateProfile = useUpdateInstructorProfile();
 
   return (
     <main className="mx-auto max-w-5xl space-y-6 px-4 py-8 sm:px-8">
       <h1 className="font-heading text-2xl font-medium">Profile</h1>
-      {profile.isLoading || areas.isLoading ? <PageLoader /> : null}
+      {profile.isLoading || cities.isLoading ? <PageLoader /> : null}
       {profile.isError ? (
         <ErrorState message={toUserMessage(profile.error)} onRetry={() => void profile.refetch()} />
       ) : null}
+      {cities.isError ? (
+        <ErrorState message={toUserMessage(cities.error)} onRetry={() => void cities.refetch()} />
+      ) : null}
       {areas.isError ? <ErrorState message={toUserMessage(areas.error)} onRetry={() => void areas.refetch()} /> : null}
       {profile.data ? <IdentityBar profile={profile.data} /> : null}
-      {profile.data && areas.data && areas.data.length > 0 ? (
+      {profile.data && cities.data && cities.data.length > 0 ? (
         <section className="space-y-3">
           <div className="space-y-1">
             <h2 className="font-heading text-lg font-medium">Teaching profile</h2>
@@ -42,7 +52,10 @@ export function InstructorProfilePage() {
           </div>
           <RegisterForm
             key={`${profile.data.id}-${profile.data.areaId}-${profile.data.displayName}`}
-            areas={areas.data}
+            cities={cities.data}
+            cityId={cityId}
+            onCityChange={setChosenCityId}
+            areas={areas.data ?? []}
             defaultValues={profileFormFromInstructor(profile.data)}
             busy={updateProfile.isPending}
             submitLabel="Save profile"

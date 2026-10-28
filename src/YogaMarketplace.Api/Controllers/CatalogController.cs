@@ -43,6 +43,16 @@ public class CatalogController : ControllerBase
         CancellationToken cancellationToken) =>
         Ok(await _catalog.CitiesAsync(stateId, cancellationToken));
 
+    [HttpGet("catalog/cities/nearest")]
+    public async Task<ActionResult<CityResponse>> NearestCity(
+        [FromQuery] double? lat,
+        [FromQuery] double? lng,
+        CancellationToken cancellationToken)
+    {
+        var city = await _catalog.NearestCityAsync(lat, lng, cancellationToken);
+        return city is null ? NoContent() : Ok(city);
+    }
+
     [HttpGet("categories")]
     public async Task<ActionResult<IReadOnlyList<CategoryResponse>>> Categories(CancellationToken cancellationToken) =>
         Ok(await _catalog.CategoriesAsync(cancellationToken));

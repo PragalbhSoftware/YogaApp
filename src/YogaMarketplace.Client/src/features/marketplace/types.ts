@@ -1,3 +1,11 @@
+export type CatalogCity = {
+  id: string;
+  name: string;
+  stateId: string;
+  slug: string;
+  displayOrder: number;
+};
+
 export type Area = {
   id: string;
   cityId: string;

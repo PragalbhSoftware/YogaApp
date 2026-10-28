@@ -5,6 +5,13 @@ namespace YogaMarketplace.Api.Tests;
 public class MarketClockRulesTests
 {
     [Fact]
+    public void Default_zone_id_is_accepted()
+    {
+        Assert.Equal(MarketClock.DefaultTimeZoneId, MarketClock.Normalize(MarketClock.DefaultTimeZoneId));
+        Assert.Equal(MarketClock.DefaultTimeZoneId, MarketClock.Normalize(" " + MarketClock.DefaultTimeZoneId + " "));
+    }
+
+    [Fact]
     public void Iana_ids_are_accepted()
     {
         Assert.Equal("Asia/Kolkata", MarketClock.Normalize(" Asia/Kolkata "));

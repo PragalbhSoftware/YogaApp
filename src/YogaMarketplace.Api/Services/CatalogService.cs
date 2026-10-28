@@ -38,16 +38,74 @@ public class CatalogService
 
     public async Task<IReadOnlyList<CityResponse>> CitiesAsync(Guid? stateId, CancellationToken cancellationToken)
     {
-        if (stateId is not Guid id || id == Guid.Empty)
-            throw new DomainException("Pick a state.");
+        var query = _db.Cities.AsNoTracking().Where(c => c.IsActive && c.State!.IsActive);
+        if (stateId is Guid id && id != Guid.Empty)
+            query = query.Where(c => c.StateId == id);
 
-        return await _db.Cities.AsNoTracking()
-            .Where(c => c.IsActive && c.StateId == id && c.State!.IsActive)
+        return await query
             .OrderBy(c => c.DisplayOrder)
             .ThenBy(c => c.Name)
             .Select(c => new CityResponse(c.Id, c.Name, c.StateId, c.Slug, c.DisplayOrder))
             .ToListAsync(cancellationToken);
     }
+
+    /// <summary>
+    /// The active city whose active areas, those with both coordinates, have the closest average point.
+    /// Null when no such city exists.
+    /// </summary>
+    public async Task<CityResponse?> NearestCityAsync(double? latitude, double? longitude, CancellationToken cancellationToken)
+    {
+        if (latitude is not double lat || longitude is not double lng)
+            throw new DomainException("Enter a latitude and a longitude.");
+        if (!double.IsFinite(lat) || !double.IsFinite(lng) || lat is < -90 or > 90 || lng is < -180 or > 180)
+            throw new DomainException("Latitude must be between -90 and 90, and longitude between -180 and 180.");
+
+        var maxKm = (double)(await _settings.GetAsync(cancellationToken)).NearestCityMaxKm;
+
+        var areas = await _db.Areas.AsNoTracking()
+            .Where(a => a.IsActive && a.Latitude != null && a.Longitude != null && a.City!.IsActive && a.City.State!.IsActive)
+            .Select(a => new
+            {
+                a.CityId,
+                a.Latitude,
+                a.Longitude,
+                a.City!.Name,
+                a.City.StateId,
+                a.City.Slug,
+                a.City.DisplayOrder
+            })
+            .ToListAsync(cancellationToken);
+
+        CityResponse? nearest = null;
+        var best = double.MaxValue;
+        foreach (var city in areas.GroupBy(a => a.CityId))
+        {
+            var sample = city.First();
+            var averageLat = city.Average(a => (double)a.Latitude!.Value);
+            var averageLng = city.Average(a => (double)a.Longitude!.Value);
+            var distance = HaversineKm(lat, lng, averageLat, averageLng);
+            if (nearest is not null && (distance > best || (distance == best && string.Compare(sample.Name, nearest.Name, StringComparison.Ordinal) >= 0)))
+                continue;
+            best = distance;
+            nearest = new CityResponse(sample.CityId, sample.Name, sample.StateId, sample.Slug, sample.DisplayOrder);
+        }
+
+        if (nearest is null || best > maxKm)
+            return null;
+        return nearest;
+    }
+
+    private static double HaversineKm(double lat1, double lng1, double lat2, double lng2)
+    {
+        const double earthRadiusKm = 6371;
+        var lat = Radians(lat2 - lat1);
+        var lng = Radians(lng2 - lng1);
+        var a = Math.Sin(lat / 2) * Math.Sin(lat / 2)
+            + Math.Cos(Radians(lat1)) * Math.Cos(Radians(lat2)) * Math.Sin(lng / 2) * Math.Sin(lng / 2);
+        return earthRadiusKm * 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+    }
+
+    private static double Radians(double degrees) => degrees * Math.PI / 180;
 
     public async Task<IReadOnlyList<CategoryResponse>> CategoriesAsync(CancellationToken cancellationToken) =>
         await _db.Categories.AsNoTracking()

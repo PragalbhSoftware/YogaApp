@@ -1362,6 +1362,12 @@ namespace YogaMarketplace.Infrastructure.Persistence.Migrations
                         .HasPrecision(10, 2)
                         .HasColumnType("decimal(10,2)");
 
+                    b.Property<decimal>("NearestCityMaxKm")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(7, 2)
+                        .HasColumnType("decimal(7,2)")
+                        .HasDefaultValue(100m);
+
                     b.Property<int>("NotificationMaxAttempts")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int")

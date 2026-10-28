@@ -9,10 +9,13 @@ import {
   type InstructorRegisterFormValues,
 } from "@/features/instructor/schemas";
 import type { RegisterInstructorInput } from "@/features/instructor/types";
-import type { Area } from "@/features/marketplace/types";
+import type { Area, CatalogCity } from "@/features/marketplace/types";
 import { brand } from "@/constants/brand";
 
 type RegisterFormProps = {
+  cities: CatalogCity[];
+  cityId: string;
+  onCityChange: (cityId: string) => void;
   areas: Area[];
   defaultValues: InstructorRegisterFormValues;
   busy: boolean;
@@ -37,6 +40,9 @@ const selectSx = {
 };
 
 export function RegisterForm({
+  cities,
+  cityId,
+  onCityChange,
   areas,
   defaultValues,
   busy,
@@ -115,6 +121,30 @@ export function RegisterForm({
                 />
               )}
             />
+          </div>
+          <div className="flex flex-col gap-2">
+            <label htmlFor="instructor-city" className="text-sm font-medium text-brand-text">
+              City
+            </label>
+            <TextField
+              id="instructor-city"
+              select
+              hiddenLabel
+              fullWidth
+              value={cityId}
+              onChange={(event) => {
+                onCityChange(event.target.value);
+                form.setValue("areaId", "");
+              }}
+              sx={selectSx}
+            >
+              <MenuItem value="">Select a city</MenuItem>
+              {cities.map((city) => (
+                <MenuItem key={city.id} value={city.id}>
+                  {city.name}
+                </MenuItem>
+              ))}
+            </TextField>
           </div>
           <Controller
             name="areaId"

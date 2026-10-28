@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { usePageTitle } from "@/hooks/use-page-title";
@@ -10,20 +11,18 @@ import { RegisterForm } from "@/features/instructor/components/register-form";
 import { emptyInstructorRegisterForm } from "@/features/instructor/schemas";
 import { useRegisterInstructor } from "@/features/instructor/hooks/use-instructor-schedule";
 import { useAreas } from "@/features/marketplace/hooks/use-areas";
+import { useCities } from "@/features/marketplace/hooks/use-cities";
 import { toUserMessage } from "@/services/http/api-error";
-import { useAreaStore } from "@/stores/area-store";
 import { toastError } from "@/services/http/toast-error";
 
 export function InstructorRegisterPage() {
   usePageTitle("Teach with us");
   const navigate = useNavigate();
   const { user } = useAuth();
-  const areas = useAreas();
-  const selectedCity = useAreaStore((state) => state.city);
-  const selectedArea = useAreaStore((state) => state.areaName);
+  const cities = useCities();
+  const [cityId, setCityId] = useState("");
+  const areas = useAreas(cityId || null);
   const register = useRegisterInstructor();
-  const defaultAreaId =
-    areas.data?.find((area) => area.cityName === selectedCity && area.name === selectedArea)?.id ?? "";
 
   async function onSubmit(input: Parameters<typeof register.mutateAsync>[0]) {
     try {
@@ -45,24 +44,22 @@ export function InstructorRegisterPage() {
         </p>
       </header>
 
-      {areas.isLoading ? <PageLoader /> : null}
-      {areas.isError ? (
-        <ErrorState message={toUserMessage(areas.error)} onRetry={() => void areas.refetch()} />
+      {cities.isLoading ? <PageLoader /> : null}
+      {cities.isError ? (
+        <ErrorState message={toUserMessage(cities.error)} onRetry={() => void cities.refetch()} />
       ) : null}
-      {areas.isSuccess && areas.data.length === 0 ? (
-        <EmptyState
-          title="No neighbourhoods yet"
-          description="Areas will appear here once the marketplace lists them."
-        />
+      {cities.isSuccess && cities.data.length === 0 ? (
+        <EmptyState title="No cities yet" description="Cities will appear here once the marketplace lists them." />
       ) : null}
-      {areas.isSuccess && areas.data.length > 0 ? (
+      {areas.isError ? <ErrorState message={toUserMessage(areas.error)} onRetry={() => void areas.refetch()} /> : null}
+      {cities.isSuccess && cities.data.length > 0 ? (
         <RegisterForm
-          key={`${user?.id ?? "anon"}-${defaultAreaId}`}
-          areas={areas.data}
-          defaultValues={{
-            ...emptyInstructorRegisterForm(user?.name ?? ""),
-            areaId: defaultAreaId,
-          }}
+          key={user?.id ?? "anon"}
+          cities={cities.data}
+          cityId={cityId}
+          onCityChange={setCityId}
+          areas={areas.data ?? []}
+          defaultValues={emptyInstructorRegisterForm(user?.name ?? "")}
           busy={register.isPending}
           onSubmit={(input) => void onSubmit(input)}
         />

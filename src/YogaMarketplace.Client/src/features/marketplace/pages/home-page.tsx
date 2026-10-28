@@ -1,16 +1,22 @@
 import { useState, useSyncExternalStore } from "react";
 import { useSearchParams } from "react-router-dom";
 import { sessionModes, type SessionModeFilter } from "@/constants/catalog";
+import { EmptyState } from "@/components/common/empty-state";
+import { ErrorState } from "@/components/common/error-state";
 import { PageLoader } from "@/components/common/page-loader";
 import { AreaPicker } from "@/features/marketplace/components/area-picker";
 import { HomeHero } from "@/features/marketplace/components/home-hero";
 import { InstructorList } from "@/features/marketplace/components/instructor-list";
 import { ModeFilter } from "@/features/marketplace/components/mode-filter";
 import { useClosedAreaReset } from "@/features/marketplace/hooks/use-closed-area-reset";
+import { useCities } from "@/features/marketplace/hooks/use-cities";
 import { useInstructors } from "@/features/marketplace/hooks/use-instructors";
 import { useSiteBanner } from "@/features/marketplace/hooks/use-site";
+import { useCityHydrated } from "@/hooks/use-city-hydrated";
 import { usePageTitle } from "@/hooks/use-page-title";
+import { toUserMessage } from "@/services/http/api-error";
 import { useAreaStore } from "@/stores/area-store";
+import { useCityStore } from "@/stores/city-store";
 
 function readMode(value: string | null): SessionModeFilter {
   if (value && sessionModes.includes(value as (typeof sessionModes)[number])) {
@@ -28,31 +34,54 @@ function useAreaHydrated() {
 }
 
 export function HomePage() {
-  const city = useAreaStore((state) => state.city);
+  const cityId = useCityStore((state) => state.cityId);
   const areaName = useAreaStore((state) => state.areaName);
   const setArea = useAreaStore((state) => state.setArea);
-  const hydrated = useAreaHydrated();
+  const areaHydrated = useAreaHydrated();
+  const cityHydrated = useCityHydrated();
+  const cities = useCities();
+  const city = cities.data?.find((item) => item.id === cityId)?.name ?? null;
   const [changingArea, setChangingArea] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const mode = readMode(searchParams.get("mode"));
-  const pickingArea = Boolean(hydrated && (!city || !areaName || changingArea));
+  const hydrated = areaHydrated && cityHydrated;
+  const pickingArea = Boolean(hydrated && cityId && city && (!areaName || changingArea));
   const instructors = useInstructors(pickingArea ? null : city, pickingArea ? null : areaName, mode);
   const banner = useSiteBanner();
-  useClosedAreaReset(hydrated ? city : null, hydrated ? areaName : null);
-  usePageTitle(city && !pickingArea ? `Instructors in ${city}` : null);
+  useClosedAreaReset(hydrated ? cityId : null, hydrated ? city : null, hydrated ? areaName : null);
+  usePageTitle(city && areaName && !pickingArea ? `Instructors in ${city}` : null);
 
-  if (!hydrated) return <PageLoader />;
+  if (!hydrated || cities.isLoading) return <PageLoader />;
+  if (cities.isError) {
+    return (
+      <main className="mx-auto max-w-3xl px-4 py-8 sm:px-8">
+        <ErrorState message={toUserMessage(cities.error)} onRetry={() => void cities.refetch()} />
+      </main>
+    );
+  }
+  if (!cities.data?.length) {
+    return (
+      <main className="mx-auto max-w-3xl px-4 py-8 sm:px-8">
+        <EmptyState
+          title="We're not live in any city yet"
+          description="Cities will show up here once the marketplace lists them."
+        />
+      </main>
+    );
+  }
 
-  if (!city || !areaName || changingArea) {
+  if (!cityId || !city || !areaName || changingArea) {
+    if (!cityId || !city) return <PageLoader />;
     return (
       <AreaPicker
+        cityId={cityId}
         selectedCity={city}
         selectedName={areaName}
-        onSelect={(nextCity, name) => {
-          setArea(nextCity, name);
+        onSelect={(_nextCity, name) => {
+          setArea(name);
           setChangingArea(false);
         }}
-        onCancel={city && areaName ? () => setChangingArea(false) : undefined}
+        onCancel={areaName ? () => setChangingArea(false) : undefined}
       />
     );
   }

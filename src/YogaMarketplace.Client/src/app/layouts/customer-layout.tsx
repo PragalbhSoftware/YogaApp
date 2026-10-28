@@ -5,6 +5,7 @@ import { PageLoader } from "@/components/common/page-loader";
 import { SiteFooter } from "@/components/common/site-footer";
 import { routes } from "@/constants/routes";
 import { useAuth } from "@/features/auth/hooks/use-auth";
+import { CustomerCityPicker } from "@/features/marketplace/components/customer-city-picker";
 import { cn } from "@/utils/cn";
 
 const signedInNav = [
@@ -68,6 +69,7 @@ export function CustomerLayout() {
       </header>
 
       <div className="pb-[calc(4.75rem+env(safe-area-inset-bottom))] md:pb-0">
+        <CustomerCityPicker />
         <Suspense fallback={<PageLoader />}>
           <Outlet />
         </Suspense>

@@ -11,6 +11,7 @@ export type InstructorProfile = {
   areaId: string;
   area: string;
   city: string;
+  cityId: string;
   status: string;
   offersHome: boolean;
   offersStudio: boolean;

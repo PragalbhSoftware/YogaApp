@@ -158,6 +158,7 @@ export const creditSettingsSchema = z.object({
 export const reconciliationLimits = {
   maxWebhookStuckMinutes: 7 * 24 * 60,
   maxRefundPendingHours: 30 * 24,
+  maxNearestCityKm: 20_000,
   noteMax: 500,
 } as const;
 
@@ -176,6 +177,11 @@ export const reconciliationSettingsSchema = z.object({
     .int("Enter a whole number of hours.")
     .min(1, `Must be between 1 and ${reconciliationLimits.maxRefundPendingHours} hours.`)
     .max(reconciliationLimits.maxRefundPendingHours, `Must be between 1 and ${reconciliationLimits.maxRefundPendingHours} hours.`),
+  nearestCityMaxKm: z.coerce
+    .number({ invalid_type_error: "Enter a distance in kilometres." })
+    .min(1, `Must be between 1 and ${reconciliationLimits.maxNearestCityKm} km.`)
+    .max(reconciliationLimits.maxNearestCityKm, `Must be between 1 and ${reconciliationLimits.maxNearestCityKm} km.`)
+    .refine((value) => Math.round(value * 100) === value * 100, "Use at most 2 decimal places."),
 });
 
 export const jobScheduleSettingsSchema = z.object({

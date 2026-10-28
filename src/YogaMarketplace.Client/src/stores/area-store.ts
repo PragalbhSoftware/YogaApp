@@ -2,33 +2,36 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 type AreaState = {
-  city: string | null;
   areaName: string | null;
-  setArea: (city: string, areaName: string) => void;
+  setArea: (areaName: string) => void;
   clearArea: () => void;
 };
 
-type PersistedArea = Pick<AreaState, "city" | "areaName">;
+type PersistedArea = Pick<AreaState, "areaName">;
 
-/** Version 0 saved only a neighbourhood name. Without its city it is ambiguous, so the customer picks again. */
+/**
+ * Older saves stored a city name and no city id. That name is not a city id, so the customer picks again.
+ * Version 0 stored only a neighbourhood name, which is ambiguous without a city.
+ */
 export function migrateArea(persisted: unknown, version: number): PersistedArea {
-  const previous = (persisted ?? {}) as Partial<PersistedArea>;
-  if (version < 1 || !previous.city || !previous.areaName) return { city: null, areaName: null };
-  return { city: previous.city, areaName: previous.areaName };
+  const previous = (persisted ?? {}) as { city?: string | null; cityId?: string | null; areaName?: string | null };
+  if (version < 1 || (Boolean(previous.city) && !previous.cityId) || !previous.areaName) {
+    return { areaName: null };
+  }
+  return { areaName: previous.areaName };
 }
 
 export const useAreaStore = create<AreaState>()(
   persist(
     (set) => ({
-      city: null,
       areaName: null,
-      setArea: (city, areaName) => set({ city, areaName }),
-      clearArea: () => set({ city: null, areaName: null }),
+      setArea: (areaName) => set({ areaName }),
+      clearArea: () => set({ areaName: null }),
     }),
     {
       name: "ym.area",
-      version: 1,
-      partialize: (state): PersistedArea => ({ city: state.city, areaName: state.areaName }),
+      version: 2,
+      partialize: (state): PersistedArea => ({ areaName: state.areaName }),
       migrate: migrateArea,
     },
   ),

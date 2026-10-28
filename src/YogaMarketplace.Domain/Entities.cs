@@ -311,6 +311,9 @@ public class PlatformSettings
     public Guid Id { get; set; }
     public string Currency { get; set; } = "INR";
     public string TimeZoneId { get; set; } = MarketClock.DefaultTimeZoneId;
+
+    /// <summary>Furthest active city "Use my location" will pick, in kilometres.</summary>
+    public decimal NearestCityMaxKm { get; set; } = PlatformSettingsRules.DefaultNearestCityMaxKm;
     public decimal CommissionPercent { get; set; }
     public decimal ConvenienceFee { get; set; }
     public int CancelFreeWindowHours { get; set; }

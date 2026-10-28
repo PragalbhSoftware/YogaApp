@@ -1,7 +1,14 @@
 {
   "cities": [
-    { "name": "Mumbai", "pin": "400001", "areas": ["Bandra", "Andheri", "Powai"] },
-    { "name": "Pune", "pin": "411001", "areas": ["Koregaon Park", "Baner"] }
+    { "name": "Mumbai", "pin": "400001", "areas": [
+      { "name": "Bandra", "latitude": 19.0596, "longitude": 72.8295 },
+      { "name": "Andheri", "latitude": 19.1197, "longitude": 72.8464 },
+      { "name": "Powai", "latitude": 19.1176, "longitude": 72.9060 }
+    ] },
+    { "name": "Pune", "pin": "411001", "areas": [
+      { "name": "Koregaon Park", "latitude": 18.5362, "longitude": 73.8939 },
+      { "name": "Baner", "latitude": 18.5590, "longitude": 73.7868 }
+    ] }
   ],
   "customers": [
     { "phone": "+917000010001", "name": "Riya Kapoor", "gender": "Female" },
