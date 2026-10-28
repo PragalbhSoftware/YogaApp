@@ -13,8 +13,17 @@ export function useInstructors(
     queryFn: () => instructorsApi.browse(cityId ?? "", areaId, mode, page),
     enabled: Boolean(cityId),
     placeholderData: (previousData, previousQuery) => {
-      const previousCity = previousQuery?.queryKey[1];
-      if (previousCity === cityId) return previousData;
+      const previous = previousQuery?.queryKey;
+      if (!previous) return undefined;
+      const [, previousCity, previousArea, previousMode, previousPage] = previous;
+      if (
+        previousCity === cityId &&
+        previousArea === (areaId ?? null) &&
+        previousMode === mode &&
+        previousPage !== page
+      ) {
+        return previousData;
+      }
       return undefined;
     },
   });
