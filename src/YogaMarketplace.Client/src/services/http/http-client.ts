@@ -14,7 +14,7 @@ declare module "axios" {
   }
 }
 
-type ErrorBody = { error?: string };
+type ErrorBody = { error?: string; code?: string };
 
 const FALLBACK_MESSAGE = "Something went wrong. Try again.";
 const SESSION_ENDED = "Your session has ended. Sign in again.";
@@ -45,7 +45,7 @@ async function readApiError(error: AxiosError<ErrorBody | Blob>) {
   }
 
   const body = await readErrorBody(error.response.data);
-  return new ApiError(body?.error ?? FALLBACK_MESSAGE, error.response.status, false, correlationId);
+  return new ApiError(body?.error ?? FALLBACK_MESSAGE, error.response.status, false, correlationId, body?.code);
 }
 
 /** Short enough to read out over the phone; the server keeps ids of letters and digits as they are. */

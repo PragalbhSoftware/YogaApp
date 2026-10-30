@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using YogaMarketplace.Api.Security;
 using YogaMarketplace.Domain;
@@ -27,10 +28,20 @@ public class ProviderService
     public async Task<IReadOnlyList<ProviderSummary>> BrowseAsync(
         string? city,
         string? area,
+        Guid? cityId,
+        Guid? areaId,
         string? mode,
         string? category,
+        int? page,
+        int? pageSize,
         CancellationToken cancellationToken)
     {
+        if (cityId is Guid id && id != Guid.Empty)
+            return await BrowseByCityAsync(id, areaId, mode, category, page, pageSize, cancellationToken);
+
+        if (areaId is Guid onlyArea && onlyArea != Guid.Empty)
+            throw new DomainException("Pick a city first.");
+
         var parsedMode = ParseOptionalMode(mode);
         var query = VerifiedQuery();
         if (parsedMode == SessionMode.Online)
@@ -69,9 +80,121 @@ public class ProviderService
             query = query.Where(p => p.Services.Any(s => s.IsActive && s.Category!.Slug == slug));
         }
 
-        var providers = await query.OrderBy(p => p.DisplayName).Take(100).ToListAsync(cancellationToken);
+        var (pageNumber, size) = AdminQuery.Paging(page, pageSize);
+        var providers = await query
+            .OrderBy(p => p.DisplayName)
+            .ThenBy(p => p.Id)
+            .Skip((pageNumber - 1) * size)
+            .Take(size)
+            .ToListAsync(cancellationToken);
         var ratings = await LoadRatingsAsync(providers.Select(p => p.Id).ToArray(), cancellationToken);
-        return providers.Select(p => ToSummary(p, ratings)).ToList();
+        return providers.Select(p => ToSummary(p, ratings, outOfCity: false)).ToList();
+    }
+
+    /// <summary>Listed Online with a rate and an active service; inactive place stays out.</summary>
+    private static readonly Expression<Func<Provider, bool>> IsOnlineEligible = p =>
+        p.OffersOnline
+        && p.OnlineRate != null
+        && p.Services.Any(s => s.IsActive)
+        && p.Area!.IsActive
+        && p.Area.City!.IsActive
+        && p.Area.City.State!.IsActive;
+
+    private static Expression<Func<Provider, bool>> IsInCity(Guid cityId) => p =>
+        p.Area!.CityId == cityId
+        && p.Area.IsActive
+        && p.Area.City!.IsActive
+        && p.Area.City.State!.IsActive;
+
+    private static Expression<Func<Provider, bool>> InCityOrOnline(Guid cityId, Guid? areaId) =>
+        areaId is Guid neighbourhood
+            ? p =>
+                (p.Area!.CityId == cityId
+                    && p.AreaId == neighbourhood
+                    && p.Area.IsActive
+                    && p.Area.City!.IsActive
+                    && p.Area.City.State!.IsActive
+                    && (p.OffersHome || p.OffersStudio || (p.OffersOnline && p.OnlineRate != null && p.Services.Any(s => s.IsActive))))
+                || (p.OffersOnline
+                    && p.OnlineRate != null
+                    && p.Services.Any(s => s.IsActive)
+                    && p.Area!.IsActive
+                    && p.Area.City!.IsActive
+                    && p.Area.City.State!.IsActive)
+            : p =>
+                (p.Area!.CityId == cityId
+                    && p.Area.IsActive
+                    && p.Area.City!.IsActive
+                    && p.Area.City.State!.IsActive
+                    && (p.OffersHome || p.OffersStudio || (p.OffersOnline && p.OnlineRate != null && p.Services.Any(s => s.IsActive))))
+                || (p.OffersOnline
+                    && p.OnlineRate != null
+                    && p.Services.Any(s => s.IsActive)
+                    && p.Area!.IsActive
+                    && p.Area.City!.IsActive
+                    && p.Area.City.State!.IsActive);
+
+    private async Task<IReadOnlyList<ProviderSummary>> BrowseByCityAsync(
+        Guid cityId,
+        Guid? areaId,
+        string? mode,
+        string? category,
+        int? page,
+        int? pageSize,
+        CancellationToken cancellationToken)
+    {
+        var city = await _db.Cities.AsNoTracking()
+            .Include(c => c.State)
+            .SingleOrDefaultAsync(c => c.Id == cityId, cancellationToken);
+        if (city is null || !city.IsActive || city.State is not { IsActive: true })
+            throw new DomainException("Pick a city from the list.");
+
+        if (areaId is Guid aid && aid != Guid.Empty)
+        {
+            var areaRow = await _db.Areas.AsNoTracking().SingleOrDefaultAsync(a => a.Id == aid, cancellationToken);
+            if (areaRow is null || areaRow.CityId != cityId)
+                throw new DomainException("Pick a neighbourhood in that city.", code: "area_invalid");
+        }
+
+        var parsedMode = ParseOptionalMode(mode);
+        var query = VerifiedQuery();
+
+        if (parsedMode == SessionMode.Online)
+        {
+            query = query.Where(IsOnlineEligible);
+        }
+        else if (parsedMode == SessionMode.Home)
+        {
+            query = query.Where(IsInCity(cityId)).Where(p => p.OffersHome);
+            if (areaId is Guid homeArea)
+                query = query.Where(p => p.AreaId == homeArea);
+        }
+        else if (parsedMode == SessionMode.Studio)
+        {
+            query = query.Where(IsInCity(cityId)).Where(p => p.OffersStudio);
+            if (areaId is Guid studioArea)
+                query = query.Where(p => p.AreaId == studioArea);
+        }
+        else
+        {
+            query = query.Where(InCityOrOnline(cityId, areaId is Guid n && n != Guid.Empty ? n : null));
+        }
+
+        if (!string.IsNullOrWhiteSpace(category))
+        {
+            var slug = category.Trim().ToLower();
+            query = query.Where(p => p.Services.Any(s => s.IsActive && s.Category!.Slug == slug));
+        }
+
+        var (pageNumber, size) = AdminQuery.Paging(page, pageSize);
+        var providers = await query
+            .OrderBy(p => p.DisplayName)
+            .ThenBy(p => p.Id)
+            .Skip((pageNumber - 1) * size)
+            .Take(size)
+            .ToListAsync(cancellationToken);
+        var ratings = await LoadRatingsAsync(providers.Select(p => p.Id).ToArray(), cancellationToken);
+        return providers.Select(p => ToSummary(p, ratings, outOfCity: p.Area!.CityId != cityId)).ToList();
     }
 
     public async Task<ProviderDetail> GetPublicAsync(Guid id, CancellationToken cancellationToken)
@@ -583,7 +706,10 @@ public class ProviderService
         return rows.ToDictionary(r => r.Key, r => (decimal.Round((decimal)r.Average, 2), r.Count));
     }
 
-    private static ProviderSummary ToSummary(Provider provider, IReadOnlyDictionary<Guid, (decimal Average, int Count)> ratings)
+    private static ProviderSummary ToSummary(
+        Provider provider,
+        IReadOnlyDictionary<Guid, (decimal Average, int Count)> ratings,
+        bool outOfCity)
     {
         ratings.TryGetValue(provider.Id, out var rating);
         return new ProviderSummary(
@@ -597,7 +723,8 @@ public class ProviderService
             rating.Count == 0 ? null : rating.Average,
             rating.Count,
             OrderedPhotos(provider).Select(p => ProviderMediaService.PhotoUrl(p.Id)).FirstOrDefault(),
-            ProviderMediaRules.IsVerified(provider.Certificates));
+            ProviderMediaRules.IsVerified(provider.Certificates),
+            outOfCity);
     }
 
     private static IEnumerable<ProviderPhoto> OrderedPhotos(Provider provider) =>
@@ -613,6 +740,7 @@ public class ProviderService
             provider.Age,
             provider.Area!.Name,
             provider.Area.City!.Name,
+            provider.Area.CityId,
             provider.Status.ToString(),
             ModesOf(provider),
             provider.StudioAddress,

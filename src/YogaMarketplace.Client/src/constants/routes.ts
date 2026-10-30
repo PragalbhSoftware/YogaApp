@@ -52,8 +52,9 @@ export function packPath(packId: string) {
   return `${routes.packs}?pack=${encodeURIComponent(packId)}`;
 }
 
-export function bookPath(providerId: string, slotId: string, mode: string) {
-  return `/book/${providerId}/${slotId}?mode=${encodeURIComponent(mode)}`;
+export function bookPath(providerId: string, slotId: string, mode: string, remote = false) {
+  const query = `mode=${encodeURIComponent(mode)}${remote ? "&remote=1" : ""}`;
+  return `/book/${providerId}/${slotId}?${query}`;
 }
 
 export function adminUserPath(id: string) {

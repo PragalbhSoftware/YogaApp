@@ -13,7 +13,11 @@ const options: { value: SessionModeFilter; label: string }[] = [
 
 export function ModeFilter({ value, onChange }: ModeFilterProps) {
   return (
-    <div className="flex flex-wrap gap-2" role="group" aria-label="Session type">
+    <div
+      className="-mx-1 flex flex-nowrap gap-2 overflow-x-auto px-1 pb-1"
+      role="group"
+      aria-label="Session type"
+    >
       {options.map((option) => {
         const selected = option.value === value;
         return (
@@ -24,6 +28,7 @@ export function ModeFilter({ value, onChange }: ModeFilterProps) {
             onClick={() => onChange(option.value)}
             aria-pressed={selected}
             sx={{
+              flexShrink: 0,
               bgcolor: selected ? "primary.main" : "background.paper",
               color: selected ? "primary.contrastText" : "text.primary",
               border: "1px solid",

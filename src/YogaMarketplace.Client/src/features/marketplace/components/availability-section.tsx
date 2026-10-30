@@ -59,6 +59,7 @@ function pickDate(
 export function AvailabilitySection({ instructorId, modes }: AvailabilitySectionProps) {
   const allowed = offeredSessionModes(modes);
   const [searchParams, setSearchParams] = useSearchParams();
+  const remote = searchParams.get("remote") === "1";
   const mode = readMode(searchParams.get("mode"), allowed);
   const today = kolkataToday();
   const requestedDate = searchParams.get("date");
@@ -136,7 +137,7 @@ export function AvailabilitySection({ instructorId, modes }: AvailabilitySection
             />
           ) : (
             daySlots.map((slot) => (
-              <OpenSlotRow key={slot.id} slot={slot} providerId={instructorId} />
+              <OpenSlotRow key={slot.id} slot={slot} providerId={instructorId} remote={remote} />
             ))
           )}
         </div>
