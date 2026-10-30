@@ -107,6 +107,7 @@ public record ProviderDetail(
     int? Age,
     string Area,
     string City,
+    Guid CityId,
     string Status,
     IReadOnlyList<ModeRate> Modes,
     string? StudioAddress,

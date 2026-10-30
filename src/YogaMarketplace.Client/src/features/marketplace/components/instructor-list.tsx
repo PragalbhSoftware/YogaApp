@@ -60,9 +60,7 @@ export function InstructorList({
       {inPerson.length === 0 && onlineOnly.length > 0 ? (
         <p className="text-sm text-brand-muted">No in-person instructors in this city yet</p>
       ) : (
-        <p className="text-sm text-brand-muted">
-          {list.length === 1 ? "1 instructor" : `${list.length} instructors`}
-        </p>
+        <p className="text-sm text-brand-muted">Showing {list.length}</p>
       )}
       <div className="grid gap-4 sm:grid-cols-2">
         {list.map((instructor) => (

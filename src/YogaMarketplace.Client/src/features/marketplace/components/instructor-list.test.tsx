@@ -78,4 +78,23 @@ describe("InstructorList empty states", () => {
     expect(screen.getByText("No in-person instructors in this city yet")).toBeInTheDocument();
     expect(screen.getByText("Online · Other")).toBeInTheDocument();
   });
+
+  it("shows Showing N without implying a total count", () => {
+    render(
+      <MemoryRouter>
+        <InstructorList
+          cityName="Harbor"
+          mode=""
+          modeLabel="any mode"
+          instructors={[online]}
+          isLoading={false}
+          isError={false}
+          error={null}
+          onRetry={vi.fn()}
+          onShowOnline={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText("Showing 1")).not.toBeNull();
+  });
 });

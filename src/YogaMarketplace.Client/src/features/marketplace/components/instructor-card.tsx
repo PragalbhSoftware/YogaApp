@@ -34,7 +34,12 @@ export function InstructorCard({ instructor, mode = "" }: InstructorCardProps) {
             <Chip
               label={`Online · ${instructor.city}`}
               size="small"
-              sx={{ alignSelf: "flex-start", fontWeight: 600, height: 24 }}
+              sx={{
+                alignSelf: "flex-start",
+                fontWeight: 600,
+                height: "auto",
+                "& .MuiChip-label": { whiteSpace: "normal" },
+              }}
             />
           ) : (
             <p className="text-sm text-brand-muted">{instructor.area}</p>

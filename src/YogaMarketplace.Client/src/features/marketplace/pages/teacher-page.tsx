@@ -17,8 +17,10 @@ import { TrialOfferNote } from "@/features/marketplace/components/trial-offer-no
 import { VerifiedBadge } from "@/features/marketplace/components/verified-badge";
 import { useInstructor, useInstructorReviews } from "@/features/marketplace/hooks/use-instructors";
 import { areaClosedDescription, areaClosedTitle } from "@/features/marketplace/utils/areas";
+import { isOutOfSelectedCity } from "@/features/marketplace/utils/out-of-city";
 import { usePageTitle } from "@/hooks/use-page-title";
 import { ApiError, toUserMessage } from "@/services/http/api-error";
+import { useCityStore } from "@/stores/city-store";
 
 const BOOKING_ID = "book";
 
@@ -30,13 +32,14 @@ export function TeacherPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const selectedCityId = useCityStore((state) => state.cityId);
   const remoteHint = searchParams.get("remote") === "1";
   const instructor = useInstructor(id);
   const reviews = useInstructorReviews(id);
   usePageTitle(instructor.data?.displayName ?? "Instructor");
   const offered = instructor.data?.modes ?? [];
-  const onlineOnlyFromData = offered.length > 0 && offered.every((item) => item.mode === "Online");
-  const remoteOnly = remoteHint || onlineOnlyFromData;
+  const outOfCity = isOutOfSelectedCity(instructor.data?.cityId, selectedCityId);
+  const remoteOnly = remoteHint || outOfCity;
   const modes = remoteOnly ? offered.filter((item) => item.mode === "Online") : offered;
 
   return (
@@ -80,7 +83,11 @@ export function TeacherPage() {
                 <Chip
                   label={`Online · ${instructor.data.city}`}
                   size="small"
-                  sx={{ fontWeight: 600, height: 24 }}
+                  sx={{
+                    fontWeight: 600,
+                    height: "auto",
+                    "& .MuiChip-label": { whiteSpace: "normal" },
+                  }}
                 />
               ) : (
                 <p className="text-sm text-brand-muted">{instructor.data.area}</p>

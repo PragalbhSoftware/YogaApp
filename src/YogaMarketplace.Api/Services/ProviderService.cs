@@ -740,6 +740,7 @@ public class ProviderService
             provider.Age,
             provider.Area!.Name,
             provider.Area.City!.Name,
+            provider.Area.CityId,
             provider.Status.ToString(),
             ModesOf(provider),
             provider.StudioAddress,

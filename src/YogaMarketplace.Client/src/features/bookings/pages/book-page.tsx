@@ -30,6 +30,7 @@ import { PayAgreement } from "@/features/content/components/pay-agreement";
 import { useInstructor, useInstructorOpenSlots } from "@/features/marketplace/hooks/use-instructors";
 import { areaClosedDescription, areaClosedTitle } from "@/features/marketplace/utils/areas";
 import { offeredSessionModes } from "@/features/marketplace/utils/modes";
+import { isOutOfSelectedCity } from "@/features/marketplace/utils/out-of-city";
 import { VisitAddressCard } from "@/features/profile/components/visit-address-card";
 import { useCustomerProfile, useSaveVisitAddress } from "@/features/profile/hooks/use-profile";
 import type { VisitAddress } from "@/features/profile/types";
@@ -37,6 +38,7 @@ import { toUserMessage } from "@/services/http/api-error";
 import { slotHasEnded, addMonths, endOfMonth, kolkataToday, startOfMonth } from "@/utils/clock";
 import { toastError } from "@/services/http/toast-error";
 import { emptyBookingDraft, useBookingDraftStore } from "@/stores/booking-draft-store";
+import { useCityStore } from "@/stores/city-store";
 
 function readTrialChoice(value: string | null): boolean | null {
   if (value === "1") return true;
@@ -60,17 +62,16 @@ export function BookPage() {
   const { providerId, slotId } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const instructor = useInstructor(providerId);
+  const selectedCityId = useCityStore((state) => state.cityId);
   const remoteHint = searchParams.get("remote") === "1";
-  const onlineOnlyFromData =
-    Boolean(instructor.data?.modes?.length) &&
-    (instructor.data?.modes ?? []).every((item) => item.mode === "Online");
-  const remoteOnly = remoteHint || onlineOnlyFromData;
+  const outOfCity = isOutOfSelectedCity(instructor.data?.cityId, selectedCityId);
+  const remoteOnly = remoteHint || outOfCity;
   const allowedModes: SessionMode[] = instructor.data
     ? offeredSessionModes(instructor.data.modes).filter((item) => !remoteOnly || item === "Online")
-    : remoteHint
+    : remoteOnly
       ? ["Online"]
       : [...sessionModes];
-  const mode = readMode(searchParams.get("mode"), allowedModes);
+  const mode = remoteOnly ? "Online" : readMode(searchParams.get("mode"), allowedModes);
   const today = kolkataToday();
   const slotsFrom = startOfMonth(today);
   const slotsTo = endOfMonth(addMonths(today, 2));
