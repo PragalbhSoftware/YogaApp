@@ -60,8 +60,7 @@ export function HomePage() {
 
   useEffect(() => {
     if (!(instructors.error instanceof ApiError) || instructors.error.status !== 400) return;
-    const message = instructors.error.message;
-    if (/neighbourhood/i.test(message)) {
+    if (instructors.error.code === "area_invalid") {
       clearArea();
       return;
     }

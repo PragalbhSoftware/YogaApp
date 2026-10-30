@@ -153,7 +153,7 @@ public class ProviderService
         {
             var areaRow = await _db.Areas.AsNoTracking().SingleOrDefaultAsync(a => a.Id == aid, cancellationToken);
             if (areaRow is null || areaRow.CityId != cityId)
-                throw new DomainException("Pick a neighbourhood in that city.");
+                throw new DomainException("Pick a neighbourhood in that city.", code: "area_invalid");
         }
 
         var parsedMode = ParseOptionalMode(mode);

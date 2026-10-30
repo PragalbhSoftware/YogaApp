@@ -31,7 +31,7 @@ vi.mock("@/features/marketplace/hooks/use-instructors", () => ({
     data: undefined,
     isLoading: false,
     isError: true,
-    error: new ApiError("Pick a neighbourhood in that city.", 400),
+    error: new ApiError("Pick a neighbourhood in that city.", 400, false, undefined, "area_invalid"),
     isFetching: false,
     isPlaceholderData: false,
     refetch: vi.fn(),

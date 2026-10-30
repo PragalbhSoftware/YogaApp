@@ -710,17 +710,16 @@ public partial class BookingService : IBookingService, IBookingHandshake, IRazor
             throw new DomainException(ProviderApproval.AreaClosedMessage, 409);
     }
 
-    /// <summary>When the customer has a preferred city, Home visits must be in that city.</summary>
+    /// <summary>Home visits require a preferred city that matches the instructor's city.</summary>
     private static void EnsureHomeCityMatches(User customer, AvailabilitySlot slot)
     {
         if (slot.Mode != SessionMode.Home)
             return;
-        if (customer.PreferredCityId is not Guid preferred || preferred == Guid.Empty)
-            return;
         var provider = slot.Provider ?? throw new InvalidOperationException("Provider was not loaded.");
         var area = provider.Area ?? throw new InvalidOperationException("Provider area was not loaded.");
-        if (area.CityId != preferred)
-            throw new DomainException("Home visits are only available in your preferred city.");
+        var cityName = area.City?.Name ?? "that city";
+        if (customer.PreferredCityId is not Guid preferred || preferred == Guid.Empty || area.CityId != preferred)
+            throw new DomainException($"This instructor visits homes in {cityName} only.");
     }
 
     /// <summary>Regular sessions use the mode rate; a trial uses the service's trial price, which may be zero.</summary>

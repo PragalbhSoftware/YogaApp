@@ -52,6 +52,7 @@ public class ProviderBrowseCityTests : IClassFixture<YogaApiFactory>
         var anon = _factory.CreateClient();
         var wrongArea = await anon.GetAsync($"/api/providers?cityId={TestWorld.CityId}&areaId={other.AreaId}");
         Assert.Equal(HttpStatusCode.BadRequest, wrongArea.StatusCode);
+        Assert.Contains("\"code\":\"area_invalid\"", await wrongArea.Content.ReadAsStringAsync(), StringComparison.Ordinal);
 
         var areaAlone = await anon.GetAsync($"/api/providers?areaId={SeedIds.AreaBandra}");
         Assert.Equal(HttpStatusCode.BadRequest, areaAlone.StatusCode);
