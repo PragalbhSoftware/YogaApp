@@ -82,6 +82,6 @@ describe("teacher page out of city", () => {
     );
     await waitFor(() => expect(screen.getByText("Online · Other")).toBeInTheDocument());
     expect(screen.queryByText("Home")).not.toBeInTheDocument();
-    expect(screen.getByText(/Online/)).toBeInTheDocument();
+    expect(screen.getAllByText("Online").length).toBeGreaterThan(0);
   });
 });

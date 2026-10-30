@@ -9,23 +9,19 @@ using YogaMarketplace.Infrastructure.Persistence;
 
 namespace YogaMarketplace.Api.Tests;
 
-public class ProviderBrowseCityTests : IClassFixture<YogaApiFactory>
+/// <summary>Each test owns a factory so online cities / Pending providers never leak across facts.</summary>
+public class ProviderBrowseCityTests
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
-    private readonly YogaApiFactory _factory;
-
-    public ProviderBrowseCityTests(YogaApiFactory factory)
-    {
-        _factory = factory;
-    }
 
     [Fact]
     public async Task City_filter_includes_in_city_and_online_providers_once()
     {
-        var admin = await SignInAdminAsync();
-        var other = await CreateOnlineOnlyCityAsync(admin, "Other");
+        await using var factory = new YogaApiFactory();
+        var admin = await SignInAdminAsync(factory);
+        var other = await CreateOnlineOnlyCityAsync(factory, admin, "Other");
 
-        var anon = _factory.CreateClient();
+        var anon = factory.CreateClient();
         var list = await anon.GetFromJsonAsync<List<ProviderBody>>(
             $"/api/providers?cityId={TestWorld.CityId}&category=yoga", Json);
         Assert.Contains(list!, p => p.Id == SeedIds.AnanyaProviderId && !p.IsOutOfCity);
@@ -37,6 +33,11 @@ public class ProviderBrowseCityTests : IClassFixture<YogaApiFactory>
         Assert.Contains(home!, p => p.Id == SeedIds.AnanyaProviderId);
         Assert.DoesNotContain(home!, p => p.Id == other.ProviderId);
 
+        var studio = await anon.GetFromJsonAsync<List<ProviderBody>>(
+            $"/api/providers?cityId={TestWorld.CityId}&mode=Studio&category=yoga", Json);
+        Assert.Contains(studio!, p => p.Id == SeedIds.AnanyaProviderId);
+        Assert.DoesNotContain(studio!, p => p.Id == other.ProviderId);
+
         var online = await anon.GetFromJsonAsync<List<ProviderBody>>(
             $"/api/providers?cityId={other.CityId}&mode=Online&category=yoga", Json);
         Assert.Contains(online!, p => p.Id == SeedIds.AnanyaProviderId);
@@ -46,10 +47,11 @@ public class ProviderBrowseCityTests : IClassFixture<YogaApiFactory>
     [Fact]
     public async Task Area_from_another_city_is_rejected_and_bad_city_is_rejected()
     {
-        var admin = await SignInAdminAsync();
-        var other = await CreateOnlineOnlyCityAsync(admin, "Away");
+        await using var factory = new YogaApiFactory();
+        var admin = await SignInAdminAsync(factory);
+        var other = await CreateOnlineOnlyCityAsync(factory, admin, "Away");
 
-        var anon = _factory.CreateClient();
+        var anon = factory.CreateClient();
         var wrongArea = await anon.GetAsync($"/api/providers?cityId={TestWorld.CityId}&areaId={other.AreaId}");
         Assert.Equal(HttpStatusCode.BadRequest, wrongArea.StatusCode);
         Assert.Contains("\"code\":\"area_invalid\"", await wrongArea.Content.ReadAsStringAsync(), StringComparison.Ordinal);
@@ -62,6 +64,9 @@ public class ProviderBrowseCityTests : IClassFixture<YogaApiFactory>
         Assert.Equal(HttpStatusCode.BadRequest, unknown.StatusCode);
         Assert.Contains("Pick a city", await unknown.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
 
+        var invalid = await anon.GetAsync("/api/providers?cityId=not-a-guid");
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+
         await PatchAsync<CityBody>(admin, $"/api/admin/cities/{other.CityId}", new { isActive = false });
         var inactive = await anon.GetAsync($"/api/providers?cityId={other.CityId}");
         Assert.Equal(HttpStatusCode.BadRequest, inactive.StatusCode);
@@ -70,10 +75,11 @@ public class ProviderBrowseCityTests : IClassFixture<YogaApiFactory>
     [Fact]
     public async Task Area_narrows_in_city_but_keeps_out_of_city_online()
     {
-        var admin = await SignInAdminAsync();
-        var other = await CreateOnlineOnlyCityAsync(admin, "Remote");
+        await using var factory = new YogaApiFactory();
+        var admin = await SignInAdminAsync(factory);
+        var other = await CreateOnlineOnlyCityAsync(factory, admin, "Remote");
 
-        var anon = _factory.CreateClient();
+        var anon = factory.CreateClient();
         var bandra = await anon.GetFromJsonAsync<List<ProviderBody>>(
             $"/api/providers?cityId={TestWorld.CityId}&areaId={SeedIds.AreaBandra}&category=yoga", Json);
         Assert.Contains(bandra!, p => p.Id == SeedIds.AnanyaProviderId);
@@ -94,17 +100,18 @@ public class ProviderBrowseCityTests : IClassFixture<YogaApiFactory>
     [Fact]
     public async Task Inactive_place_and_unlisted_providers_are_excluded_even_when_online()
     {
-        var admin = await SignInAdminAsync();
-        var other = await CreateOnlineOnlyCityAsync(admin, "Quiet");
+        await using var factory = new YogaApiFactory();
+        var admin = await SignInAdminAsync(factory);
+        var other = await CreateOnlineOnlyCityAsync(factory, admin, "Quiet");
 
         await PatchAsync<CityBody>(admin, $"/api/admin/cities/{other.CityId}", new { isActive = false });
-        var anon = _factory.CreateClient();
+        var anon = factory.CreateClient();
         var list = await anon.GetFromJsonAsync<List<ProviderBody>>(
             $"/api/providers?cityId={TestWorld.CityId}&category=yoga", Json);
         Assert.DoesNotContain(list!, p => p.Id == other.ProviderId);
 
         await PatchAsync<CityBody>(admin, $"/api/admin/cities/{other.CityId}", new { isActive = true });
-        using (var scope = _factory.Services.CreateScope())
+        using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<YogaDbContext>();
             var provider = await db.Providers.SingleAsync(p => p.Id == other.ProviderId);
@@ -118,14 +125,41 @@ public class ProviderBrowseCityTests : IClassFixture<YogaApiFactory>
     }
 
     [Fact]
+    public async Task Inactive_area_and_inactive_state_exclude_online_providers()
+    {
+        await using var factory = new YogaApiFactory();
+        var admin = await SignInAdminAsync(factory);
+        var other = await CreateOnlineOnlyCityAsync(factory, admin, "Closed");
+
+        await PatchAsync<AreaBody>(admin, $"/api/admin/areas/{other.AreaId}", new { isActive = false });
+        var anon = factory.CreateClient();
+        var afterArea = await anon.GetFromJsonAsync<List<ProviderBody>>(
+            $"/api/providers?cityId={TestWorld.CityId}&category=yoga", Json);
+        Assert.DoesNotContain(afterArea!, p => p.Id == other.ProviderId);
+
+        await PatchAsync<AreaBody>(admin, $"/api/admin/areas/{other.AreaId}", new { isActive = true });
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<YogaDbContext>();
+            var state = await db.States.SingleAsync(s => s.Id == other.StateId);
+            state.IsActive = false;
+            await db.SaveChangesAsync();
+        }
+        var afterState = await anon.GetFromJsonAsync<List<ProviderBody>>(
+            $"/api/providers?cityId={TestWorld.CityId}&category=yoga", Json);
+        Assert.DoesNotContain(afterState!, p => p.Id == other.ProviderId);
+    }
+
+    [Fact]
     public async Task Paging_mixed_in_city_and_online_skips_nobody_and_repeats_nobody()
     {
-        var admin = await SignInAdminAsync();
+        await using var factory = new YogaApiFactory();
+        var admin = await SignInAdminAsync(factory);
         var extras = new List<Guid>();
         foreach (var label in new[] { "PageOne", "PageTwo", "PageThree" })
-            extras.Add((await CreateOnlineOnlyCityAsync(admin, label)).ProviderId);
+            extras.Add((await CreateOnlineOnlyCityAsync(factory, admin, label)).ProviderId);
 
-        var anon = _factory.CreateClient();
+        var anon = factory.CreateClient();
         var page1 = await anon.GetFromJsonAsync<List<ProviderBody>>(
             $"/api/providers?cityId={TestWorld.CityId}&category=yoga&page=1&pageSize=2", Json);
         var page2 = await anon.GetFromJsonAsync<List<ProviderBody>>(
@@ -140,7 +174,10 @@ public class ProviderBrowseCityTests : IClassFixture<YogaApiFactory>
             Assert.Contains(all!, p => p.Id == id);
     }
 
-    private async Task<(Guid CityId, Guid AreaId, Guid ProviderId)> CreateOnlineOnlyCityAsync(HttpClient admin, string label)
+    private static async Task<(Guid CityId, Guid AreaId, Guid StateId, Guid ProviderId)> CreateOnlineOnlyCityAsync(
+        YogaApiFactory factory,
+        HttpClient admin,
+        string label)
     {
         var tag = (char)('A' + Random.Shared.Next(26));
         var state = await PostAsync<StateBody>(admin, "/api/admin/states", new
@@ -163,7 +200,7 @@ public class ProviderBrowseCityTests : IClassFixture<YogaApiFactory>
 
         var providerId = Guid.NewGuid();
         var userId = Guid.NewGuid();
-        using (var scope = _factory.Services.CreateScope())
+        using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<YogaDbContext>();
             var now = DateTimeOffset.UtcNow;
@@ -201,12 +238,12 @@ public class ProviderBrowseCityTests : IClassFixture<YogaApiFactory>
             await db.SaveChangesAsync();
         }
 
-        return (city.Id, area.Id, providerId);
+        return (city.Id, area.Id, state.Id, providerId);
     }
 
-    private async Task<HttpClient> SignInAdminAsync()
+    private static async Task<HttpClient> SignInAdminAsync(YogaApiFactory factory)
     {
-        var client = _factory.CreateClient();
+        var client = factory.CreateClient();
         var otp = await PostAsync<OtpBody>(client, "/api/auth/otp/request", new { phone = SeedIds.AdminPhone, isNewUser = false });
         var auth = await PostAsync<AuthBody>(client, "/api/auth/otp/verify", new { phone = SeedIds.AdminPhone, code = otp.DevCode });
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth.Token);
@@ -232,8 +269,8 @@ public class ProviderBrowseCityTests : IClassFixture<YogaApiFactory>
     private sealed record OtpBody(Guid ChallengeId, DateTimeOffset ExpiresAt, string? DevCode);
     private sealed record UserAuthBody(string Role);
     private sealed record AuthBody(string Token, UserAuthBody User);
-    private sealed record StateBody(Guid Id);
+    private sealed record StateBody(Guid Id, string Name, bool IsActive);
     private sealed record CityBody(Guid Id, string Name, Guid StateId, bool IsActive);
-    private sealed record AreaBody(Guid Id);
+    private sealed record AreaBody(Guid Id, string Name, bool IsActive);
     private sealed record ProviderBody(Guid Id, string DisplayName, string City, bool IsOutOfCity);
 }

@@ -80,13 +80,14 @@ describe("InstructorList empty states", () => {
   });
 
   it("shows Showing N without implying a total count", () => {
+    const local: InstructorSummary = { ...online, isOutOfCity: false, area: "Bandra", city: "Harbor" };
     render(
       <MemoryRouter>
         <InstructorList
           cityName="Harbor"
           mode=""
           modeLabel="any mode"
-          instructors={[online]}
+          instructors={[local]}
           isLoading={false}
           isError={false}
           error={null}
@@ -95,6 +96,6 @@ describe("InstructorList empty states", () => {
         />
       </MemoryRouter>,
     );
-    expect(screen.getByText("Showing 1")).not.toBeNull();
+    expect(screen.getByText("Showing 1")).toBeInTheDocument();
   });
 });
