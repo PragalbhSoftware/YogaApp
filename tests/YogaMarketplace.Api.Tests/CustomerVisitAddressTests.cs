@@ -138,6 +138,8 @@ public class CustomerVisitAddressTests : IClassFixture<YogaApiFactory>
         var phone = NewPhone();
         var otp = await PostAsync<OtpBody>(client, "/api/auth/otp/request", new { phone, name, gender, isNewUser = true, acceptedPolicies = true });
         var auth = await PostAsync<AuthBody>(client, "/api/auth/otp/verify", new { phone, code = otp.DevCode });
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth.Token);
+        await TestPreferredCity.PreferHarborAsync(client);
         return (auth.Token, phone);
     }
 
