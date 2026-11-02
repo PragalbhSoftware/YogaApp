@@ -130,6 +130,7 @@ public partial class BookingService : IBookingService, IBookingHandshake, IRazor
         var customer = await RequireCustomerAsync(cancellationToken);
         var slot = await LoadBookableSlotAsync(request.SlotId, cancellationToken);
         var provider = slot.Provider!;
+        EnsureHomeCityMatches(customer, slot);
         var (homeAddress, landmark) = ResolveLocation(customer, slot, request);
 
         var service = await ResolveServiceAsync(provider.Id, request.ServiceId, cancellationToken);
@@ -664,7 +665,7 @@ public partial class BookingService : IBookingService, IBookingHandshake, IRazor
     private IQueryable<AvailabilitySlot> SlotsWithProvider() =>
         _db.AvailabilitySlots
             .Include(s => s.Provider!).ThenInclude(p => p.User)
-            .Include(s => s.Provider!).ThenInclude(p => p.Area);
+            .Include(s => s.Provider!).ThenInclude(p => p.Area!).ThenInclude(a => a.City);
 
     private async Task<AvailabilitySlot> LoadBookableSlotAsync(Guid slotId, CancellationToken cancellationToken)
     {
@@ -707,6 +708,18 @@ public partial class BookingService : IBookingService, IBookingHandshake, IRazor
         var area = provider.Area ?? throw new InvalidOperationException("Provider area was not loaded.");
         if (!area.IsActive)
             throw new DomainException(ProviderApproval.AreaClosedMessage, 409);
+    }
+
+    /// <summary>Home visits require a preferred city that matches the instructor's city.</summary>
+    private static void EnsureHomeCityMatches(User customer, AvailabilitySlot slot)
+    {
+        if (slot.Mode != SessionMode.Home)
+            return;
+        var provider = slot.Provider ?? throw new InvalidOperationException("Provider was not loaded.");
+        var area = provider.Area ?? throw new InvalidOperationException("Provider area was not loaded.");
+        var cityName = area.City?.Name ?? "that city";
+        if (customer.PreferredCityId is not Guid preferred || preferred == Guid.Empty || area.CityId != preferred)
+            throw new DomainException($"This instructor visits homes in {cityName} only.");
     }
 
     /// <summary>Regular sessions use the mode rate; a trial uses the service's trial price, which may be zero.</summary>

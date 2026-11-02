@@ -22,6 +22,10 @@ vi.mock("@/features/marketplace/hooks/use-instructors", () => ({
   useInstructors: () => ({ data: [], isLoading: false, isError: false, error: null, refetch: vi.fn() }),
 }));
 
+vi.mock("@/features/marketplace/hooks/use-areas", () => ({
+  useAreas: () => ({ data: [], isSuccess: true, isLoading: false, isError: false }),
+}));
+
 vi.mock("@/features/marketplace/hooks/use-site", () => ({
   useSiteBanner: () => ({ data: undefined, isLoading: false }),
 }));

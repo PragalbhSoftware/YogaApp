@@ -96,7 +96,9 @@ public record ProviderSummary(
     decimal? RatingAverage,
     int ReviewCount,
     string? PhotoUrl,
-    bool IsVerified);
+    bool IsVerified,
+    /// <summary>True when listed for the requested city via Online from another city.</summary>
+    bool IsOutOfCity);
 
 public record ProviderDetail(
     Guid Id,
@@ -105,6 +107,7 @@ public record ProviderDetail(
     int? Age,
     string Area,
     string City,
+    Guid CityId,
     string Status,
     IReadOnlyList<ModeRate> Modes,
     string? StudioAddress,

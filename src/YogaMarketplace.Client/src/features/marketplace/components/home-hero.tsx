@@ -5,14 +5,14 @@ import { bannerCopy } from "@/features/marketplace/utils/copy";
 
 type HomeHeroProps = {
   city: string;
-  areaName: string;
+  areaName: string | null;
   banner: SiteBanner | undefined;
   bannerLoading: boolean;
   onChangeArea: () => void;
 };
 
 export function HomeHero({ city, areaName, banner, bannerLoading, onChangeArea }: HomeHeroProps) {
-  const place = `${areaName}, ${city}`;
+  const place = areaName ? `${areaName}, ${city}` : city;
   const copy = bannerCopy(banner);
 
   return (
@@ -41,11 +41,11 @@ export function HomeHero({ city, areaName, banner, bannerLoading, onChangeArea }
             type="button"
             onClick={onChangeArea}
             className="inline-flex max-w-full items-center gap-2 rounded-full border border-white/25 bg-white/10 px-3 py-1.5 text-sm"
-            aria-label={`Change area. Currently ${place}`}
+            aria-label={areaName ? `Change area. Currently ${place}` : `Choose a neighbourhood in ${city}`}
           >
             <MapPin className="size-3.5 shrink-0" aria-hidden="true" />
             <span className="truncate">{place}</span>
-            <span className="text-xs opacity-80">Change</span>
+            <span className="text-xs opacity-80">{areaName ? "Change" : "Neighbourhood"}</span>
           </button>
           {bannerLoading ? null : (
             <Chip

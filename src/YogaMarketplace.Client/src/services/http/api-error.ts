@@ -3,13 +3,16 @@ export class ApiError extends Error {
   readonly unreachable: boolean;
   /** The id sent as `X-Correlation-Id`; the server logs the request under it. */
   readonly correlationId?: string;
+  /** Machine-readable error from the API when present (e.g. area_invalid). */
+  readonly code?: string;
 
-  constructor(message: string, status = 0, unreachable = false, correlationId?: string) {
+  constructor(message: string, status = 0, unreachable = false, correlationId?: string, code?: string) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.unreachable = unreachable;
     this.correlationId = correlationId;
+    this.code = code;
   }
 }
 

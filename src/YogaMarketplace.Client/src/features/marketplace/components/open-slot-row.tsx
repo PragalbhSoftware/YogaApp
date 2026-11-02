@@ -9,9 +9,10 @@ import { cn } from "@/utils/cn";
 type OpenSlotRowProps = {
   slot: OpenSlot;
   providerId: string;
+  remote?: boolean;
 };
 
-export function OpenSlotRow({ slot, providerId }: OpenSlotRowProps) {
+export function OpenSlotRow({ slot, providerId, remote = false }: OpenSlotRowProps) {
   const ended = slotHasEnded(slot.date, slot.end);
   const duration = durationLabel(slot.start, slot.end);
 
@@ -42,7 +43,7 @@ export function OpenSlotRow({ slot, providerId }: OpenSlotRowProps) {
       {ended ? null : (
         <Button
           component={Link}
-          to={bookPath(providerId, slot.id, slot.mode)}
+          to={bookPath(providerId, slot.id, slot.mode, remote)}
           variant="contained"
           size="small"
           sx={{ flexShrink: 0, minHeight: 44, minWidth: 88, borderRadius: "16px", px: 2.5 }}

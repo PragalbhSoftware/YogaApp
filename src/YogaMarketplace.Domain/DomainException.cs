@@ -3,10 +3,12 @@ namespace YogaMarketplace.Domain;
 public class DomainException : Exception
 {
     public int StatusCode { get; }
+    public string? Code { get; }
 
-    public DomainException(string message, int statusCode = 400) : base(message)
+    public DomainException(string message, int statusCode = 400, string? code = null) : base(message)
     {
         StatusCode = statusCode;
+        Code = code;
     }
 }
 

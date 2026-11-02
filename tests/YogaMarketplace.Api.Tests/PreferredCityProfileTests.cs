@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using YogaMarketplace.Infrastructure.Persistence;
+using JsonElement = System.Text.Json.JsonElement;
 
 namespace YogaMarketplace.Api.Tests;
 
@@ -114,6 +115,89 @@ public class PreferredCityProfileTests : IClassFixture<YogaApiFactory>
     }
 
     [Fact]
+    public async Task Home_order_requires_preferred_city_matching_instructor()
+    {
+        var client = await SignUpAsync();
+        var homeSlot = await FirstOpenSlotAsync(client, "Home");
+
+        var noCity = await client.PostAsJsonAsync("/api/bookings/orders", new
+        {
+            slotId = homeSlot.Id,
+            homeAddress = "14th Road",
+            landmark = "Near the station"
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, noCity.StatusCode);
+        Assert.Contains($"visits homes in {TestWorld.CityName} only", await noCity.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
+
+        var admin = await SignInAdminAsync();
+        var otherCity = await PostAsync<CityBody>(admin, "/api/admin/cities", new
+        {
+            name = "Elsewhere" + Guid.NewGuid().ToString("N")[..6],
+            stateId = TestWorld.StateId,
+            displayOrder = 6
+        });
+        await PutAsync<ProfileBody>(client, "/api/profile/preferred-city", new { preferredCityId = otherCity.Id });
+
+        var wrongCity = await client.PostAsJsonAsync("/api/bookings/orders", new
+        {
+            slotId = homeSlot.Id,
+            homeAddress = "14th Road",
+            landmark = "Near the station"
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, wrongCity.StatusCode);
+        Assert.Contains($"visits homes in {TestWorld.CityName} only", await wrongCity.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
+
+        await PutAsync<ProfileBody>(client, "/api/profile/preferred-city", new { preferredCityId = TestWorld.CityId });
+        var ok = await client.PostAsJsonAsync("/api/bookings/orders", new
+        {
+            slotId = homeSlot.Id,
+            homeAddress = "14th Road",
+            landmark = "Near the station"
+        });
+        Assert.Equal(HttpStatusCode.OK, ok.StatusCode);
+
+        var studioSlot = await FirstOpenSlotAsync(client, "Studio");
+        await PutAsync<ProfileBody>(client, "/api/profile/preferred-city", new { preferredCityId = otherCity.Id });
+        var studio = await client.PostAsJsonAsync("/api/bookings/orders", new { slotId = studioSlot.Id });
+        Assert.Equal(HttpStatusCode.OK, studio.StatusCode);
+    }
+
+    [Fact]
+    public async Task Home_credit_booking_rejects_instructor_outside_preferred_city()
+    {
+        var admin = await SignInAdminAsync();
+        var otherCity = await PostAsync<CityBody>(admin, "/api/admin/cities", new
+        {
+            name = "CreditCity" + Guid.NewGuid().ToString("N")[..6],
+            stateId = TestWorld.StateId,
+            displayOrder = 5
+        });
+        var pack = await PostAsync<IdBody>(admin, "/api/admin/packs", new
+        {
+            name = "Home city pack " + Guid.NewGuid().ToString("N")[..8],
+            sessions = 2,
+            price = 1600m,
+            validityDays = 30,
+            priceCap = 5000m
+        });
+
+        var client = await SignUpAsync();
+        await PutAsync<ProfileBody>(client, "/api/profile/preferred-city", new { preferredCityId = otherCity.Id });
+        var packOrder = await PostAsync<OrderBody>(client, $"/api/packs/{pack.Id}/orders", new { });
+        await PostAsync<JsonElement>(client, "/api/packs/local-confirm", new { orderId = packOrder.OrderId });
+
+        var homeSlot = await FirstOpenSlotAsync(client, "Home");
+        var response = await client.PostAsJsonAsync("/api/bookings/credit", new
+        {
+            slotId = homeSlot.Id,
+            homeAddress = "14th Road",
+            landmark = "Near the station"
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains($"visits homes in {TestWorld.CityName} only", await response.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Deleting_a_city_requires_admin_and_blocks_unknown_or_linked_rows()
     {
         var anon = _factory.CreateClient();
@@ -141,6 +225,15 @@ public class PreferredCityProfileTests : IClassFixture<YogaApiFactory>
         var blocked = await admin.DeleteAsync($"/api/admin/cities/{city.Id}");
         Assert.Equal(HttpStatusCode.Conflict, blocked.StatusCode);
         Assert.Contains("neighbourhood", await blocked.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task<SlotBody> FirstOpenSlotAsync(HttpClient client, string mode)
+    {
+        var list = await client.GetFromJsonAsync<SlotListBody>(
+            $"/api/providers/{SeedIds.AnanyaProviderId}/slots?mode={mode}", Json);
+        var slot = list!.Slots.OrderByDescending(s => s.Date).ThenByDescending(s => s.Start).FirstOrDefault();
+        Assert.NotNull(slot);
+        return slot!;
     }
 
     private async Task<HttpClient> SignUpAsync()
@@ -200,4 +293,8 @@ public class PreferredCityProfileTests : IClassFixture<YogaApiFactory>
     private sealed record CityBody(Guid Id, string Name, Guid StateId, bool IsActive);
     private sealed record AreaBody(Guid Id);
     private sealed record ProfileBody(Guid Id, string? Name, string Role, Guid? PreferredCityId);
+    private sealed record SlotBody(Guid Id, string Mode, DateOnly Date, string Start, string End);
+    private sealed record SlotListBody(string Mode, DateOnly From, DateOnly To, List<SlotBody> Slots);
+    private sealed record IdBody(Guid Id);
+    private sealed record OrderBody(string OrderId);
 }

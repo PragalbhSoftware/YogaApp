@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Button } from "@mui/material";
+import { Button, Chip } from "@mui/material";
 import { teacherPath } from "@/constants/routes";
 import type { SessionModeFilter } from "@/constants/catalog";
 import { InstructorAvatar } from "@/features/marketplace/components/instructor-avatar";
@@ -14,7 +14,12 @@ type InstructorCardProps = {
 
 export function InstructorCard({ instructor, mode = "" }: InstructorCardProps) {
   const modes = instructor.modes ?? [];
-  const href = mode ? `${teacherPath(instructor.id)}?mode=${mode}` : teacherPath(instructor.id);
+  const outOfCity = Boolean(instructor.isOutOfCity);
+  const href = outOfCity
+    ? `${teacherPath(instructor.id)}?mode=Online&remote=1`
+    : mode
+      ? `${teacherPath(instructor.id)}?mode=${mode}`
+      : teacherPath(instructor.id);
 
   return (
     <article className="flex h-full flex-col rounded-3xl bg-brand-surface p-5 shadow-[0_8px_24px_rgba(37,49,39,0.06)]">
@@ -22,12 +27,23 @@ export function InstructorCard({ instructor, mode = "" }: InstructorCardProps) {
         <InstructorAvatar name={instructor.displayName} photoUrl={instructor.photoUrl} size="md" />
         <div className="min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="font-heading text-xl leading-tight font-medium">
-              {instructor.displayName}
-            </h2>
+            <h2 className="font-heading text-xl leading-tight font-medium">{instructor.displayName}</h2>
             {instructor.isVerified ? <VerifiedBadge /> : null}
           </div>
-          <p className="text-sm text-brand-muted">{instructor.area}</p>
+          {outOfCity ? (
+            <Chip
+              label={`Online · ${instructor.city}`}
+              size="small"
+              sx={{
+                alignSelf: "flex-start",
+                fontWeight: 600,
+                height: "auto",
+                "& .MuiChip-label": { whiteSpace: "normal" },
+              }}
+            />
+          ) : (
+            <p className="text-sm text-brand-muted">{instructor.area}</p>
+          )}
           {instructor.reviewCount > 0 && instructor.ratingAverage != null ? (
             <p className="text-sm text-brand-text">
               {instructor.ratingAverage.toFixed(1)} · {instructor.reviewCount}{" "}
@@ -39,7 +55,7 @@ export function InstructorCard({ instructor, mode = "" }: InstructorCardProps) {
 
       {modes.length > 0 ? (
         <div className="mt-4">
-          <ModeRateList modes={modes} />
+          <ModeRateList modes={outOfCity ? modes.filter((item) => item.mode === "Online") : modes} />
         </div>
       ) : null}
 

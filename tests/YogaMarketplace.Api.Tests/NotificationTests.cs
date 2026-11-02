@@ -756,7 +756,9 @@ public class NotificationTests
         var phone = "+9197" + Random.Shared.Next(10000000, 99999999);
         var otp = await PostAsync<OtpBody>(client, "/api/auth/otp/request",
             new { phone, name = "Notified Customer", gender = "Female", isNewUser = true, acceptedPolicies = true });
-        return (await VerifyAsync(client, phone, otp.DevCode), phone);
+        var signedIn = await VerifyAsync(client, phone, otp.DevCode);
+        await TestPreferredCity.PreferHarborAsync(signedIn);
+        return (signedIn, phone);
     }
 
     private static async Task<HttpClient> VerifyAsync(HttpClient client, string phone, string code)

@@ -51,11 +51,15 @@ export type InstructorSummary = {
   photoUrl?: string | null;
   /** True once admin has approved at least one certificate. */
   isVerified: boolean;
+  /** True when this row is Online from another city for the selected city. */
+  isOutOfCity?: boolean;
 };
 
 export type InstructorDetail = Omit<InstructorSummary, "photoUrl"> & {
   age: number | null;
   studioAddress: string | null;
+  /** Instructor's marketplace city; compared to the selected city for Online-only out-of-city views. */
+  cityId: string;
   /** False when admin has closed the instructor's area. The profile stays viewable but cannot be booked. */
   areaOpen: boolean;
   photoUrls: string[];
