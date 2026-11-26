@@ -58,4 +58,12 @@ describe("AdminLayout", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
     expect(screen.getAllByRole("link", { name: /Errors/, hidden: true })).toHaveLength(2);
   });
+
+  it("never shows the shared mobile bottom tab bar on admin pages", () => {
+    for (const path of [routes.admin, routes.adminUsers, routes.adminBookings, routes.adminErrors]) {
+      const { unmount } = renderAt(path);
+      expect(screen.queryByTestId("bottom-tab-bar")).not.toBeInTheDocument();
+      unmount();
+    }
+  });
 });

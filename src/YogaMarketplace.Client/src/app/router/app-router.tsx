@@ -156,6 +156,7 @@ export function AppRouter() {
             <Route element={<AllowGuestOr roles={["Customer"]} />}>
               <Route element={<CustomerLayout />}>
                 <Route path={routes.home} element={<HomePage />} />
+                <Route path={routes.explore} element={<HomePage />} />
                 <Route path={routes.teacher} element={<TeacherPage />} />
                 <Route path={routes.packs} element={<PacksPage />} />
                 <Route element={<RequireAuth />}>
