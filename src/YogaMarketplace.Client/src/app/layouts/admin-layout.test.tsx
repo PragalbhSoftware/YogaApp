@@ -3,6 +3,7 @@ import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import { AdminLayout } from "@/app/layouts/admin-layout";
 import { adminNav } from "@/app/layouts/admin-nav";
+import { tabBarContentPaddingClass } from "@/app/layouts/nav-config";
 import { routes } from "@/constants/routes";
 
 vi.mock("@/features/admin/hooks/use-admin", () => ({
@@ -57,5 +58,18 @@ describe("AdminLayout", () => {
     renderAt(routes.adminErrors);
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
     expect(screen.getAllByRole("link", { name: /Errors/, hidden: true })).toHaveLength(2);
+  });
+
+  it("never shows the shared mobile bottom tab bar on admin pages", () => {
+    for (const path of [routes.admin, routes.adminUsers, routes.adminBookings, routes.adminErrors]) {
+      const { unmount } = renderAt(path);
+      expect(screen.queryByTestId("bottom-tab-bar")).not.toBeInTheDocument();
+      unmount();
+    }
+  });
+
+  it("does not apply tab-bar content padding on admin pages", () => {
+    const { container } = renderAt(routes.admin);
+    expect(container.innerHTML).not.toContain(tabBarContentPaddingClass);
   });
 });

@@ -1,48 +1,25 @@
 import { Suspense } from "react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { CalendarDays, Home, LogIn, User } from "lucide-react";
+import { Outlet, useLocation } from "react-router-dom";
+import {
+  customerNavItems,
+  guestNavItems,
+  shouldShowBottomTabBar,
+  tabBarContentPaddingClass,
+} from "@/app/layouts/nav-config";
 import { PageLoader } from "@/components/common/page-loader";
+import { BottomTabBar, RoleNavLinks } from "@/components/common/bottom-tab-bar";
 import { SiteFooter } from "@/components/common/site-footer";
-import { routes } from "@/constants/routes";
 import { useAuth } from "@/features/auth/hooks/use-auth";
 import { CitySwitcher } from "@/features/marketplace/components/city-switcher";
 import { CustomerCityPicker } from "@/features/marketplace/components/customer-city-picker";
 import { usePreferredCitySync } from "@/features/marketplace/hooks/use-preferred-city-sync";
 import { cn } from "@/utils/cn";
 
-const signedInNav = [
-  { to: routes.home, label: "Home", icon: Home },
-  { to: routes.bookings, label: "Bookings", icon: CalendarDays },
-  { to: routes.profile, label: "Profile", icon: User },
-];
-
-const guestNav = [
-  { to: routes.home, label: "Home", icon: Home },
-  { to: routes.login, label: "Sign in", icon: LogIn },
-];
-
-const mobileColumns: Record<number, string> = { 2: "grid-cols-2", 3: "grid-cols-3" };
-
-function isNavActive(pathname: string, to: string) {
-  if (to === routes.home) {
-    return pathname === routes.home || pathname.startsWith(`${routes.instructors}/`);
-  }
-  return pathname === to;
-}
-
-function itemClass(active: boolean, compact: boolean) {
-  return cn(
-    compact
-      ? "flex flex-col items-center gap-1 rounded-2xl py-1 text-[11px] font-medium"
-      : "inline-flex items-center justify-center gap-2 rounded-full px-3 py-2 text-sm font-medium",
-    active ? "text-brand-primary" : "text-brand-muted",
-  );
-}
-
 export function CustomerLayout() {
   const { pathname } = useLocation();
   const { isAuthenticated } = useAuth();
-  const navItems = isAuthenticated ? signedInNav : guestNav;
+  const navItems = isAuthenticated ? customerNavItems : guestNavItems;
+  const showTabBar = shouldShowBottomTabBar(pathname);
   usePreferredCitySync();
 
   return (
@@ -52,24 +29,7 @@ export function CustomerLayout() {
           <p className="font-heading text-lg text-brand-primary">Yoga Marketplace</p>
           <div className="flex items-center gap-2">
             <CitySwitcher />
-            <nav aria-label="Customer" className="flex items-center gap-2">
-              {navItems.map((item) => {
-                const Icon = item.icon;
-                const active = isNavActive(pathname, item.to);
-                return (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    end={item.to === routes.home}
-                    aria-current={pathname === item.to ? "page" : undefined}
-                    className={itemClass(active, false)}
-                  >
-                    <Icon className="size-5" aria-hidden="true" />
-                    {item.label}
-                  </NavLink>
-                );
-              })}
-            </nav>
+            <RoleNavLinks items={navItems} pathname={pathname} ariaLabel="Customer" />
           </div>
         </div>
       </header>
@@ -79,7 +39,10 @@ export function CustomerLayout() {
         <CitySwitcher compact />
       </header>
 
-      <div className="pb-[calc(4.75rem+env(safe-area-inset-bottom))] md:pb-0">
+      <div
+        data-testid="layout-content"
+        className={cn(showTabBar && tabBarContentPaddingClass)}
+      >
         <CustomerCityPicker />
         <Suspense fallback={<PageLoader />}>
           <Outlet />
@@ -87,29 +50,9 @@ export function CustomerLayout() {
         <SiteFooter />
       </div>
 
-      <nav
-        aria-label="Customer"
-        className="fixed inset-x-0 bottom-0 z-20 border-t border-brand-border bg-brand-surface/95 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur md:hidden"
-      >
-        <div className={cn("mx-auto grid max-w-md", mobileColumns[navItems.length])}>
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const active = isNavActive(pathname, item.to);
-            return (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.to === routes.home}
-                aria-current={pathname === item.to ? "page" : undefined}
-                className={itemClass(active, true)}
-              >
-                <Icon className="size-5" aria-hidden="true" />
-                {item.label}
-              </NavLink>
-            );
-          })}
-        </div>
-      </nav>
+      {showTabBar ? (
+        <BottomTabBar items={navItems} pathname={pathname} ariaLabel="Customer" />
+      ) : null}
     </div>
   );
 }

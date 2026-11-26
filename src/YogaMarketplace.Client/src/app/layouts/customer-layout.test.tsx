@@ -1,57 +1,120 @@
-import { render, screen, within } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { fireEvent, render, screen, within } from "@testing-library/react";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CustomerLayout } from "@/app/layouts/customer-layout";
+import {
+  customerNavItems,
+  guestNavItems,
+  tabBarContentPaddingClass,
+} from "@/app/layouts/nav-config";
+import { routes } from "@/constants/routes";
+import { useAuthStore } from "@/stores/auth-store";
 
 vi.mock("@/features/marketplace/components/customer-city-picker", () => ({ CustomerCityPicker: () => null }));
 vi.mock("@/features/marketplace/components/city-switcher", () => ({ CitySwitcher: () => null }));
 vi.mock("@/features/marketplace/hooks/use-preferred-city-sync", () => ({ usePreferredCitySync: () => undefined }));
-import { routes } from "@/constants/routes";
-import { useAuthStore } from "@/stores/auth-store";
 
-function renderLayout() {
+function Pathname() {
+  const { pathname } = useLocation();
+  return <p>{pathname}</p>;
+}
+
+function renderAt(path: string, signedIn = false) {
+  if (signedIn) {
+    useAuthStore
+      .getState()
+      .signIn("token", { id: "u1", name: "Test", phone: "+919000000000", gender: null, role: "Customer" });
+  }
+
   return render(
-    <MemoryRouter initialEntries={[routes.home]}>
+    <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route element={<CustomerLayout />}>
-          <Route path={routes.home} element={<p>home</p>} />
+          <Route path={routes.home} element={<Pathname />} />
+          <Route path={routes.bookings} element={<Pathname />} />
+          <Route path="/bookings/:id" element={<Pathname />} />
+          <Route path={routes.packs} element={<Pathname />} />
+          <Route path={routes.profile} element={<Pathname />} />
+          <Route path={routes.book} element={<Pathname />} />
+          <Route path={routes.teacher} element={<Pathname />} />
         </Route>
+        <Route path={routes.login} element={<Pathname />} />
       </Routes>
     </MemoryRouter>,
   );
 }
 
-function navLabels() {
-  return screen
-    .getAllByRole("navigation", { name: "Customer" })
-    .map((nav) => within(nav).getAllByRole("link").map((link) => link.textContent));
+function bottomBar() {
+  return screen.getByTestId("bottom-tab-bar");
+}
+
+function tabLabelsAndHrefs(nav: HTMLElement) {
+  return within(nav)
+    .getAllByRole("link")
+    .map((link) => [link.textContent, link.getAttribute("href")]);
 }
 
 describe("CustomerLayout navigation", () => {
   beforeEach(() => useAuthStore.getState().signOut());
 
-  it("hides Bookings from signed-out visitors", () => {
-    renderLayout();
-
-    for (const labels of navLabels()) {
-      expect(labels).toEqual(["Home", "Sign in"]);
+  it("shows guest tabs matching nav-config", () => {
+    renderAt(routes.home);
+    const expected = guestNavItems.map((item) => [item.label, item.to]);
+    expect(tabLabelsAndHrefs(bottomBar())).toEqual(expected);
+    for (const nav of screen.getAllByRole("navigation", { name: "Customer" })) {
+      expect(tabLabelsAndHrefs(nav)).toEqual(expected);
     }
   });
 
-  it("shows Bookings once the customer signs in", () => {
-    useAuthStore
-      .getState()
-      .signIn("token", { id: "u1", name: "Test", phone: "+919000000000", gender: null, role: "Customer" });
-    renderLayout();
-
-    for (const labels of navLabels()) {
-      expect(labels).toEqual(["Home", "Bookings", "Profile"]);
+  it("shows customer tabs matching nav-config", () => {
+    renderAt(routes.home, true);
+    const expected = customerNavItems.map((item) => [item.label, item.to]);
+    expect(tabLabelsAndHrefs(bottomBar())).toEqual(expected);
+    for (const nav of screen.getAllByRole("navigation", { name: "Customer" })) {
+      expect(tabLabelsAndHrefs(nav)).toEqual(expected);
     }
+  });
+
+  it("hides the bar on /book/:id and shows it again after leaving", () => {
+    renderAt("/book/provider-1/slot-2", true);
+    expect(screen.queryByTestId("bottom-tab-bar")).not.toBeInTheDocument();
+    expect(screen.getByTestId("layout-content").className).not.toContain("safe-area-inset-bottom");
+
+    fireEvent.click(screen.getAllByRole("link", { name: "Home" })[0]);
+    expect(bottomBar()).toBeInTheDocument();
+    expect(screen.getByTestId("layout-content").className).toContain(tabBarContentPaddingClass);
+  });
+
+  it("highlights Bookings on a deep bookings path", () => {
+    renderAt("/bookings/123", true);
+    expect(within(bottomBar()).getByRole("link", { name: "Bookings" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+
+  it("highlights Home on teacher detail paths", () => {
+    renderAt("/teachers/teacher-1", true);
+    expect(within(bottomBar()).getByRole("link", { name: "Home" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+
+  it("navigates when a tab is clicked", () => {
+    renderAt(routes.home, true);
+    fireEvent.click(within(bottomBar()).getByRole("link", { name: "Credits" }));
+    expect(screen.getByText(routes.packs)).toBeInTheDocument();
+  });
+
+  it("applies safe-area content padding only when the bar is shown", () => {
+    renderAt(routes.home, true);
+    expect(screen.getByTestId("layout-content").className).toContain(tabBarContentPaddingClass);
+    expect(bottomBar().className).toContain("md:hidden");
   });
 
   it("shows the footer with packs and the three policy pages", () => {
-    renderLayout();
-
+    renderAt(routes.home);
     const footer = within(screen.getByRole("navigation", { name: "More" }));
     expect(footer.getAllByRole("link").map((link) => link.getAttribute("href"))).toEqual([
       routes.packs,

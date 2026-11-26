@@ -1,7 +1,6 @@
 export const routes = {
   login: "/login",
   home: "/",
-  explore: "/explore",
   instructors: "/teachers",
   teacher: "/teachers/:id",
   book: "/book/:providerId/:slotId",
