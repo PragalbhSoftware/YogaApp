@@ -35,7 +35,6 @@ export function InstructorLayout() {
               ariaLabel="Instructor"
               badgeCounts={badgeCounts}
             />
-            <MenuButton open={menuOpen} onClick={() => setMenuOpen(true)} />
           </div>
         </div>
       </header>

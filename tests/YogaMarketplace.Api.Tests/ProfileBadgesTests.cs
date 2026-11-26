@@ -118,6 +118,17 @@ public class ProfileBadgesTests
     }
 
     [Fact]
+    public async Task Admin_gets_zero_bookings_and_requests()
+    {
+        await using var factory = new YogaApiFactory();
+        await using var host = WithClock(factory);
+        var admin = await SignInAsync(host, SeedIds.AdminPhone);
+        var badges = await GetBadgesAsync(admin);
+        Assert.Equal(0, badges.Bookings);
+        Assert.Equal(0, badges.Requests);
+    }
+
+    [Fact]
     public async Task Instructor_without_provider_row_gets_requests_zero()
     {
         await using var factory = new YogaApiFactory();

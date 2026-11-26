@@ -53,6 +53,10 @@ function bottomBar() {
   return screen.getByTestId("bottom-tab-bar");
 }
 
+function menuButton() {
+  return screen.getByTestId("menu-button");
+}
+
 function tabLabelsAndHrefs(nav: HTMLElement) {
   return within(nav)
     .getAllByRole("link")
@@ -83,9 +87,19 @@ describe("InstructorLayout navigation", () => {
     );
   });
 
+  it("keeps the drawer closed by default and sets aria-expanded on the menu button", () => {
+    renderAt(routes.instructor);
+    expect(screen.queryByTestId("app-side-drawer")).not.toBeInTheDocument();
+    const menu = menuButton();
+    expect(menu).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(menu);
+    expect(menu).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByTestId("app-side-drawer")).toBeInTheDocument();
+  });
+
   it("shows drawer items matching nav-config and Settings goes to instructor profile", () => {
     renderAt(routes.instructor);
-    fireEvent.click(screen.getAllByTestId("menu-button")[0]);
+    fireEvent.click(menuButton());
     const labels = within(screen.getByTestId("app-side-drawer"))
       .getAllByRole("link")
       .map((link) => link.textContent)
@@ -100,10 +114,20 @@ describe("InstructorLayout navigation", () => {
     expect(screen.getByTestId("path")).toHaveTextContent(routes.instructorProfile);
   });
 
-  it("shows the Requests badge above 0", () => {
+  it("hides the Requests badge at 0 and shows it above 0 with a 99+ cap and pending screen-reader name", () => {
+    badgesState.requests = 0;
+    const { unmount } = renderAt(routes.instructor);
+    expect(within(bottomBar()).getByRole("link", { name: "Requests" }).textContent).toBe("Requests");
+    unmount();
+
     badgesState.requests = 2;
+    const mid = renderAt(routes.instructor);
+    expect(within(bottomBar()).getByRole("link", { name: "Requests, 2 pending" }).textContent).toMatch(/2/);
+    mid.unmount();
+
+    badgesState.requests = 120;
     renderAt(routes.instructor);
-    expect(within(bottomBar()).getByRole("link", { name: /Requests/ }).textContent).toMatch(/2/);
+    expect(within(bottomBar()).getByRole("link", { name: "Requests, 99+ pending" }).textContent).toMatch(/99\+/);
   });
 
   it("applies safe-area content padding when the bar is shown", () => {

@@ -66,7 +66,7 @@ function bottomBar() {
 }
 
 function menuButton() {
-  return screen.getAllByTestId("menu-button")[0];
+  return screen.getByTestId("menu-button");
 }
 
 function tabLabelsAndHrefs(nav: HTMLElement) {
@@ -95,7 +95,7 @@ describe("CustomerLayout navigation", () => {
     expect(tabLabelsAndHrefs(bottomBar())).toEqual(expected);
   });
 
-  it("hides the bar on /book/:id and restores it after leaving, even with the drawer open", async () => {
+  it("hides the bar on /book/:id while the drawer is open or closed, and restores it after leaving", async () => {
     renderAt("/book/provider-1/slot-2", true);
     expect(screen.queryByTestId("bottom-tab-bar")).not.toBeInTheDocument();
     expect(screen.getByTestId("layout-content").className).not.toContain(tabBarContentPaddingClass);
@@ -104,6 +104,12 @@ describe("CustomerLayout navigation", () => {
     expect(screen.getByTestId("app-side-drawer")).toBeInTheDocument();
     expect(screen.queryByTestId("bottom-tab-bar")).not.toBeInTheDocument();
 
+    fireEvent.click(within(screen.getByTestId("app-side-drawer")).getByRole("button", { name: "Close menu" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.getByTestId("path")).toHaveTextContent("/book/provider-1/slot-2");
+    expect(screen.queryByTestId("bottom-tab-bar")).not.toBeInTheDocument();
+
+    fireEvent.click(menuButton());
     fireEvent.click(within(screen.getByTestId("app-side-drawer")).getByRole("link", { name: "Settings" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(screen.getByTestId("path")).toHaveTextContent(routes.profile);
@@ -191,7 +197,7 @@ describe("CustomerLayout navigation", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 
-  it("hides the Bookings badge at 0 and shows it above 0 with a 99+ cap", () => {
+  it("hides the Bookings badge at 0 and shows it above 0 with a 99+ cap and pending screen-reader name", () => {
     badgesState.bookings = 0;
     const { unmount } = renderAt(routes.home, true);
     expect(within(bottomBar()).getByRole("link", { name: "Bookings" }).textContent).toBe("Bookings");
@@ -199,12 +205,12 @@ describe("CustomerLayout navigation", () => {
 
     badgesState.bookings = 3;
     const mid = renderAt(routes.home, true);
-    expect(within(bottomBar()).getByRole("link", { name: /Bookings/ }).textContent).toMatch(/3/);
+    expect(within(bottomBar()).getByRole("link", { name: "Bookings, 3 pending" }).textContent).toMatch(/3/);
     mid.unmount();
 
     badgesState.bookings = 120;
     renderAt(routes.home, true);
-    expect(within(bottomBar()).getByRole("link", { name: /Bookings/ }).textContent).toMatch(/99\+/);
+    expect(within(bottomBar()).getByRole("link", { name: "Bookings, 99+ pending" }).textContent).toMatch(/99\+/);
   });
 
   it("shows the footer with packs and the three policy pages", () => {

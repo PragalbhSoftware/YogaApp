@@ -15,6 +15,9 @@ import { routes } from "@/constants/routes";
 
 export type NavBadgeKey = "bookings" | "requests";
 
+/** Screen-reader word after the badge count, e.g. "Bookings, 3 pending". */
+export const navBadgePendingWord = "pending";
+
 /** One bottom/desktop tab. Labels live here so category copy can change in one place. */
 export type NavItem = {
   to: string;

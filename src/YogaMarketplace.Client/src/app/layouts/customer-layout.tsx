@@ -45,7 +45,6 @@ export function CustomerLayout() {
               ariaLabel="Customer"
               badgeCounts={badgeCounts}
             />
-            <MenuButton open={menuOpen} onClick={() => setMenuOpen(true)} />
           </div>
         </div>
       </header>

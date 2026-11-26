@@ -2,7 +2,7 @@ import type { ComponentType } from "react";
 import { Badge } from "@mui/material";
 import { Link } from "react-router-dom";
 import type { NavBadgeKey, NavItem } from "@/app/layouts/nav-config";
-import { isNavItemActive } from "@/app/layouts/nav-config";
+import { isNavItemActive, navBadgePendingWord } from "@/app/layouts/nav-config";
 import { cn } from "@/utils/cn";
 
 const mobileColumns: Record<number, string> = {
@@ -30,6 +30,10 @@ function itemClass(active: boolean, compact: boolean) {
   );
 }
 
+function formatBadgeCount(count: number) {
+  return count > badgeMax ? `${badgeMax}+` : String(count);
+}
+
 function TabIcon({
   icon: Icon,
   count,
@@ -38,9 +42,11 @@ function TabIcon({
   count: number;
 }) {
   return (
-    <Badge badgeContent={count} color="error" max={badgeMax} invisible={count === 0}>
-      <Icon className="size-5" aria-hidden="true" />
-    </Badge>
+    <span aria-hidden="true">
+      <Badge badgeContent={count} color="error" max={badgeMax} invisible={count === 0}>
+        <Icon className="size-5" />
+      </Badge>
+    </span>
   );
 }
 
@@ -56,8 +62,15 @@ function NavItemLink({
   count: number;
 }) {
   const active = isNavItemActive(pathname, item);
+  const accessibleName =
+    count > 0 ? `${item.label}, ${formatBadgeCount(count)} ${navBadgePendingWord}` : undefined;
   return (
-    <Link to={item.to} aria-current={active ? "page" : undefined} className={itemClass(active, compact)}>
+    <Link
+      to={item.to}
+      aria-current={active ? "page" : undefined}
+      aria-label={accessibleName}
+      className={itemClass(active, compact)}
+    >
       <TabIcon icon={item.icon} count={count} />
       {item.label}
     </Link>

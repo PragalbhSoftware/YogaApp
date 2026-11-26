@@ -1,7 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { useClearSessionOnSignOut } from "@/app/providers/use-clear-session-on-sign-out";
 import { profileBadgesQueryKey, useProfileBadges } from "@/features/profile/hooks/use-profile";
 import { invalidateBookingLists } from "@/features/bookings/hooks/use-bookings";
 import { useAuthStore } from "@/stores/auth-store";
@@ -65,17 +66,22 @@ describe("useProfileBadges", () => {
   });
 
   it("does not show user A's badge count after B signs in", async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderHook(() => useClearSessionOnSignOut(client), { wrapper: wrapper(client) });
+
     useAuthStore
       .getState()
       .signIn("token-a", { id: "a", name: "A", phone: "+919000000003", gender: null, role: "Customer" });
     badgesMock.mockResolvedValue({ bookings: 7, requests: 0 });
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const first = renderHook(() => useProfileBadges(), { wrapper: wrapper(client) });
     await waitFor(() => expect(first.result.current.data?.bookings).toBe(7));
     first.unmount();
 
-    useAuthStore.getState().signOut();
-    client.clear();
+    act(() => {
+      useAuthStore.getState().signOut();
+    });
+    await waitFor(() => expect(client.getQueryData(profileBadgesQueryKey)).toBeUndefined());
+
     badgesMock.mockResolvedValue({ bookings: 0, requests: 0 });
     useAuthStore
       .getState()

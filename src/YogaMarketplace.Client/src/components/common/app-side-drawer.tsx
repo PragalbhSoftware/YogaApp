@@ -38,53 +38,54 @@ export function AppSideDrawer({ open, onOpenChange, items, brand }: AppSideDrawe
       slotProps={{
         paper: {
           id: "app-side-drawer",
-          className: "w-[min(20rem,100vw)] bg-brand-surface",
+          className: "w-[min(20rem,100vw)]",
+          sx: { bgcolor: "var(--color-brand-surface, #FFFFFF)" },
         },
       }}
     >
-      <div data-testid="app-side-drawer" className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b border-brand-border px-4 py-3">
-        <p className="font-heading text-base text-brand-primary">{brand}</p>
-        <IconButton aria-label="Close menu" onClick={() => onOpenChange(false)} size="small">
-          <X className="size-5" aria-hidden="true" />
-        </IconButton>
-      </div>
-      <nav aria-label="Menu" className="flex flex-col gap-1 p-3">
-        {items.map((item) => {
-          if (item.kind === "action") {
+      <div data-testid="app-side-drawer" className="flex h-full flex-col bg-brand-surface">
+        <div className="flex items-center justify-between border-b border-brand-border px-4 py-3">
+          <p className="font-heading text-base text-brand-primary">{brand}</p>
+          <IconButton aria-label="Close menu" onClick={() => onOpenChange(false)} size="small">
+            <X className="size-5" aria-hidden="true" />
+          </IconButton>
+        </div>
+        <nav aria-label="Menu" className="flex flex-col gap-1 p-3">
+          {items.map((item) => {
+            if (item.kind === "action") {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={drawerItemClass(false)}
+                  onClick={() => {
+                    onOpenChange(false);
+                    signOut();
+                  }}
+                >
+                  <Icon className="size-5" aria-hidden="true" />
+                  {item.label}
+                </button>
+              );
+            }
+
             const Icon = item.icon;
+            const active = isNavItemActive(pathname, item);
             return (
-              <button
-                key={item.id}
-                type="button"
-                className={drawerItemClass(false)}
-                onClick={() => {
-                  onOpenChange(false);
-                  signOut();
-                }}
+              <Link
+                key={item.to}
+                to={item.to}
+                aria-current={active ? "page" : undefined}
+                className={drawerItemClass(active)}
+                onClick={() => onOpenChange(false)}
               >
                 <Icon className="size-5" aria-hidden="true" />
                 {item.label}
-              </button>
+              </Link>
             );
-          }
-
-          const Icon = item.icon;
-          const active = isNavItemActive(pathname, item);
-          return (
-            <Link
-              key={item.to}
-              to={item.to}
-              aria-current={active ? "page" : undefined}
-              className={drawerItemClass(active)}
-              onClick={() => onOpenChange(false)}
-            >
-              <Icon className="size-5" aria-hidden="true" />
-              {item.label}
-            </Link>
-          );
-        })}
-      </nav>
+          })}
+        </nav>
       </div>
     </MuiDrawer>
   );

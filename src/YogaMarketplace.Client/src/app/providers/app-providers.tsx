@@ -1,13 +1,10 @@
-import { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { CssBaseline, ThemeProvider } from "@mui/material";
 import { Toaster } from "sonner";
 import { AppRouter, RouteFallback } from "@/app/router/app-router";
+import { useClearSessionOnSignOut } from "@/app/providers/use-clear-session-on-sign-out";
 import { theme } from "@/app/theme/theme";
 import { useRestoredSession } from "@/features/auth/hooks/use-restored-session";
-import { useAreaStore } from "@/stores/area-store";
-import { useAuthStore } from "@/stores/auth-store";
-import { useCityStore } from "@/stores/city-store";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -15,22 +12,8 @@ const queryClient = new QueryClient({
   },
 });
 
-function useClearCacheOnSignOut() {
-  useEffect(
-    () =>
-      useAuthStore.subscribe((state, previous) => {
-        if (previous.user && !state.user) {
-          queryClient.clear();
-          useCityStore.getState().clearCity();
-          useAreaStore.getState().clearArea();
-        }
-      }),
-    [],
-  );
-}
-
 export function AppProviders() {
-  useClearCacheOnSignOut();
+  useClearSessionOnSignOut(queryClient);
   const restored = useRestoredSession();
   return (
     <ThemeProvider theme={theme}>
