@@ -2,7 +2,6 @@ import { Suspense } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import {
   customerNavItems,
-  filterRegisteredNavItems,
   guestNavItems,
   shouldShowBottomTabBar,
   tabBarContentPaddingClass,
@@ -19,7 +18,7 @@ import { cn } from "@/utils/cn";
 export function CustomerLayout() {
   const { pathname } = useLocation();
   const { isAuthenticated } = useAuth();
-  const navItems = filterRegisteredNavItems(isAuthenticated ? customerNavItems : guestNavItems);
+  const navItems = isAuthenticated ? customerNavItems : guestNavItems;
   const showTabBar = shouldShowBottomTabBar(pathname);
   usePreferredCitySync();
 

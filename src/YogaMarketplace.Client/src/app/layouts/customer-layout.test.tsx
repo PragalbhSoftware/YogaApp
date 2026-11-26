@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CustomerLayout } from "@/app/layouts/customer-layout";
 import {
   customerNavItems,
-  filterRegisteredNavItems,
   guestNavItems,
   tabBarContentPaddingClass,
 } from "@/app/layouts/nav-config";
@@ -32,7 +31,6 @@ function renderAt(path: string, signedIn = false) {
       <Routes>
         <Route element={<CustomerLayout />}>
           <Route path={routes.home} element={<Pathname />} />
-          <Route path={routes.explore} element={<Pathname />} />
           <Route path={routes.bookings} element={<Pathname />} />
           <Route path="/bookings/:id" element={<Pathname />} />
           <Route path={routes.packs} element={<Pathname />} />
@@ -61,7 +59,7 @@ describe("CustomerLayout navigation", () => {
 
   it("shows guest tabs matching nav-config", () => {
     renderAt(routes.home);
-    const expected = filterRegisteredNavItems(guestNavItems).map((item) => [item.label, item.to]);
+    const expected = guestNavItems.map((item) => [item.label, item.to]);
     expect(tabLabelsAndHrefs(bottomBar())).toEqual(expected);
     for (const nav of screen.getAllByRole("navigation", { name: "Customer" })) {
       expect(tabLabelsAndHrefs(nav)).toEqual(expected);
@@ -70,7 +68,7 @@ describe("CustomerLayout navigation", () => {
 
   it("shows customer tabs matching nav-config", () => {
     renderAt(routes.home, true);
-    const expected = filterRegisteredNavItems(customerNavItems).map((item) => [item.label, item.to]);
+    const expected = customerNavItems.map((item) => [item.label, item.to]);
     expect(tabLabelsAndHrefs(bottomBar())).toEqual(expected);
     for (const nav of screen.getAllByRole("navigation", { name: "Customer" })) {
       expect(tabLabelsAndHrefs(nav)).toEqual(expected);
@@ -89,18 +87,17 @@ describe("CustomerLayout navigation", () => {
 
   it("highlights Bookings on a deep bookings path", () => {
     renderAt("/bookings/123", true);
-    const bookings = within(bottomBar()).getByRole("link", { name: "Bookings" });
-    expect(bookings).toHaveAttribute("aria-current", "page");
-  });
-
-  it("highlights Explore on teacher detail paths", () => {
-    renderAt("/teachers/teacher-1", true);
-    expect(within(bottomBar()).getByRole("link", { name: "Explore" })).toHaveAttribute(
+    expect(within(bottomBar()).getByRole("link", { name: "Bookings" })).toHaveAttribute(
       "aria-current",
       "page",
     );
-    expect(within(bottomBar()).getByRole("link", { name: "Home" })).not.toHaveAttribute(
+  });
+
+  it("highlights Home on teacher detail paths", () => {
+    renderAt("/teachers/teacher-1", true);
+    expect(within(bottomBar()).getByRole("link", { name: "Home" })).toHaveAttribute(
       "aria-current",
+      "page",
     );
   });
 

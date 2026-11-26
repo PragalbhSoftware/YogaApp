@@ -1,7 +1,6 @@
 import { Suspense } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import {
-  filterRegisteredNavItems,
   instructorNavItems,
   shouldShowBottomTabBar,
   tabBarContentPaddingClass,
@@ -13,7 +12,7 @@ import { cn } from "@/utils/cn";
 
 export function InstructorLayout() {
   const { pathname } = useLocation();
-  const navItems = filterRegisteredNavItems(instructorNavItems);
+  const navItems = instructorNavItems;
   const showTabBar = shouldShowBottomTabBar(pathname);
 
   return (

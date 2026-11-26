@@ -2,11 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 import { InstructorLayout } from "@/app/layouts/instructor-layout";
-import {
-  filterRegisteredNavItems,
-  instructorNavItems,
-  tabBarContentPaddingClass,
-} from "@/app/layouts/nav-config";
+import { instructorNavItems, tabBarContentPaddingClass } from "@/app/layouts/nav-config";
 import { routes } from "@/constants/routes";
 
 function Pathname() {
@@ -44,7 +40,7 @@ function tabLabelsAndHrefs(nav: HTMLElement) {
 describe("InstructorLayout navigation", () => {
   it("shows instructor tabs matching nav-config", () => {
     renderAt(routes.instructor);
-    const expected = filterRegisteredNavItems(instructorNavItems).map((item) => [item.label, item.to]);
+    const expected = instructorNavItems.map((item) => [item.label, item.to]);
     expect(tabLabelsAndHrefs(bottomBar())).toEqual(expected);
     for (const nav of screen.getAllByRole("navigation", { name: "Instructor" })) {
       expect(tabLabelsAndHrefs(nav)).toEqual(expected);
