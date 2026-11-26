@@ -5,7 +5,9 @@ import { Toaster } from "sonner";
 import { AppRouter, RouteFallback } from "@/app/router/app-router";
 import { theme } from "@/app/theme/theme";
 import { useRestoredSession } from "@/features/auth/hooks/use-restored-session";
+import { useAreaStore } from "@/stores/area-store";
 import { useAuthStore } from "@/stores/auth-store";
+import { useCityStore } from "@/stores/city-store";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -17,7 +19,11 @@ function useClearCacheOnSignOut() {
   useEffect(
     () =>
       useAuthStore.subscribe((state, previous) => {
-        if (previous.user && !state.user) queryClient.clear();
+        if (previous.user && !state.user) {
+          queryClient.clear();
+          useCityStore.getState().clearCity();
+          useAreaStore.getState().clearArea();
+        }
       }),
     [],
   );

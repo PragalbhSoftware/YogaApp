@@ -7,6 +7,7 @@ import type {
   CreateReviewInput,
 } from "@/features/bookings/types";
 import { myCreditsKey } from "@/features/credits/hooks/use-credits";
+import { profileBadgesQueryKey } from "@/features/profile/hooks/use-profile";
 import { withRetry } from "@/services/http/retry";
 
 export function invalidateBookingLists(queryClient: ReturnType<typeof useQueryClient>) {
@@ -15,6 +16,7 @@ export function invalidateBookingLists(queryClient: ReturnType<typeof useQueryCl
   void queryClient.invalidateQueries({ queryKey: ["instructor-bookings"] });
   void queryClient.invalidateQueries({ queryKey: ["instructor-slots"] });
   void queryClient.invalidateQueries({ queryKey: ["instructor-open-slots"] });
+  void queryClient.invalidateQueries({ queryKey: profileBadgesQueryKey });
 }
 
 export function useBookingQuote(slotId: string | undefined, trial: boolean, enabled: boolean) {

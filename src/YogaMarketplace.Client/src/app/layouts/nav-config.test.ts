@@ -64,6 +64,7 @@ describe("nav-config", () => {
     expect(isNavItemActive("/bookings/123", bookings)).toBe(true);
     expect(isNavItemActive(`${routes.instructors}/abc`, home)).toBe(true);
     expect(isNavItemActive(routes.home, home)).toBe(true);
+    expect(isNavItemActive(`${routes.instructors}/abc`, guestNavItems[0])).toBe(true);
     expect(isNavItemActive(routes.instructorBookings, schedule)).toBe(false);
     expect(isNavItemActive(`${routes.instructorBookings}/x`, requests)).toBe(true);
   });

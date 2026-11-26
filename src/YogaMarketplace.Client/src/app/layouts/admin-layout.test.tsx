@@ -60,10 +60,12 @@ describe("AdminLayout", () => {
     expect(screen.getAllByRole("link", { name: /Errors/, hidden: true })).toHaveLength(2);
   });
 
-  it("never shows the shared mobile bottom tab bar on admin pages", () => {
+  it("never shows the shared mobile bottom tab bar or side drawer on admin pages", () => {
     for (const path of [routes.admin, routes.adminUsers, routes.adminBookings, routes.adminErrors]) {
       const { unmount } = renderAt(path);
       expect(screen.queryByTestId("bottom-tab-bar")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("app-side-drawer")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("menu-button")).not.toBeInTheDocument();
       unmount();
     }
   });
