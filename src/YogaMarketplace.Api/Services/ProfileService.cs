@@ -9,11 +9,13 @@ public class ProfileService
 {
     private readonly YogaDbContext _db;
     private readonly ICurrentUser _current;
+    private readonly TimeProvider _time;
 
-    public ProfileService(YogaDbContext db, ICurrentUser current)
+    public ProfileService(YogaDbContext db, ICurrentUser current, TimeProvider time)
     {
         _db = db;
         _current = current;
+        _time = time;
     }
 
     public async Task<CustomerProfileResponse> GetMineAsync(CancellationToken cancellationToken)
@@ -21,6 +23,39 @@ public class ProfileService
         var user = await _db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Id == _current.UserId, cancellationToken)
             ?? throw new DomainException("Sign in required.", 401);
         return ToResponse(user);
+    }
+
+    public async Task<ProfileBadgesResponse> GetBadgesAsync(CancellationToken cancellationToken)
+    {
+        var user = await _db.Users.AsNoTracking()
+            .Where(u => u.Id == _current.UserId)
+            .Select(u => new { u.Id, u.Role })
+            .SingleOrDefaultAsync(cancellationToken)
+            ?? throw new DomainException("Sign in required.", 401);
+
+        var now = _time.GetUtcNow();
+        var today = MarketClock.Today(now);
+        var localTime = TimeOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(now.UtcDateTime, MarketClock.Zone));
+
+        if (user.Role == UserRole.Customer)
+        {
+            var bookings = await _db.Bookings.AsNoTracking()
+                .Where(b => b.CustomerId == user.Id && b.Status == BookingStatus.PendingAccept)
+                .Where(b => b.Slot!.Date > today || (b.Slot.Date == today && b.Slot.StartTime > localTime))
+                .CountAsync(cancellationToken);
+            return new ProfileBadgesResponse(bookings, 0);
+        }
+
+        if (user.Role == UserRole.Provider)
+        {
+            var requests = await _db.Bookings.AsNoTracking()
+                .Where(b => b.Provider!.UserId == user.Id && b.Status == BookingStatus.PendingAccept)
+                .Where(b => b.Slot!.Date > today || (b.Slot.Date == today && b.Slot.StartTime > localTime))
+                .CountAsync(cancellationToken);
+            return new ProfileBadgesResponse(0, requests);
+        }
+
+        return new ProfileBadgesResponse(0, 0);
     }
 
     public async Task<CustomerProfileResponse> UpdateAccountAsync(

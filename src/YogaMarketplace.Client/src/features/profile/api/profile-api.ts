@@ -1,9 +1,18 @@
 import { http } from "@/services/http/http-client";
-import type { CustomerProfile, UpdateCustomerAccountInput, VisitAddressInput } from "@/features/profile/types";
+import type {
+  CustomerProfile,
+  ProfileBadges,
+  UpdateCustomerAccountInput,
+  VisitAddressInput,
+} from "@/features/profile/types";
 
 export const profileApi = {
   me() {
     return http.get<CustomerProfile>("/api/profile").then((res) => res.data);
+  },
+
+  badges() {
+    return http.get<ProfileBadges>("/api/profile/badges").then((res) => res.data);
   },
 
   updateAccount(input: UpdateCustomerAccountInput) {

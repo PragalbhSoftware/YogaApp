@@ -20,6 +20,10 @@ public class ProfileController : ControllerBase
     public async Task<ActionResult<CustomerProfileResponse>> Me(CancellationToken cancellationToken) =>
         Ok(await _profile.GetMineAsync(cancellationToken));
 
+    [HttpGet("badges")]
+    public async Task<ActionResult<ProfileBadgesResponse>> Badges(CancellationToken cancellationToken) =>
+        Ok(await _profile.GetBadgesAsync(cancellationToken));
+
     [HttpPatch]
     public async Task<ActionResult<CustomerProfileResponse>> Update(
         [FromBody] UpdateCustomerProfileRequest? request,

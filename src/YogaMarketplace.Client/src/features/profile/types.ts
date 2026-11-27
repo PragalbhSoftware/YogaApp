@@ -17,6 +17,11 @@ export type CustomerProfile = {
   preferredCityId: string | null;
 };
 
+export type ProfileBadges = {
+  bookings: number;
+  requests: number;
+};
+
 export type VisitAddressInput = {
   line1: string;
   area: string;

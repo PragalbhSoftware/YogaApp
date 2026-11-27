@@ -4,6 +4,7 @@ import type { UpdateCustomerAccountInput, VisitAddressInput } from "@/features/p
 import { useAuthStore } from "@/stores/auth-store";
 
 export const profileQueryKey = ["profile"] as const;
+export const profileBadgesQueryKey = ["profile-badges"] as const;
 
 export function useCustomerProfile() {
   const token = useAuthStore((state) => state.token);
@@ -11,6 +12,19 @@ export function useCustomerProfile() {
     queryKey: profileQueryKey,
     queryFn: profileApi.me,
     enabled: Boolean(token),
+  });
+}
+
+/** Customer Bookings / instructor Requests counts. Guests and admins skip the call. */
+export function useProfileBadges() {
+  const token = useAuthStore((state) => state.token);
+  const role = useAuthStore((state) => state.user?.role);
+  const enabled = Boolean(token) && (role === "Customer" || role === "Provider");
+  return useQuery({
+    queryKey: profileBadgesQueryKey,
+    queryFn: profileApi.badges,
+    enabled,
+    refetchOnWindowFocus: true,
   });
 }
 

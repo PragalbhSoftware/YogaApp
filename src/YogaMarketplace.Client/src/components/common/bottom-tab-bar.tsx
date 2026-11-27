@@ -1,6 +1,8 @@
+import type { ComponentType } from "react";
+import { Badge } from "@mui/material";
 import { Link } from "react-router-dom";
-import type { NavItem } from "@/app/layouts/nav-config";
-import { isNavItemActive } from "@/app/layouts/nav-config";
+import type { NavBadgeKey, NavItem } from "@/app/layouts/nav-config";
+import { isNavItemActive, navBadgePendingWord } from "@/app/layouts/nav-config";
 import { cn } from "@/utils/cn";
 
 const mobileColumns: Record<number, string> = {
@@ -10,10 +12,13 @@ const mobileColumns: Record<number, string> = {
   5: "grid-cols-5",
 };
 
+const badgeMax = 99;
+
 type BottomTabBarProps = {
   items: NavItem[];
   pathname: string;
   ariaLabel: string;
+  badgeCounts?: Partial<Record<NavBadgeKey, number>>;
 };
 
 function itemClass(active: boolean, compact: boolean) {
@@ -25,20 +30,48 @@ function itemClass(active: boolean, compact: boolean) {
   );
 }
 
+function formatBadgeCount(count: number) {
+  return count > badgeMax ? `${badgeMax}+` : String(count);
+}
+
+function TabIcon({
+  icon: Icon,
+  count,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  count: number;
+}) {
+  return (
+    <span aria-hidden="true">
+      <Badge badgeContent={count} color="error" max={badgeMax} invisible={count === 0}>
+        <Icon className="size-5" />
+      </Badge>
+    </span>
+  );
+}
+
 function NavItemLink({
   item,
   pathname,
   compact,
+  count,
 }: {
   item: NavItem;
   pathname: string;
   compact: boolean;
+  count: number;
 }) {
-  const Icon = item.icon;
   const active = isNavItemActive(pathname, item);
+  const accessibleName =
+    count > 0 ? `${item.label}, ${formatBadgeCount(count)} ${navBadgePendingWord}` : undefined;
   return (
-    <Link to={item.to} aria-current={active ? "page" : undefined} className={itemClass(active, compact)}>
-      <Icon className="size-5" aria-hidden="true" />
+    <Link
+      to={item.to}
+      aria-current={active ? "page" : undefined}
+      aria-label={accessibleName}
+      className={itemClass(active, compact)}
+    >
+      <TabIcon icon={item.icon} count={count} />
       {item.label}
     </Link>
   );
@@ -49,22 +82,30 @@ export function RoleNavLinks({
   items,
   pathname,
   ariaLabel,
+  badgeCounts,
 }: {
   items: NavItem[];
   pathname: string;
   ariaLabel: string;
+  badgeCounts?: Partial<Record<NavBadgeKey, number>>;
 }) {
   return (
     <nav aria-label={ariaLabel} className="flex items-center gap-2">
       {items.map((item) => (
-        <NavItemLink key={item.to} item={item} pathname={pathname} compact={false} />
+        <NavItemLink
+          key={item.to}
+          item={item}
+          pathname={pathname}
+          compact={false}
+          count={item.badge ? (badgeCounts?.[item.badge] ?? 0) : 0}
+        />
       ))}
     </nav>
   );
 }
 
 /** Fixed mobile bottom tabs. Same look and safe-area inset as the previous layout bars. */
-export function BottomTabBar({ items, pathname, ariaLabel }: BottomTabBarProps) {
+export function BottomTabBar({ items, pathname, ariaLabel, badgeCounts }: BottomTabBarProps) {
   const columns = mobileColumns[items.length] ?? "grid-cols-5";
 
   return (
@@ -75,7 +116,13 @@ export function BottomTabBar({ items, pathname, ariaLabel }: BottomTabBarProps) 
     >
       <div className={cn("mx-auto grid max-w-md", columns)}>
         {items.map((item) => (
-          <NavItemLink key={item.to} item={item} pathname={pathname} compact />
+          <NavItemLink
+            key={item.to}
+            item={item}
+            pathname={pathname}
+            compact
+            count={item.badge ? (badgeCounts?.[item.badge] ?? 0) : 0}
+          />
         ))}
       </div>
     </nav>
