@@ -1,6 +1,5 @@
 using System.Net;
 using Microsoft.AspNetCore.HttpOverrides;
-using IPNetwork = Microsoft.AspNetCore.HttpOverrides.IPNetwork;
 
 namespace YogaMarketplace.Api.Options;
 
@@ -28,16 +27,15 @@ public static class ForwardedHeadersSettings
                 options.KnownProxies.Add(address);
             }
             foreach (var network in networks)
-                options.KnownNetworks.Add(ParseNetwork(network));
+                options.KnownIPNetworks.Add(ParseNetwork(network));
         });
         return services;
     }
 
-    private static IPNetwork ParseNetwork(string value)
+    private static System.Net.IPNetwork ParseNetwork(string value)
     {
-        var parts = value.Split('/', 2);
-        if (parts.Length != 2 || !IPAddress.TryParse(parts[0], out var prefix) || !int.TryParse(parts[1], out var length))
-            throw new InvalidOperationException($"ForwardedHeaders:KnownNetworks has an invalid CIDR range: '{value}'.");
-        return new IPNetwork(prefix, length);
+        if (System.Net.IPNetwork.TryParse(value, out var network))
+            return network;
+        throw new InvalidOperationException($"ForwardedHeaders:KnownNetworks has an invalid CIDR range: '{value}'.");
     }
 }
