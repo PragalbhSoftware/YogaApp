@@ -34,8 +34,14 @@ public static class ForwardedHeadersSettings
 
     private static System.Net.IPNetwork ParseNetwork(string value)
     {
-        if (System.Net.IPNetwork.TryParse(value, out var network))
-            return network;
-        throw new InvalidOperationException($"ForwardedHeaders:KnownNetworks has an invalid CIDR range: '{value}'.");
+        // TryParse masks host bits; reject non-canonical CIDRs so a typo like 10.0.0.4/24 fails at startup.
+        if (!System.Net.IPNetwork.TryParse(value, out var network))
+            throw new InvalidOperationException($"ForwardedHeaders:KnownNetworks has an invalid CIDR range: '{value}'.");
+        var slash = value.IndexOf('/');
+        if (slash <= 0
+            || !IPAddress.TryParse(value.AsSpan(0, slash), out var prefix)
+            || !prefix.Equals(network.BaseAddress))
+            throw new InvalidOperationException($"ForwardedHeaders:KnownNetworks has an invalid CIDR range: '{value}'.");
+        return network;
     }
 }

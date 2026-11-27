@@ -38,6 +38,7 @@ jobs:
         with:
           dotnet-version: 10.0.x
       - run: dotnet tool restore
+      - run: dotnet restore src/YogaMarketplace.Infrastructure
       # Idempotent: safe to run against any database version, including one that is already current.
       - run: >-
           dotnet ef migrations script --idempotent
