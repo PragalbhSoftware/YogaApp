@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Project standards
 
-The product is a generic local-services marketplace (yoga first), launching in India city by city. ASP.NET Core 8 API + EF Core (SQL Server) with a React/Vite client served from the API's `wwwroot`.
+The product is a generic local-services marketplace (yoga first), launching in India city by city. ASP.NET Core 10 API + EF Core (SQL Server) with a React/Vite client served from the API's `wwwroot`.
 
 ## Workflow
 

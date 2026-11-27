@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -45,8 +46,11 @@ public class YogaApiFactory : WebApplicationFactory<Program>
 
         builder.ConfigureServices(services =>
         {
+            // EF 9+: UseSqlServer lives on IDbContextOptionsConfiguration; removing only
+            // DbContextOptions leaves SqlServer registered and dual-provider startup fails.
             var toRemove = services.Where(d =>
                 d.ServiceType == typeof(DbContextOptions<YogaDbContext>)
+                || d.ServiceType == typeof(IDbContextOptionsConfiguration<YogaDbContext>)
                 || d.ServiceType == typeof(YogaDbContext)).ToList();
             foreach (var descriptor in toRemove)
                 services.Remove(descriptor);

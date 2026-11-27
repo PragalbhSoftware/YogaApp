@@ -9,7 +9,7 @@ Yoga is the first `Category`. The model (Provider, Service, Category, Booking) i
 | Project | Role |
 | --- | --- |
 | `src/YogaMarketplace.Client` | React SPA (Vite, TypeScript, MUI, Tailwind, TanStack Query, Zustand). The only front end. |
-| `src/YogaMarketplace.Api` | ASP.NET Core 8 Web API: OTP/JWT, browse, slots, book and pay, provider handshake, admin |
+| `src/YogaMarketplace.Api` | ASP.NET Core 10 Web API: OTP/JWT, browse, slots, book and pay, provider handshake, admin |
 | `src/YogaMarketplace.Domain` | Entities and rules (booking, cancellation, provider approval, user blocking, catalog) |
 | `src/YogaMarketplace.Infrastructure` | EF Core, SQL Server, migrations, seed |
 | `tests/YogaMarketplace.Api.Tests` | Domain rules and API tests (SQLite) |
@@ -18,7 +18,7 @@ Flow is controllers to services to EF Core. No CQRS and no message bus.
 
 ## Run locally
 
-Requires the .NET 8 SDK and Node 20.19+ (CI uses Node 22).
+Requires the .NET 10 SDK and Node 20.19+ (CI uses Node 22).
 
 ### 1. SQL Server
 
@@ -415,7 +415,7 @@ dotnet publish src/YogaMarketplace.Api -c Release -o ./publish
 
 This also builds the SPA into `./publish/wwwroot` (Node 22 required). When the SPA is hosted elsewhere, add `-p:SkipSpaBuild=true`.
 
-Run `./publish/YogaMarketplace.Api.dll` behind HTTPS (Nginx, IIS with the .NET 8 Hosting Bundle and an app pool set to **No Managed Code**, or a platform service). Health checks:
+Run `./publish/YogaMarketplace.Api.dll` behind HTTPS (Nginx, IIS with the .NET 10 Hosting Bundle and an app pool set to **No Managed Code**, or a platform service). Health checks:
 
 - `GET /health`: the process is up (use for liveness)
 - `GET /health/ready`: the database answers (use for readiness or the load balancer)
@@ -462,7 +462,7 @@ Upload `dist/` to any static host or CDN. Every unknown path must fall back to `
 
 ## Deploy to Plesk (single site)
 
-One IIS site on `https://yogademo.psoftcs.com` runs the API and serves the SPA. yogademo is the **Staging** site: Razorpay Test keys, OTP demo sign-in and the demo-data loader. A live site uses the same steps with `Production`, live keys and no demo variables. The server needs the **.NET 8 Hosting Bundle** (ask the host if the Plesk "ASP.NET Core" component is not listed).
+One IIS site on `https://yogademo.psoftcs.com` runs the API and serves the SPA. yogademo is the **Staging** site: Razorpay Test keys, OTP demo sign-in and the demo-data loader. A live site uses the same steps with `Production`, live keys and no demo variables. The server needs the **.NET 10 Hosting Bundle** (ask the host if the Plesk "ASP.NET Core" component is not listed).
 
 ### 1. Build
 
@@ -470,7 +470,7 @@ One IIS site on `https://yogademo.psoftcs.com` runs the API and serves the SPA. 
 dotnet publish src/YogaMarketplace.Api -c Release -o publish
 ```
 
-This needs the .NET 8 SDK and Node 22. It builds the SPA with `VITE_API_BASE_URL` empty (the app calls `/api` on its own origin) and puts it in `publish/wwwroot`. Every CI run also uploads the same folder as the `site-publish` artifact, and the database script as `migrations-sql`. `publish/web.config` runs the app in-process with `AspNetCoreModuleV2` and the stdout log off. Its comments show how to turn the log on for a startup failure.
+This needs the .NET 10 SDK and Node 22. It builds the SPA with `VITE_API_BASE_URL` empty (the app calls `/api` on its own origin) and puts it in `publish/wwwroot`. Every CI run also uploads the same folder as the `site-publish` artifact, and the database script as `migrations-sql`. `publish/web.config` runs the app in-process with `AspNetCoreModuleV2` and the stdout log off. Its comments show how to turn the log on for a startup failure.
 
 ### 2. Subdomain and SSL
 
